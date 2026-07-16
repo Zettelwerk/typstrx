@@ -170,6 +170,19 @@ class TypstSession {
     );
   }
 
+  /// Extracts text/link geometry for a page; used by [TypstPage].
+  @internal
+  Future<rust.PageTextData> pageText({
+    required int generation,
+    required int pageIndex,
+  }) {
+    _checkDisposed();
+    return _native.pageText(
+      generation: BigInt.from(generation),
+      pageIndex: pageIndex,
+    );
+  }
+
   /// Releases the native session. Streams close and further calls throw.
   Future<void> dispose() async {
     if (_disposed) return;

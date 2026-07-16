@@ -3,16 +3,21 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart'
+    show Material, MaterialLocalizations, TextButton;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../document/typst_document.dart';
+import '../document/typst_link.dart';
 import '../document/typst_page.dart';
 import '../document/typst_session.dart';
+import '../document/typst_text.dart';
 import 'typst_page_image_cache.dart';
 import 'typst_viewer_params.dart';
 
 part 'typst_viewer_controller.dart';
+part 'typst_viewer_selection.dart';
 
 /// Positions of all pages in document coordinates (points).
 class TypstPageLayout {
@@ -64,6 +69,16 @@ class _TypstViewerState extends State<TypstViewer> {
   bool _fitDone = false;
   Timer? _renderTimer;
 
+  // Text selection & links (see typst_viewer_selection.dart).
+  final _pageTexts = <int, TypstPageText>{};
+  final _pageLinks = <int, List<TypstLink>>{};
+  final _loadingPageText = <int>{};
+  _SelPoint? _selAnchor;
+  _SelPoint? _selFocus;
+  Offset? _toolbarAnchor;
+  MouseCursor _hoverCursor = MouseCursor.defer;
+  bool _lastInputWasTouch = false;
+
   @override
   void initState() {
     super.initState();
@@ -110,6 +125,7 @@ class _TypstViewerState extends State<TypstViewer> {
       _document = document;
       _layout = _layoutPages(document);
       _cache.removePagesAbove(document.pages.length);
+      _clearPageTextCaches();
     });
     _scheduleRender();
   }
@@ -181,6 +197,11 @@ class _TypstViewerState extends State<TypstViewer> {
 
   void _onMatrixChanged() {
     _scheduleRender();
+  }
+
+  /// Repaint request from the selection/link layer.
+  void _repaint() {
+    if (mounted) setState(() {});
   }
 
   /// Scrolls the view so that the given document offset lands at the top-left
@@ -326,6 +347,7 @@ class _TypstViewerState extends State<TypstViewer> {
     }
 
     await _updateTiles(document, layout, visible, previewScale);
+    await _preloadPageText(document, visiblePages);
   }
 
   /// Renders one high-resolution tile per visible page — the visible window
@@ -392,28 +414,96 @@ class _TypstViewerState extends State<TypstViewer> {
         if (layout == null) {
           return ColoredBox(color: widget.params.backgroundColor);
         }
-        return ColoredBox(
-          color: widget.params.backgroundColor,
-          child: InteractiveViewer(
-            transformationController: _txController,
-            constrained: false,
-            boundaryMargin: const EdgeInsets.all(double.infinity),
-            minScale: widget.params.minScale,
-            maxScale: widget.params.maxScale,
-            onInteractionEnd: (_) {
-              _txController.value = _clampMatrix(_txController.value);
-            },
-            child: Listener(
-              onPointerSignal: _onPointerSignal,
-              child: CustomPaint(
-                size: layout.documentSize,
-                painter: _TypstDocumentPainter(this),
-              ),
+        return CallbackShortcuts(
+          bindings: {
+            const SingleActivator(LogicalKeyboardKey.keyC, control: true):
+                _copySelection,
+            const SingleActivator(LogicalKeyboardKey.keyC, meta: true):
+                _copySelection,
+          },
+          child: Focus(
+            autofocus: true,
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: ColoredBox(
+                    color: widget.params.backgroundColor,
+                    child: InteractiveViewer(
+                      transformationController: _txController,
+                      constrained: false,
+                      boundaryMargin: const EdgeInsets.all(double.infinity),
+                      minScale: widget.params.minScale,
+                      maxScale: widget.params.maxScale,
+                      onInteractionEnd: (_) {
+                        _txController.value =
+                            _clampMatrix(_txController.value);
+                      },
+                      child: Listener(
+                        onPointerSignal: _onPointerSignal,
+                        onPointerDown: (event) => _lastInputWasTouch =
+                            event.kind == PointerDeviceKind.touch,
+                        child: MouseRegion(
+                          cursor: _hoverCursor,
+                          onHover: _onHover,
+                          child: RawGestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            gestures: _documentGestures(),
+                            child: CustomPaint(
+                              size: layout.documentSize,
+                              painter: _TypstDocumentPainter(this),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                ..._buildSelectionOverlay(context),
+              ],
             ),
           ),
         );
       },
     );
+  }
+
+  /// Gestures on the document surface. The selection pan recognizer is
+  /// mouse-only so one-finger drags keep panning the InteractiveViewer on
+  /// touch screens (where selection starts with a long press instead).
+  Map<Type, GestureRecognizerFactory> _documentGestures() {
+    return {
+      TapGestureRecognizer:
+          GestureRecognizerFactoryWithHandlers<TapGestureRecognizer>(
+        TapGestureRecognizer.new,
+        (recognizer) => recognizer
+          ..onTapUp = _onTapUp
+          ..onSecondaryTapUp = _onSecondaryTapUp,
+      ),
+      DoubleTapGestureRecognizer:
+          GestureRecognizerFactoryWithHandlers<DoubleTapGestureRecognizer>(
+        DoubleTapGestureRecognizer.new,
+        (recognizer) => recognizer.onDoubleTapDown = _onDoubleTapDown,
+      ),
+      LongPressGestureRecognizer:
+          GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
+        LongPressGestureRecognizer.new,
+        (recognizer) => recognizer.onLongPressStart = _onLongPressStart,
+      ),
+      if (widget.params.enableTextSelection)
+        PanGestureRecognizer:
+            GestureRecognizerFactoryWithHandlers<PanGestureRecognizer>(
+          () => PanGestureRecognizer(
+            supportedDevices: {PointerDeviceKind.mouse},
+          ),
+          (recognizer) => recognizer
+            // Anchor the selection at the press position, not where the
+            // recognizer won the gesture arena.
+            ..dragStartBehavior = DragStartBehavior.down
+            ..onStart = _onSelectionDragStart
+            ..onUpdate = _onSelectionDragUpdate
+            ..onEnd = _onSelectionDragEnd,
+        ),
+    };
   }
 }
 
@@ -480,6 +570,16 @@ class _TypstDocumentPainter extends CustomPainter {
           tile.rect,
           imagePaint,
         );
+      }
+
+      // Selection highlight.
+      final selectionRects = state._selectionRectsForPage(i, rect);
+      if (selectionRects.isNotEmpty) {
+        final selectionPaint = Paint()
+          ..color = state.widget.params.selectionColor;
+        for (final selectionRect in selectionRects) {
+          canvas.drawRect(selectionRect, selectionPaint);
+        }
       }
     }
   }

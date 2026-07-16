@@ -52,6 +52,22 @@ class FakeRustSession implements rust.TypstSession {
   }
 
   @override
+  Future<rust.PageTextData> pageText({
+    required BigInt generation,
+    required int pageIndex,
+  }) async {
+    if (generation.toInt() != this.generation) {
+      throw const rust.TypstrxError.stale();
+    }
+    return const rust.PageTextData(
+      fullText: '',
+      charRects: [],
+      fragments: [],
+      links: [],
+    );
+  }
+
+  @override
   Future<int> registerFont({required List<int> data}) async => 1;
 
   @override

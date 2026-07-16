@@ -10,8 +10,8 @@ use typst_layout::PagedDocument;
 use typst::{World, WorldExt};
 
 use crate::api::types::{
-    CompileResult, DiagnosticSeverity, PageInfo, RenderedRegion, SessionOptions,
-    TypstDiagnostic, TypstrxError,
+    CompileResult, DiagnosticSeverity, PageInfo, PageTextData, RenderedRegion,
+    SessionOptions, TypstDiagnostic, TypstrxError,
 };
 use crate::render::render_region;
 use crate::world::{TypstrxWorld, WorldOptions};
@@ -145,6 +145,30 @@ impl TypstSession {
             full_height,
             background_argb,
         )
+    }
+
+    /// Extracts text and link geometry for page `page_index` (0-based).
+    ///
+    /// Fails with [`TypstrxError::Stale`] when `generation` no longer matches
+    /// the latest compiled document.
+    pub fn page_text(
+        &self,
+        generation: u64,
+        page_index: u32,
+    ) -> Result<PageTextData, TypstrxError> {
+        let inner = self.inner.read();
+        let compiled = inner.compiled.as_ref().ok_or(TypstrxError::NoDocument)?;
+        if compiled.generation != generation {
+            return Err(TypstrxError::Stale);
+        }
+        let page_count = compiled.document.pages().len() as u32;
+        if page_index >= page_count {
+            return Err(TypstrxError::PageOutOfRange { page_count });
+        }
+        Ok(crate::text::extract_page_text(
+            &compiled.document,
+            page_index as usize,
+        ))
     }
 
     /// Registers all font faces contained in `data` (TTF/OTF, also

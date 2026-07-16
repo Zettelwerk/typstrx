@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'dart:ui';
 
 import '../rust/api/types.dart' as rust;
 import 'typst_document.dart';
 import 'typst_image.dart';
+import 'typst_link.dart';
+import 'typst_rect.dart';
+import 'typst_text.dart';
 
 /// A single page of a compiled [TypstDocument].
 class TypstPage {
@@ -76,4 +80,79 @@ class TypstPage {
       return null;
     }
   }
+
+  Future<TypstPageText?>? _textFuture;
+
+  /// Loads the page's text with per-character geometry (cached per page).
+  ///
+  /// Returns null when the document has been replaced by a newer compilation.
+  Future<TypstPageText?> loadStructuredText() {
+    return _textFuture ??= _loadText();
+  }
+
+  /// Loads the page's links (cached per page, via the same extraction as
+  /// [loadStructuredText]).
+  ///
+  /// Returns an empty list when the document has become stale.
+  Future<List<TypstLink>> loadLinks() async =>
+      (await _loadRaw())?.toTypstLinks() ?? const [];
+
+  Future<rust.PageTextData?>? _rawFuture;
+
+  Future<rust.PageTextData?> _loadRaw() {
+    return _rawFuture ??= () async {
+      try {
+        return await document.session.pageText(
+          generation: document.generation,
+          pageIndex: pageNumber - 1,
+        );
+      } on rust.TypstrxError_Stale {
+        return null;
+      } on rust.TypstrxError_NoDocument {
+        return null;
+      }
+    }();
+  }
+
+  Future<TypstPageText?> _loadText() async {
+    final raw = await _loadRaw();
+    if (raw == null) return null;
+    final charRects = [
+      for (final rect in raw.charRects) TypstRect.fromRust(rect),
+    ];
+    final fragments = <TypstPageTextFragment>[];
+    final pageText = TypstPageText(
+      pageNumber: pageNumber,
+      fullText: raw.fullText,
+      charRects: charRects,
+      fragments: fragments,
+    );
+    for (final fragment in raw.fragments) {
+      fragments.add(TypstPageTextFragment(
+        pageText: pageText,
+        index: fragment.index,
+        length: fragment.length,
+        bounds: TypstRect.fromRust(fragment.bounds),
+      ));
+    }
+    return pageText;
+  }
+}
+
+/// Maps bridge-level link data to the public model.
+extension on rust.PageTextData {
+  List<TypstLink> toTypstLinks() => [
+        for (final link in links)
+          TypstLink(
+            rect: TypstRect.fromRust(link.rect),
+            url: link.url != null ? Uri.tryParse(link.url!) : null,
+            dest: link.destPage != null
+                ? TypstDest(
+                    pageNumber: link.destPage!,
+                    x: link.destXPt,
+                    y: link.destYPt,
+                  )
+                : null,
+          ),
+      ];
 }

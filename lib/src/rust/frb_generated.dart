@@ -67,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => 419570723;
+  int get rustContentHash => 602791988;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -86,6 +86,12 @@ abstract class RustLibApi extends BaseApi {
 
   Future<TypstSession> crateApiSessionTypstSessionCreate({
     required SessionOptions options,
+  });
+
+  Future<PageTextData> crateApiSessionTypstSessionPageText({
+    required TypstSession that,
+    required BigInt generation,
+    required int pageIndex,
   });
 
   Future<int> crateApiSessionTypstSessionRegisterFont({
@@ -206,6 +212,46 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<PageTextData> crateApiSessionTypstSessionPageText({
+    required TypstSession that,
+    required BigInt generation,
+    required int pageIndex,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTypstSession(
+            that,
+            serializer,
+          );
+          sse_encode_u_64(generation, serializer);
+          sse_encode_u_32(pageIndex, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 3,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_page_text_data,
+          decodeErrorData: sse_decode_typstrx_error,
+        ),
+        constMeta: kCrateApiSessionTypstSessionPageTextConstMeta,
+        argValues: [that, generation, pageIndex],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSessionTypstSessionPageTextConstMeta =>
+      const TaskConstMeta(
+        debugName: "TypstSession_page_text",
+        argNames: ["that", "generation", "pageIndex"],
+      );
+
+  @override
   Future<int> crateApiSessionTypstSessionRegisterFont({
     required TypstSession that,
     required List<int> data,
@@ -222,7 +268,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 3,
+            funcId: 4,
             port: port_,
           );
         },
@@ -276,7 +322,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 4,
+            funcId: 5,
             port: port_,
           );
         },
@@ -338,7 +384,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 5,
+            funcId: 6,
             port: port_,
           );
         },
@@ -368,7 +414,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 6,
+            funcId: 7,
             port: port_,
           );
         },
@@ -395,7 +441,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 7,
+            funcId: 8,
             port: port_,
           );
         },
@@ -461,6 +507,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  double dco_decode_box_autoadd_f_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as double;
+  }
+
+  @protected
   SessionOptions dco_decode_box_autoadd_session_options(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_session_options(raw);
@@ -506,9 +558,30 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  LinkData dco_decode_link_data(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return LinkData(
+      rect: dco_decode_rect_pt(arr[0]),
+      url: dco_decode_opt_String(arr[1]),
+      destPage: dco_decode_opt_box_autoadd_u_32(arr[2]),
+      destXPt: dco_decode_opt_box_autoadd_f_64(arr[3]),
+      destYPt: dco_decode_opt_box_autoadd_f_64(arr[4]),
+    );
+  }
+
+  @protected
   List<String> dco_decode_list_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_String).toList();
+  }
+
+  @protected
+  List<LinkData> dco_decode_list_link_data(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_link_data).toList();
   }
 
   @protected
@@ -530,6 +603,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<RectPt> dco_decode_list_rect_pt(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_rect_pt).toList();
+  }
+
+  @protected
+  List<TextFragmentData> dco_decode_list_text_fragment_data(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_text_fragment_data).toList();
+  }
+
+  @protected
   List<TypstDiagnostic> dco_decode_list_typst_diagnostic(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_typst_diagnostic).toList();
@@ -539,6 +624,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   String? dco_decode_opt_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_String(raw);
+  }
+
+  @protected
+  double? dco_decode_opt_box_autoadd_f_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_f_64(raw);
   }
 
   @protected
@@ -556,6 +647,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return PageInfo(
       widthPt: dco_decode_f_64(arr[0]),
       heightPt: dco_decode_f_64(arr[1]),
+    );
+  }
+
+  @protected
+  PageTextData dco_decode_page_text_data(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return PageTextData(
+      fullText: dco_decode_String(arr[0]),
+      charRects: dco_decode_list_rect_pt(arr[1]),
+      fragments: dco_decode_list_text_fragment_data(arr[2]),
+      links: dco_decode_list_link_data(arr[3]),
+    );
+  }
+
+  @protected
+  RectPt dco_decode_rect_pt(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return RectPt(
+      left: dco_decode_f_64(arr[0]),
+      top: dco_decode_f_64(arr[1]),
+      right: dco_decode_f_64(arr[2]),
+      bottom: dco_decode_f_64(arr[3]),
     );
   }
 
@@ -581,6 +700,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return SessionOptions(
       packageCacheDir: dco_decode_opt_String(arr[0]),
       allowPackageDownload: dco_decode_bool(arr[1]),
+    );
+  }
+
+  @protected
+  TextFragmentData dco_decode_text_fragment_data(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return TextFragmentData(
+      index: dco_decode_u_32(arr[0]),
+      length: dco_decode_u_32(arr[1]),
+      bounds: dco_decode_rect_pt(arr[2]),
     );
   }
 
@@ -700,6 +832,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  double sse_decode_box_autoadd_f_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_f_64(deserializer));
+  }
+
+  @protected
   SessionOptions sse_decode_box_autoadd_session_options(
     SseDeserializer deserializer,
   ) {
@@ -752,6 +890,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  LinkData sse_decode_link_data(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_rect = sse_decode_rect_pt(deserializer);
+    var var_url = sse_decode_opt_String(deserializer);
+    var var_destPage = sse_decode_opt_box_autoadd_u_32(deserializer);
+    var var_destXPt = sse_decode_opt_box_autoadd_f_64(deserializer);
+    var var_destYPt = sse_decode_opt_box_autoadd_f_64(deserializer);
+    return LinkData(
+      rect: var_rect,
+      url: var_url,
+      destPage: var_destPage,
+      destXPt: var_destXPt,
+      destYPt: var_destYPt,
+    );
+  }
+
+  @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -759,6 +914,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <String>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_String(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<LinkData> sse_decode_list_link_data(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <LinkData>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_link_data(deserializer));
     }
     return ans_;
   }
@@ -790,6 +957,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<RectPt> sse_decode_list_rect_pt(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <RectPt>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_rect_pt(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<TextFragmentData> sse_decode_list_text_fragment_data(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <TextFragmentData>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_text_fragment_data(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<TypstDiagnostic> sse_decode_list_typst_diagnostic(
     SseDeserializer deserializer,
   ) {
@@ -815,6 +1008,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  double? sse_decode_opt_box_autoadd_f_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_f_64(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -831,6 +1035,36 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_widthPt = sse_decode_f_64(deserializer);
     var var_heightPt = sse_decode_f_64(deserializer);
     return PageInfo(widthPt: var_widthPt, heightPt: var_heightPt);
+  }
+
+  @protected
+  PageTextData sse_decode_page_text_data(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_fullText = sse_decode_String(deserializer);
+    var var_charRects = sse_decode_list_rect_pt(deserializer);
+    var var_fragments = sse_decode_list_text_fragment_data(deserializer);
+    var var_links = sse_decode_list_link_data(deserializer);
+    return PageTextData(
+      fullText: var_fullText,
+      charRects: var_charRects,
+      fragments: var_fragments,
+      links: var_links,
+    );
+  }
+
+  @protected
+  RectPt sse_decode_rect_pt(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_left = sse_decode_f_64(deserializer);
+    var var_top = sse_decode_f_64(deserializer);
+    var var_right = sse_decode_f_64(deserializer);
+    var var_bottom = sse_decode_f_64(deserializer);
+    return RectPt(
+      left: var_left,
+      top: var_top,
+      right: var_right,
+      bottom: var_bottom,
+    );
   }
 
   @protected
@@ -854,6 +1088,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return SessionOptions(
       packageCacheDir: var_packageCacheDir,
       allowPackageDownload: var_allowPackageDownload,
+    );
+  }
+
+  @protected
+  TextFragmentData sse_decode_text_fragment_data(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_index = sse_decode_u_32(deserializer);
+    var var_length = sse_decode_u_32(deserializer);
+    var var_bounds = sse_decode_rect_pt(deserializer);
+    return TextFragmentData(
+      index: var_index,
+      length: var_length,
+      bounds: var_bounds,
     );
   }
 
@@ -983,6 +1230,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_64(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_session_options(
     SessionOptions self,
     SseSerializer serializer,
@@ -1029,11 +1282,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_link_data(LinkData self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_rect_pt(self.rect, serializer);
+    sse_encode_opt_String(self.url, serializer);
+    sse_encode_opt_box_autoadd_u_32(self.destPage, serializer);
+    sse_encode_opt_box_autoadd_f_64(self.destXPt, serializer);
+    sse_encode_opt_box_autoadd_f_64(self.destYPt, serializer);
+  }
+
+  @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_String(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_link_data(
+    List<LinkData> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_link_data(item, serializer);
     }
   }
 
@@ -1072,6 +1347,27 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_rect_pt(List<RectPt> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_rect_pt(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_text_fragment_data(
+    List<TextFragmentData> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_text_fragment_data(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_typst_diagnostic(
     List<TypstDiagnostic> self,
     SseSerializer serializer,
@@ -1094,6 +1390,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_box_autoadd_f_64(double? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_f_64(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -1108,6 +1414,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_f_64(self.widthPt, serializer);
     sse_encode_f_64(self.heightPt, serializer);
+  }
+
+  @protected
+  void sse_encode_page_text_data(PageTextData self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.fullText, serializer);
+    sse_encode_list_rect_pt(self.charRects, serializer);
+    sse_encode_list_text_fragment_data(self.fragments, serializer);
+    sse_encode_list_link_data(self.links, serializer);
+  }
+
+  @protected
+  void sse_encode_rect_pt(RectPt self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_64(self.left, serializer);
+    sse_encode_f_64(self.top, serializer);
+    sse_encode_f_64(self.right, serializer);
+    sse_encode_f_64(self.bottom, serializer);
   }
 
   @protected
@@ -1129,6 +1453,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_opt_String(self.packageCacheDir, serializer);
     sse_encode_bool(self.allowPackageDownload, serializer);
+  }
+
+  @protected
+  void sse_encode_text_fragment_data(
+    TextFragmentData self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.index, serializer);
+    sse_encode_u_32(self.length, serializer);
+    sse_encode_rect_pt(self.bounds, serializer);
   }
 
   @protected
@@ -1224,6 +1559,19 @@ class TypstSessionImpl extends RustOpaque implements TypstSession {
       .instance
       .api
       .crateApiSessionTypstSessionCompile(that: this, source: source);
+
+  /// Extracts text and link geometry for page `page_index` (0-based).
+  ///
+  /// Fails with [`TypstrxError::Stale`] when `generation` no longer matches
+  /// the latest compiled document.
+  Future<PageTextData> pageText({
+    required BigInt generation,
+    required int pageIndex,
+  }) => RustLib.instance.api.crateApiSessionTypstSessionPageText(
+    that: this,
+    generation: generation,
+    pageIndex: pageIndex,
+  );
 
   /// Registers all font faces contained in `data` (TTF/OTF, also
   /// collections). Returns the number of faces added. Takes effect on the

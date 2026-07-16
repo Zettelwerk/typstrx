@@ -182,3 +182,96 @@ fn incremental_recompile_is_faster() {
         warm.elapsed_ms
     );
 }
+
+#[test]
+fn extracts_text_with_rects() {
+    let session = offline_session();
+    let result = session.compile("= Heading\nBody text here.".to_owned());
+    assert!(result.success);
+    let text = session.page_text(result.generation, 0).unwrap();
+    assert!(text.full_text.contains("Heading"), "text: {}", text.full_text);
+    assert!(text.full_text.contains("Body text here."));
+    // One rect per UTF-16 code unit.
+    assert_eq!(text.char_rects.len(), text.full_text.encode_utf16().count());
+    // Fragments cover the full text without gaps.
+    let mut covered = 0u32;
+    for fragment in &text.fragments {
+        assert_eq!(fragment.index, covered);
+        covered += fragment.length;
+    }
+    assert_eq!(covered as usize, text.char_rects.len());
+    // Heading line is above the body line.
+    let h_index = text.full_text.find("Heading").unwrap();
+    let b_index = text.full_text.find("Body").unwrap();
+    let h_units = text.full_text[..h_index].encode_utf16().count();
+    let b_units = text.full_text[..b_index].encode_utf16().count();
+    assert!(text.char_rects[h_units].bottom <= text.char_rects[b_units].top);
+    // Rects are sane: non-negative sizes inside an A4 page.
+    for rect in &text.char_rects {
+        assert!(rect.left <= rect.right && rect.top <= rect.bottom);
+        assert!(rect.right <= 596.0 && rect.bottom <= 842.0);
+    }
+}
+
+#[test]
+fn heading_line_gets_newline_separator() {
+    let session = offline_session();
+    let result = session.compile("= Title\nBody".to_owned());
+    let text = session.page_text(result.generation, 0).unwrap();
+    assert!(
+        text.full_text.contains("Title\n"),
+        "expected newline after heading: {:?}",
+        text.full_text
+    );
+}
+
+#[test]
+fn utf16_char_rects_for_emoji_and_cjk() {
+    let session = offline_session();
+    let result = session.compile("水 😀 ligature ffi".to_owned());
+    assert!(result.success);
+    let text = session.page_text(result.generation, 0).unwrap();
+    assert_eq!(text.char_rects.len(), text.full_text.encode_utf16().count());
+    // The emoji occupies two UTF-16 units sharing one rect.
+    if let Some(pos) = text.full_text.find('😀') {
+        let units = text.full_text[..pos].encode_utf16().count();
+        assert_eq!(text.char_rects[units], text.char_rects[units + 1]);
+    }
+}
+
+#[test]
+fn extracts_url_links() {
+    let session = offline_session();
+    let result = session.compile(
+        "#link(\"https://typst.app\")[Typst] some text".to_owned(),
+    );
+    assert!(result.success);
+    let text = session.page_text(result.generation, 0).unwrap();
+    assert_eq!(text.links.len(), 1);
+    let link = &text.links[0];
+    assert_eq!(link.url.as_deref(), Some("https://typst.app"));
+    assert!(link.rect.right > link.rect.left);
+}
+
+#[test]
+fn extracts_internal_links() {
+    let session = offline_session();
+    let source = "#link(<target>)[jump]\n#pagebreak()\n= Target <target>";
+    let result = session.compile(source.to_owned());
+    assert!(result.success, "diagnostics: {:?}", result.diagnostics.iter().map(|d| &d.message).collect::<Vec<_>>());
+    let text = session.page_text(result.generation, 0).unwrap();
+    let internal: Vec<_> = text.links.iter().filter(|l| l.dest_page.is_some()).collect();
+    assert_eq!(internal.len(), 1);
+    assert_eq!(internal[0].dest_page, Some(2));
+}
+
+#[test]
+fn page_text_stale_generation_rejected() {
+    let session = offline_session();
+    let first = session.compile("one".to_owned());
+    session.compile("two".to_owned());
+    assert!(matches!(
+        session.page_text(first.generation, 0),
+        Err(TypstrxError::Stale)
+    ));
+}

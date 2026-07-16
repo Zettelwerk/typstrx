@@ -5,11 +5,20 @@ const _initialSource = '''
 = Hello, *world*!
 
 This document is compiled by the native Typst compiler and rendered
-by typstrx.
+by typstrx. Try selecting this text with the mouse, or follow
+#link("https://typst.app")[this link to typst.app].
 
 \$ sum_(k=1)^n k = (n(n+1)) / 2 \$
 
 #lorem(50)
+
+Jump to the #link(<second>)[second page].
+
+#pagebreak()
+
+= Second page <second>
+
+#lorem(80)
 ''';
 
 Future<void> main() async {

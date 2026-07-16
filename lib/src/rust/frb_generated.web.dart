@@ -50,6 +50,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool dco_decode_bool(dynamic raw);
 
   @protected
+  double dco_decode_box_autoadd_f_64(dynamic raw);
+
+  @protected
   SessionOptions dco_decode_box_autoadd_session_options(dynamic raw);
 
   @protected
@@ -68,7 +71,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int dco_decode_i_32(dynamic raw);
 
   @protected
+  LinkData dco_decode_link_data(dynamic raw);
+
+  @protected
   List<String> dco_decode_list_String(dynamic raw);
+
+  @protected
+  List<LinkData> dco_decode_list_link_data(dynamic raw);
 
   @protected
   List<PageInfo> dco_decode_list_page_info(dynamic raw);
@@ -80,10 +89,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<RectPt> dco_decode_list_rect_pt(dynamic raw);
+
+  @protected
+  List<TextFragmentData> dco_decode_list_text_fragment_data(dynamic raw);
+
+  @protected
   List<TypstDiagnostic> dco_decode_list_typst_diagnostic(dynamic raw);
 
   @protected
   String? dco_decode_opt_String(dynamic raw);
+
+  @protected
+  double? dco_decode_opt_box_autoadd_f_64(dynamic raw);
 
   @protected
   int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
@@ -92,10 +110,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PageInfo dco_decode_page_info(dynamic raw);
 
   @protected
+  PageTextData dco_decode_page_text_data(dynamic raw);
+
+  @protected
+  RectPt dco_decode_rect_pt(dynamic raw);
+
+  @protected
   RenderedRegion dco_decode_rendered_region(dynamic raw);
 
   @protected
   SessionOptions dco_decode_session_options(dynamic raw);
+
+  @protected
+  TextFragmentData dco_decode_text_fragment_data(dynamic raw);
 
   @protected
   TypstDiagnostic dco_decode_typst_diagnostic(dynamic raw);
@@ -143,6 +170,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
+  double sse_decode_box_autoadd_f_64(SseDeserializer deserializer);
+
+  @protected
   SessionOptions sse_decode_box_autoadd_session_options(
     SseDeserializer deserializer,
   );
@@ -165,7 +195,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
+  LinkData sse_decode_link_data(SseDeserializer deserializer);
+
+  @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
+
+  @protected
+  List<LinkData> sse_decode_list_link_data(SseDeserializer deserializer);
 
   @protected
   List<PageInfo> sse_decode_list_page_info(SseDeserializer deserializer);
@@ -177,6 +213,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  List<RectPt> sse_decode_list_rect_pt(SseDeserializer deserializer);
+
+  @protected
+  List<TextFragmentData> sse_decode_list_text_fragment_data(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<TypstDiagnostic> sse_decode_list_typst_diagnostic(
     SseDeserializer deserializer,
   );
@@ -185,16 +229,28 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
+  double? sse_decode_opt_box_autoadd_f_64(SseDeserializer deserializer);
+
+  @protected
   int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
 
   @protected
   PageInfo sse_decode_page_info(SseDeserializer deserializer);
 
   @protected
+  PageTextData sse_decode_page_text_data(SseDeserializer deserializer);
+
+  @protected
+  RectPt sse_decode_rect_pt(SseDeserializer deserializer);
+
+  @protected
   RenderedRegion sse_decode_rendered_region(SseDeserializer deserializer);
 
   @protected
   SessionOptions sse_decode_session_options(SseDeserializer deserializer);
+
+  @protected
+  TextFragmentData sse_decode_text_fragment_data(SseDeserializer deserializer);
 
   @protected
   TypstDiagnostic sse_decode_typst_diagnostic(SseDeserializer deserializer);
@@ -245,6 +301,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_session_options(
     SessionOptions self,
     SseSerializer serializer,
@@ -269,7 +328,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_i_32(int self, SseSerializer serializer);
 
   @protected
+  void sse_encode_link_data(LinkData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_link_data(List<LinkData> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_page_info(List<PageInfo> self, SseSerializer serializer);
@@ -284,6 +349,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_rect_pt(List<RectPt> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_text_fragment_data(
+    List<TextFragmentData> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_typst_diagnostic(
     List<TypstDiagnostic> self,
     SseSerializer serializer,
@@ -293,10 +367,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_f_64(double? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
 
   @protected
   void sse_encode_page_info(PageInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_page_text_data(PageTextData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_rect_pt(RectPt self, SseSerializer serializer);
 
   @protected
   void sse_encode_rendered_region(
@@ -307,6 +390,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_session_options(
     SessionOptions self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_text_fragment_data(
+    TextFragmentData self,
     SseSerializer serializer,
   );
 

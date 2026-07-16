@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:typstrx/src/document/typst_session.dart';
@@ -57,6 +58,55 @@ class FakeRustSession implements rust.TypstSession {
       pixels[i + 3] = 0xff;
     }
     return rust.RenderedRegion(width: width, height: height, pixels: pixels);
+  }
+
+  @override
+  Future<rust.PageTextData> pageText({
+    required BigInt generation,
+    required int pageIndex,
+  }) async {
+    if (generation.toInt() != this.generation) {
+      throw const rust.TypstrxError.stale();
+    }
+    // One line of text: "HELLOWORLD", 10 chars, 20pt wide each, at
+    // y 100..120pt, starting at x 50pt. Plus one link over the text and an
+    // internal link to page 3 at the bottom.
+    const text = 'HELLOWORLD';
+    return rust.PageTextData(
+      fullText: text,
+      charRects: [
+        for (var i = 0; i < text.length; i++)
+          rust.RectPt(
+            left: 50.0 + i * 20,
+            top: 100,
+            right: 50.0 + (i + 1) * 20,
+            bottom: 120,
+          ),
+      ],
+      fragments: [
+        rust.TextFragmentData(
+          index: 0,
+          length: text.length,
+          bounds: const rust.RectPt(left: 50, top: 100, right: 250, bottom: 120),
+        ),
+      ],
+      links: const [
+        rust.LinkData(
+          rect: rust.RectPt(left: 50, top: 300, right: 150, bottom: 320),
+          url: 'https://typst.app',
+          destPage: null,
+          destXPt: null,
+          destYPt: null,
+        ),
+        rust.LinkData(
+          rect: rust.RectPt(left: 50, top: 400, right: 150, bottom: 420),
+          url: null,
+          destPage: 3,
+          destXPt: 0,
+          destYPt: 0,
+        ),
+      ],
+    );
   }
 
   @override
@@ -197,6 +247,85 @@ void main() {
     expect(tiles, isNotEmpty);
     expect(tiles.first.fullW, closeTo(595 * 4, 8));
     expect(tiles.first.h, lessThan(tiles.first.fullH));
+  });
+
+  testWidgets('mouse drag selects text and controller exposes it',
+      (tester) async {
+    final (session, _) = await makeSession();
+    final controller = TypstViewerController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TypstViewer(
+          session: session,
+          controller: controller,
+          params: const TypstViewerParams(
+            renderDelay: Duration(milliseconds: 1),
+          ),
+        ),
+      ),
+    );
+    await settle(tester); // loads page text for visible pages
+
+    // Page 1 starts at doc (8, 8); text row at page-local y 100..120,
+    // chars from x 50. Zoom is fit-width (800 / 611).
+    const zoom = 800 / 611;
+    Offset docToView(Offset doc) => Offset(doc.dx * zoom, doc.dy * zoom);
+    final from = docToView(const Offset(8 + 55, 8 + 110));
+    final to = docToView(const Offset(8 + 145, 8 + 110));
+
+    final gesture = await tester.startGesture(
+      from,
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pump(const Duration(milliseconds: 30));
+    await gesture.moveTo(to);
+    await tester.pump(const Duration(milliseconds: 30));
+    await gesture.up();
+    await tester.pump(const Duration(milliseconds: 30));
+
+    expect(controller.selectedText, isNotEmpty);
+    expect('HELLOWORLD', contains(controller.selectedText));
+    expect(controller.selectedText.length, greaterThanOrEqualTo(4));
+
+    controller.clearSelection();
+    expect(controller.selectedText, isEmpty);
+  });
+
+  testWidgets('tapping links fires callback and navigates internal dests',
+      (tester) async {
+    final (session, _) = await makeSession();
+    final controller = TypstViewerController();
+    final tappedLinks = <TypstLink>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TypstViewer(
+          session: session,
+          controller: controller,
+          params: TypstViewerParams(
+            renderDelay: const Duration(milliseconds: 1),
+            onLinkTap: tappedLinks.add,
+          ),
+        ),
+      ),
+    );
+    await settle(tester);
+
+    const zoom = 800 / 611;
+    // URL link at page-local (50..150, 300..320). The tap only resolves
+    // after the double-tap recognizer's timeout.
+    await tester.tapAt(const Offset((8 + 100) * zoom, (8 + 310) * zoom));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(tappedLinks, hasLength(1));
+    expect(tappedLinks.first.url, Uri.parse('https://typst.app'));
+
+    // Internal link to page 3 at page-local (50..150, 400..420).
+    await tester.tapAt(const Offset((8 + 100) * zoom, (8 + 410) * zoom));
+    await tester.pump(const Duration(milliseconds: 400));
+    await settle(tester);
+    expect(tappedLinks, hasLength(2));
+    expect(controller.currentPageNumber, 3);
   });
 
   testWidgets('recompile keeps old images until replacements arrive',

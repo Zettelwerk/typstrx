@@ -24,6 +24,15 @@ abstract class TypstSession implements RustOpaqueInterface {
   static Future<TypstSession> create({required SessionOptions options}) =>
       RustLib.instance.api.crateApiSessionTypstSessionCreate(options: options);
 
+  /// Extracts text and link geometry for page `page_index` (0-based).
+  ///
+  /// Fails with [`TypstrxError::Stale`] when `generation` no longer matches
+  /// the latest compiled document.
+  Future<PageTextData> pageText({
+    required BigInt generation,
+    required int pageIndex,
+  });
+
   /// Registers all font faces contained in `data` (TTF/OTF, also
   /// collections). Returns the number of faces added. Takes effect on the
   /// next compilation.

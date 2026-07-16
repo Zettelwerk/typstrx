@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 419570723;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 602791988;
 
 // Section: executor
 
@@ -127,6 +127,61 @@ fn wire__crate__api__session__TypstSession_create_impl(
                 transform_result_sse::<_, ()>((move || {
                     let output_ok = Result::<_, ()>::Ok(
                         crate::api::session::TypstSession::create(api_options),
+                    )?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__session__TypstSession_page_text_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "TypstSession_page_text",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TypstSession>,
+            >>::sse_decode(&mut deserializer);
+            let api_generation = <u64>::sse_decode(&mut deserializer);
+            let api_page_index = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, crate::api::types::TypstrxError>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_that_guard = api_that_guard.unwrap();
+                    let output_ok = crate::api::session::TypstSession::page_text(
+                        &*api_that_guard,
+                        api_generation,
+                        api_page_index,
                     )?;
                     Ok(output_ok)
                 })())
@@ -468,6 +523,24 @@ impl SseDecode for i32 {
     }
 }
 
+impl SseDecode for crate::api::types::LinkData {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_rect = <crate::api::types::RectPt>::sse_decode(deserializer);
+        let mut var_url = <Option<String>>::sse_decode(deserializer);
+        let mut var_destPage = <Option<u32>>::sse_decode(deserializer);
+        let mut var_destXPt = <Option<f64>>::sse_decode(deserializer);
+        let mut var_destYPt = <Option<f64>>::sse_decode(deserializer);
+        return crate::api::types::LinkData {
+            rect: var_rect,
+            url: var_url,
+            dest_page: var_destPage,
+            dest_x_pt: var_destXPt,
+            dest_y_pt: var_destYPt,
+        };
+    }
+}
+
 impl SseDecode for Vec<String> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -475,6 +548,18 @@ impl SseDecode for Vec<String> {
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
             ans_.push(<String>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::types::LinkData> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::types::LinkData>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -499,6 +584,32 @@ impl SseDecode for Vec<u8> {
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
             ans_.push(<u8>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::types::RectPt> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::types::RectPt>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::types::TextFragmentData> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::types::TextFragmentData>::sse_decode(
+                deserializer,
+            ));
         }
         return ans_;
     }
@@ -529,6 +640,17 @@ impl SseDecode for Option<String> {
     }
 }
 
+impl SseDecode for Option<f64> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<f64>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<u32> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -548,6 +670,39 @@ impl SseDecode for crate::api::types::PageInfo {
         return crate::api::types::PageInfo {
             width_pt: var_widthPt,
             height_pt: var_heightPt,
+        };
+    }
+}
+
+impl SseDecode for crate::api::types::PageTextData {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_fullText = <String>::sse_decode(deserializer);
+        let mut var_charRects = <Vec<crate::api::types::RectPt>>::sse_decode(deserializer);
+        let mut var_fragments =
+            <Vec<crate::api::types::TextFragmentData>>::sse_decode(deserializer);
+        let mut var_links = <Vec<crate::api::types::LinkData>>::sse_decode(deserializer);
+        return crate::api::types::PageTextData {
+            full_text: var_fullText,
+            char_rects: var_charRects,
+            fragments: var_fragments,
+            links: var_links,
+        };
+    }
+}
+
+impl SseDecode for crate::api::types::RectPt {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_left = <f64>::sse_decode(deserializer);
+        let mut var_top = <f64>::sse_decode(deserializer);
+        let mut var_right = <f64>::sse_decode(deserializer);
+        let mut var_bottom = <f64>::sse_decode(deserializer);
+        return crate::api::types::RectPt {
+            left: var_left,
+            top: var_top,
+            right: var_right,
+            bottom: var_bottom,
         };
     }
 }
@@ -574,6 +729,20 @@ impl SseDecode for crate::api::types::SessionOptions {
         return crate::api::types::SessionOptions {
             package_cache_dir: var_packageCacheDir,
             allow_package_download: var_allowPackageDownload,
+        };
+    }
+}
+
+impl SseDecode for crate::api::types::TextFragmentData {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_index = <u32>::sse_decode(deserializer);
+        let mut var_length = <u32>::sse_decode(deserializer);
+        let mut var_bounds = <crate::api::types::RectPt>::sse_decode(deserializer);
+        return crate::api::types::TextFragmentData {
+            index: var_index,
+            length: var_length,
+            bounds: var_bounds,
         };
     }
 }
@@ -682,23 +851,29 @@ fn pde_ffi_dispatcher_primary_impl(
             wire__crate__api__session__TypstSession_compile_impl(port, ptr, rust_vec_len, data_len)
         }
         2 => wire__crate__api__session__TypstSession_create_impl(port, ptr, rust_vec_len, data_len),
-        3 => wire__crate__api__session__TypstSession_register_font_impl(
+        3 => wire__crate__api__session__TypstSession_page_text_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        4 => wire__crate__api__session__TypstSession_render_page_region_impl(
+        4 => wire__crate__api__session__TypstSession_register_font_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        5 => {
+        5 => wire__crate__api__session__TypstSession_render_page_region_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        6 => {
             wire__crate__api__session__TypstSession_set_file_impl(port, ptr, rust_vec_len, data_len)
         }
-        6 => wire__crate__api__init_app_impl(port, ptr, rust_vec_len, data_len),
-        7 => {
+        7 => wire__crate__api__init_app_impl(port, ptr, rust_vec_len, data_len),
+        8 => {
             wire__crate__api__types__session_options_default_impl(port, ptr, rust_vec_len, data_len)
         }
         _ => unreachable!(),
@@ -780,6 +955,27 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::types::DiagnosticSeverity>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::types::LinkData {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.rect.into_into_dart().into_dart(),
+            self.url.into_into_dart().into_dart(),
+            self.dest_page.into_into_dart().into_dart(),
+            self.dest_x_pt.into_into_dart().into_dart(),
+            self.dest_y_pt.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::types::LinkData {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::types::LinkData>
+    for crate::api::types::LinkData
+{
+    fn into_into_dart(self) -> crate::api::types::LinkData {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::types::PageInfo {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -794,6 +990,47 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::types::PageInfo>
     for crate::api::types::PageInfo
 {
     fn into_into_dart(self) -> crate::api::types::PageInfo {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::types::PageTextData {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.full_text.into_into_dart().into_dart(),
+            self.char_rects.into_into_dart().into_dart(),
+            self.fragments.into_into_dart().into_dart(),
+            self.links.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::types::PageTextData
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::types::PageTextData>
+    for crate::api::types::PageTextData
+{
+    fn into_into_dart(self) -> crate::api::types::PageTextData {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::types::RectPt {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.left.into_into_dart().into_dart(),
+            self.top.into_into_dart().into_dart(),
+            self.right.into_into_dart().into_dart(),
+            self.bottom.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::types::RectPt {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::types::RectPt> for crate::api::types::RectPt {
+    fn into_into_dart(self) -> crate::api::types::RectPt {
         self
     }
 }
@@ -837,6 +1074,28 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::types::SessionOptions>
     for crate::api::types::SessionOptions
 {
     fn into_into_dart(self) -> crate::api::types::SessionOptions {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::types::TextFragmentData {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.index.into_into_dart().into_dart(),
+            self.length.into_into_dart().into_dart(),
+            self.bounds.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::types::TextFragmentData
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::types::TextFragmentData>
+    for crate::api::types::TextFragmentData
+{
+    fn into_into_dart(self) -> crate::api::types::TextFragmentData {
         self
     }
 }
@@ -972,12 +1231,33 @@ impl SseEncode for i32 {
     }
 }
 
+impl SseEncode for crate::api::types::LinkData {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <crate::api::types::RectPt>::sse_encode(self.rect, serializer);
+        <Option<String>>::sse_encode(self.url, serializer);
+        <Option<u32>>::sse_encode(self.dest_page, serializer);
+        <Option<f64>>::sse_encode(self.dest_x_pt, serializer);
+        <Option<f64>>::sse_encode(self.dest_y_pt, serializer);
+    }
+}
+
 impl SseEncode for Vec<String> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <String>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::types::LinkData> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::types::LinkData>::sse_encode(item, serializer);
         }
     }
 }
@@ -1002,6 +1282,26 @@ impl SseEncode for Vec<u8> {
     }
 }
 
+impl SseEncode for Vec<crate::api::types::RectPt> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::types::RectPt>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::types::TextFragmentData> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::types::TextFragmentData>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::api::types::TypstDiagnostic> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -1018,6 +1318,16 @@ impl SseEncode for Option<String> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <String>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<f64> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <f64>::sse_encode(value, serializer);
         }
     }
 }
@@ -1040,6 +1350,26 @@ impl SseEncode for crate::api::types::PageInfo {
     }
 }
 
+impl SseEncode for crate::api::types::PageTextData {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.full_text, serializer);
+        <Vec<crate::api::types::RectPt>>::sse_encode(self.char_rects, serializer);
+        <Vec<crate::api::types::TextFragmentData>>::sse_encode(self.fragments, serializer);
+        <Vec<crate::api::types::LinkData>>::sse_encode(self.links, serializer);
+    }
+}
+
+impl SseEncode for crate::api::types::RectPt {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <f64>::sse_encode(self.left, serializer);
+        <f64>::sse_encode(self.top, serializer);
+        <f64>::sse_encode(self.right, serializer);
+        <f64>::sse_encode(self.bottom, serializer);
+    }
+}
+
 impl SseEncode for crate::api::types::RenderedRegion {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -1054,6 +1384,15 @@ impl SseEncode for crate::api::types::SessionOptions {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Option<String>>::sse_encode(self.package_cache_dir, serializer);
         <bool>::sse_encode(self.allow_package_download, serializer);
+    }
+}
+
+impl SseEncode for crate::api::types::TextFragmentData {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u32>::sse_encode(self.index, serializer);
+        <u32>::sse_encode(self.length, serializer);
+        <crate::api::types::RectPt>::sse_encode(self.bounds, serializer);
     }
 }
 

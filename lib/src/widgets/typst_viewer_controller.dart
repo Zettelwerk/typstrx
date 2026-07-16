@@ -41,6 +41,15 @@ class TypstViewerController extends ChangeNotifier
     _state?._setZoom(zoom, focalPoint: focalPoint);
   }
 
+  /// Scrolls to an internal link destination.
+  void goToDest(TypstDest dest) => _state?._goToDest(dest);
+
+  /// The currently selected text (empty when nothing is selected).
+  String get selectedText => _state?._selectedText() ?? '';
+
+  /// Clears the text selection.
+  void clearSelection() => _state?._clearSelection();
+
   void _attach(_TypstViewerState state) {
     _state = state;
     state._txController.addListener(notifyListeners);

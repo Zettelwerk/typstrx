@@ -70,6 +70,50 @@ pub struct TypstDiagnostic {
     pub column: Option<u32>,
 }
 
+/// A rectangle in page coordinates: typographic points, top-left origin,
+/// y-down (`top <= bottom`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct RectPt {
+    pub left: f64,
+    pub top: f64,
+    pub right: f64,
+    pub bottom: f64,
+}
+
+/// Text and link geometry of one page.
+pub struct PageTextData {
+    /// The page's text in visual reading order, lines separated by `\n`.
+    pub full_text: String,
+    /// One rect per UTF-16 code unit of `full_text` (so the list indexes the
+    /// text as a Dart `String`). Newline separators have zero-width rects.
+    pub char_rects: Vec<RectPt>,
+    /// Consecutive runs of `full_text` with their bounds; fragments cover the
+    /// whole text without gaps.
+    pub fragments: Vec<TextFragmentData>,
+    /// Links on the page.
+    pub links: Vec<LinkData>,
+}
+
+/// A text run: `full_text[index..index + length]` (UTF-16 indices).
+pub struct TextFragmentData {
+    pub index: u32,
+    pub length: u32,
+    pub bounds: RectPt,
+}
+
+/// A link region on a page. Either `url` or the `dest_*` fields are set.
+pub struct LinkData {
+    pub rect: RectPt,
+    /// External URL, if this is a web link.
+    pub url: Option<String>,
+    /// Target page (1-based) for an internal link.
+    pub dest_page: Option<u32>,
+    /// Target x position on the destination page in points.
+    pub dest_x_pt: Option<f64>,
+    /// Target y position on the destination page in points.
+    pub dest_y_pt: Option<f64>,
+}
+
 /// A rendered tile of a page: straight RGBA8888 pixels, `width * height * 4`
 /// bytes, rows top-to-bottom.
 pub struct RenderedRegion {

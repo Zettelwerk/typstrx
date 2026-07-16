@@ -1,5 +1,7 @@
 import 'package:flutter/widgets.dart';
 
+import '../document/typst_link.dart';
+
 /// Configuration for [TypstViewer].
 class TypstViewerParams {
   const TypstViewerParams({
@@ -16,6 +18,9 @@ class TypstViewerParams {
       blurRadius: 4,
       offset: Offset(1, 2),
     ),
+    this.enableTextSelection = true,
+    this.selectionColor = const Color(0x553b82f6),
+    this.onLinkTap,
   });
 
   /// Space between and around pages, in points (= logical pixels at zoom 1).
@@ -50,4 +55,15 @@ class TypstViewerParams {
 
   /// Drop shadow painted under every page; null for none.
   final BoxShadow? pageDropShadow;
+
+  /// Whether text can be selected (mouse drag / long-press) and copied.
+  final bool enableTextSelection;
+
+  /// Fill color of the selection highlight.
+  final Color selectionColor;
+
+  /// Called when a link is tapped. Internal links (with a
+  /// [TypstLink.dest]) additionally navigate within the viewer by default;
+  /// URL links only invoke this callback (wire it to e.g. `url_launcher`).
+  final void Function(TypstLink link)? onLinkTap;
 }

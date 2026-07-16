@@ -8,7 +8,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `eq`, `fmt`, `fmt`
 
 /// The outcome of a compilation. Returned for both successful and failed
 /// compiles; `success` tells them apart and `diagnostics` carries errors and
@@ -63,6 +63,50 @@ class CompileResult {
 /// Severity of a [`TypstDiagnostic`].
 enum DiagnosticSeverity { error, warning }
 
+/// A link region on a page. Either `url` or the `dest_*` fields are set.
+class LinkData {
+  final RectPt rect;
+
+  /// External URL, if this is a web link.
+  final String? url;
+
+  /// Target page (1-based) for an internal link.
+  final int? destPage;
+
+  /// Target x position on the destination page in points.
+  final double? destXPt;
+
+  /// Target y position on the destination page in points.
+  final double? destYPt;
+
+  const LinkData({
+    required this.rect,
+    this.url,
+    this.destPage,
+    this.destXPt,
+    this.destYPt,
+  });
+
+  @override
+  int get hashCode =>
+      rect.hashCode ^
+      url.hashCode ^
+      destPage.hashCode ^
+      destXPt.hashCode ^
+      destYPt.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is LinkData &&
+          runtimeType == other.runtimeType &&
+          rect == other.rect &&
+          url == other.url &&
+          destPage == other.destPage &&
+          destXPt == other.destXPt &&
+          destYPt == other.destYPt;
+}
+
 /// Size of a single page in typographic points (1/72 inch).
 class PageInfo {
   final double widthPt;
@@ -80,6 +124,77 @@ class PageInfo {
           runtimeType == other.runtimeType &&
           widthPt == other.widthPt &&
           heightPt == other.heightPt;
+}
+
+/// Text and link geometry of one page.
+class PageTextData {
+  /// The page's text in visual reading order, lines separated by `\n`.
+  final String fullText;
+
+  /// One rect per UTF-16 code unit of `full_text` (so the list indexes the
+  /// text as a Dart `String`). Newline separators have zero-width rects.
+  final List<RectPt> charRects;
+
+  /// Consecutive runs of `full_text` with their bounds; fragments cover the
+  /// whole text without gaps.
+  final List<TextFragmentData> fragments;
+
+  /// Links on the page.
+  final List<LinkData> links;
+
+  const PageTextData({
+    required this.fullText,
+    required this.charRects,
+    required this.fragments,
+    required this.links,
+  });
+
+  @override
+  int get hashCode =>
+      fullText.hashCode ^
+      charRects.hashCode ^
+      fragments.hashCode ^
+      links.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PageTextData &&
+          runtimeType == other.runtimeType &&
+          fullText == other.fullText &&
+          charRects == other.charRects &&
+          fragments == other.fragments &&
+          links == other.links;
+}
+
+/// A rectangle in page coordinates: typographic points, top-left origin,
+/// y-down (`top <= bottom`).
+class RectPt {
+  final double left;
+  final double top;
+  final double right;
+  final double bottom;
+
+  const RectPt({
+    required this.left,
+    required this.top,
+    required this.right,
+    required this.bottom,
+  });
+
+  @override
+  int get hashCode =>
+      left.hashCode ^ top.hashCode ^ right.hashCode ^ bottom.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RectPt &&
+          runtimeType == other.runtimeType &&
+          left == other.left &&
+          top == other.top &&
+          right == other.right &&
+          bottom == other.bottom;
 }
 
 /// A rendered tile of a page: straight RGBA8888 pixels, `width * height * 4`
@@ -137,6 +252,31 @@ class SessionOptions {
           runtimeType == other.runtimeType &&
           packageCacheDir == other.packageCacheDir &&
           allowPackageDownload == other.allowPackageDownload;
+}
+
+/// A text run: `full_text[index..index + length]` (UTF-16 indices).
+class TextFragmentData {
+  final int index;
+  final int length;
+  final RectPt bounds;
+
+  const TextFragmentData({
+    required this.index,
+    required this.length,
+    required this.bounds,
+  });
+
+  @override
+  int get hashCode => index.hashCode ^ length.hashCode ^ bounds.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TextFragmentData &&
+          runtimeType == other.runtimeType &&
+          index == other.index &&
+          length == other.length &&
+          bounds == other.bounds;
 }
 
 /// A compiler error or warning.
