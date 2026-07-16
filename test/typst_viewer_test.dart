@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -12,6 +11,8 @@ import 'package:typstrx/typstrx.dart' hide TypstSession;
 class FakeRustSession implements rust.TypstSession {
   var generation = 0;
   final renderedPages = <int>[];
+  final renderedRegions =
+      <({int page, int x, int y, int w, int h, int fullW, int fullH})>[];
 
   @override
   Future<rust.CompileResult> compile({required String source}) async {
@@ -41,6 +42,15 @@ class FakeRustSession implements rust.TypstSession {
       throw const rust.TypstrxError.stale();
     }
     renderedPages.add(pageIndex + 1);
+    renderedRegions.add((
+      page: pageIndex + 1,
+      x: x,
+      y: y,
+      w: width,
+      h: height,
+      fullW: fullWidth,
+      fullH: fullHeight,
+    ));
     final pixels = Uint8List(width * height * 4);
     for (var i = 0; i < pixels.length; i += 4) {
       pixels[i] = 0xff; // red
@@ -154,6 +164,39 @@ void main() {
     expect(controller.currentZoom, 8.0); // default maxScale
     controller.setZoom(0.01);
     expect(controller.currentZoom, 0.25); // default minScale
+  });
+
+  testWidgets('zooming in renders a partial high-resolution tile',
+      (tester) async {
+    final (session, fake) = await makeSession();
+    final controller = TypstViewerController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TypstViewer(
+          session: session,
+          controller: controller,
+          params: const TypstViewerParams(
+            renderDelay: Duration(milliseconds: 1),
+          ),
+        ),
+      ),
+    );
+    await settle(tester);
+    fake.renderedRegions.clear();
+
+    controller.setZoom(4);
+    await settle(tester);
+
+    // A partial render must have been issued: a window smaller than the
+    // virtual full page, offset into it, at tile scale (zoom 4 x dpr 3
+    // clamped to maxRenderScale 4) => fullW = 595pt * 4 = 2380 px.
+    final tiles = fake.renderedRegions
+        .where((r) => r.w < r.fullW || r.h < r.fullH)
+        .toList();
+    expect(tiles, isNotEmpty);
+    expect(tiles.first.fullW, closeTo(595 * 4, 8));
+    expect(tiles.first.h, lessThan(tiles.first.fullH));
   });
 
   testWidgets('recompile keeps old images until replacements arrive',

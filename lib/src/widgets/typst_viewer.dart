@@ -324,6 +324,51 @@ class _TypstViewerState extends State<TypstViewer> {
       if (!mounted || _document != document) return;
       await _cache.renderPreview(page, previewScale);
     }
+
+    await _updateTiles(document, layout, visible, previewScale);
+  }
+
+  /// Renders one high-resolution tile per visible page — the visible window
+  /// of the page at the device's true scale — whenever the preview tier's
+  /// capped scale is not sharp enough.
+  Future<void> _updateTiles(
+    TypstDocument document,
+    TypstPageLayout layout,
+    Rect visible,
+    double previewScale,
+  ) async {
+    final tileScale = clampDouble(
+      _currentZoom * _devicePixelRatio,
+      0.5,
+      widget.params.maxRenderScale,
+    );
+    if (tileScale <= previewScale * 1.05) {
+      _cache.pruneTiles(keep: const {});
+      return;
+    }
+
+    // A modest margin around the viewport so small pans stay sharp without
+    // re-rendering.
+    final tileWindow = visible.inflate(visible.shortestSide * 0.15);
+    final keep = <int>{};
+    final requests = <(TypstPage, Rect, Rect)>[];
+    for (var i = 0; i < layout.pageRects.length; i++) {
+      final pageRect = layout.pageRects[i];
+      final tileRect = pageRect.intersect(tileWindow);
+      if (tileRect.isEmpty) continue;
+      final pageNumber = i + 1;
+      keep.add(pageNumber);
+      if (!_cache.hasFreshTile(
+          pageNumber, tileRect, tileScale, document.generation)) {
+        requests.add((document.pages[i], pageRect, tileRect));
+      }
+    }
+    _cache.pruneTiles(keep: keep);
+
+    for (final (page, pageRect, tileRect) in requests) {
+      if (!mounted || _document != document) return;
+      await _cache.renderTile(page, pageRect, tileRect, tileScale);
+    }
   }
 
   // ---- build ----
@@ -405,6 +450,7 @@ class _TypstDocumentPainter extends CustomPainter {
       }
       canvas.drawRect(rect, pagePaint);
 
+      final imagePaint = Paint()..filterQuality = FilterQuality.medium;
       final cached = state._cache.previewOf(i + 1);
       if (cached != null) {
         canvas.drawImageRect(
@@ -416,7 +462,23 @@ class _TypstDocumentPainter extends CustomPainter {
             cached.image.height.toDouble(),
           ),
           rect,
-          Paint()..filterQuality = FilterQuality.medium,
+          imagePaint,
+        );
+      }
+
+      // Sharp visible-window tile on top of the stretched preview.
+      final tile = state._cache.tileOf(i + 1, document.generation);
+      if (tile != null) {
+        canvas.drawImageRect(
+          tile.image,
+          Rect.fromLTWH(
+            0,
+            0,
+            tile.image.width.toDouble(),
+            tile.image.height.toDouble(),
+          ),
+          tile.rect,
+          imagePaint,
         );
       }
     }
