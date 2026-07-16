@@ -36,6 +36,7 @@ class TypstViewerParams {
     this.maxScale = 8.0,
     this.maxRenderDpi = 288.0,
     this.previewDpi = 144.0,
+    this.fixedRasterDpi,
     this.maxImageCacheBytes = 100 * 1024 * 1024,
     this.renderDelay = const Duration(milliseconds: 80),
     this.backgroundColor = const Color(0xffdddddd),
@@ -155,6 +156,37 @@ class TypstViewerParams {
   /// the difference versus the eventual hi-res tile is only visible in the
   /// brief moment before that tile finishes rendering.
   final double previewDpi;
+
+  /// Overrides both [previewDpi] and [maxRenderDpi]: when set, every render
+  /// — preview and tile alike — targets exactly this DPI, always, no matter
+  /// the current zoom or device pixel ratio.
+  ///
+  /// The default (`null`) behavior renders at `min(currentZoom *
+  /// devicePixelRatio * 72, cap)` for each tier — i.e. resolution follows
+  /// what's actually needed on screen, only ever spending render/memory
+  /// budget on detail that's visible, and it never looks blurry because it
+  /// never renders *less* than the screen needs either (see
+  /// [TypstViewerController.currentRasterDpi], which reads back that
+  /// need-based value — it's normal for it to read well under [previewDpi]
+  /// at a modest zoom, since that field is a ceiling, not a target).
+  ///
+  /// Setting [fixedRasterDpi] switches to a fixed-quality model instead:
+  /// the whole page is rasterized once at exactly this DPI and then scaled
+  /// on screen like any bitmap as you zoom — sharp near that DPI's native
+  /// resolution, increasingly blurry zoomed in further past it (it's then
+  /// genuinely magnifying an existing raster, rather than the adaptive
+  /// default's re-rasterizing-from-the-compiled-document approach), and
+  /// wastefully oversampled zoomed out far below it. Because preview and
+  /// tile target the same fixed value, the hi-res tile tier effectively
+  /// never triggers in this mode — there's only one raster per page.
+  ///
+  /// This exists for comparing the two models hands-on (the example app's
+  /// rasterization panel has a toggle for it) — e.g. against pdfrx, whose
+  /// preview tier works this way (a fixed `onePassRenderingScaleThreshold`
+  /// target, defaulting to ~200 DPI) while its high-res tile tier does not
+  /// (it scales with zoom, uncapped by default). Defaults to `null`
+  /// (adaptive, resolution follows zoom).
+  final double? fixedRasterDpi;
 
   /// Total memory budget, in bytes, for all cached page preview and tile
   /// images together.

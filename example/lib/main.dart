@@ -74,6 +74,8 @@ class _EditorPageState extends State<EditorPage> {
   // tradeoff.
   double _maxRenderDpi = const TypstViewerParams().maxRenderDpi;
   double _previewDpi = const TypstViewerParams().previewDpi;
+  bool _useFixedDpi = false;
+  double _fixedDpi = const TypstViewerParams().previewDpi;
 
   @override
   void initState() {
@@ -135,16 +137,23 @@ class _EditorPageState extends State<EditorPage> {
                     params: TypstViewerParams(
                       maxRenderDpi: _maxRenderDpi,
                       previewDpi: _previewDpi,
+                      fixedRasterDpi: _useFixedDpi ? _fixedDpi : null,
                     ),
                   ),
                 ),
                 _RasterizationPanel(
                   maxRenderDpi: _maxRenderDpi,
                   previewDpi: _previewDpi,
+                  useFixedDpi: _useFixedDpi,
+                  fixedDpi: _fixedDpi,
                   onMaxRenderDpiChanged: (value) =>
                       setState(() => _maxRenderDpi = value),
                   onPreviewDpiChanged: (value) =>
                       setState(() => _previewDpi = value),
+                  onUseFixedDpiChanged: (value) =>
+                      setState(() => _useFixedDpi = value),
+                  onFixedDpiChanged: (value) =>
+                      setState(() => _fixedDpi = value),
                   viewerController: _viewerController,
                 ),
                 if (diagnostics.isNotEmpty)
@@ -189,15 +198,23 @@ class _RasterizationPanel extends StatelessWidget {
   const _RasterizationPanel({
     required this.maxRenderDpi,
     required this.previewDpi,
+    required this.useFixedDpi,
+    required this.fixedDpi,
     required this.onMaxRenderDpiChanged,
     required this.onPreviewDpiChanged,
+    required this.onUseFixedDpiChanged,
+    required this.onFixedDpiChanged,
     required this.viewerController,
   });
 
   final double maxRenderDpi;
   final double previewDpi;
+  final bool useFixedDpi;
+  final double fixedDpi;
   final ValueChanged<double> onMaxRenderDpiChanged;
   final ValueChanged<double> onPreviewDpiChanged;
+  final ValueChanged<bool> onUseFixedDpiChanged;
+  final ValueChanged<double> onFixedDpiChanged;
   final TypstViewerController viewerController;
 
   @override
@@ -212,23 +229,40 @@ class _RasterizationPanel extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(
-                child: _DpiSlider(
-                  label: 'Tile cap (maxRenderDpi)',
-                  value: maxRenderDpi,
-                  onChanged: onMaxRenderDpiChanged,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _DpiSlider(
-                  label: 'Preview cap (previewDpi)',
-                  value: previewDpi,
-                  onChanged: onPreviewDpiChanged,
-                ),
+              Switch(value: useFixedDpi, onChanged: onUseFixedDpiChanged),
+              const SizedBox(width: 4),
+              Text(
+                'Fixed DPI (ignore zoom, like pdfrx\'s preview tier)',
+                style: labelStyle,
               ),
             ],
           ),
+          if (useFixedDpi)
+            _DpiSlider(
+              label: 'Fixed DPI',
+              value: fixedDpi,
+              onChanged: onFixedDpiChanged,
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: _DpiSlider(
+                    label: 'Tile cap (maxRenderDpi)',
+                    value: maxRenderDpi,
+                    onChanged: onMaxRenderDpiChanged,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _DpiSlider(
+                    label: 'Preview cap (previewDpi)',
+                    value: previewDpi,
+                    onChanged: onPreviewDpiChanged,
+                  ),
+                ),
+              ],
+            ),
           Text(_metricsLine(), style: labelStyle),
           const SizedBox(height: 4),
         ],

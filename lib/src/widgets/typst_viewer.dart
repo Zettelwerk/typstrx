@@ -406,11 +406,14 @@ class _TypstViewerState extends State<TypstViewer> {
 
     final visible = _visibleRect;
     final cacheRect = visible.inflate(visible.height / 2);
-    final previewScale = clampDouble(
-      _currentZoom * _devicePixelRatio,
-      0.5,
-      widget.params.previewDpi / _pointsPerInch,
-    );
+    final fixedDpi = widget.params.fixedRasterDpi;
+    final previewScale = fixedDpi != null
+        ? fixedDpi / _pointsPerInch
+        : clampDouble(
+            _currentZoom * _devicePixelRatio,
+            0.5,
+            widget.params.previewDpi / _pointsPerInch,
+          );
 
     final visiblePages = <int>{};
     final toRender = <TypstPage>[];
@@ -444,11 +447,14 @@ class _TypstViewerState extends State<TypstViewer> {
     Rect visible,
     double previewScale,
   ) async {
-    final tileScale = clampDouble(
-      _currentZoom * _devicePixelRatio,
-      0.5,
-      widget.params.maxRenderDpi / _pointsPerInch,
-    );
+    final fixedDpi = widget.params.fixedRasterDpi;
+    final tileScale = fixedDpi != null
+        ? fixedDpi / _pointsPerInch
+        : clampDouble(
+            _currentZoom * _devicePixelRatio,
+            0.5,
+            widget.params.maxRenderDpi / _pointsPerInch,
+          );
     if (tileScale <= previewScale * 1.05) {
       _cache.pruneTiles(keep: const {});
       return;
