@@ -91,18 +91,31 @@ class TypstViewerParams {
 
   // ---- rasterization quality & performance ----
   //
-  // The viewer renders two tiers of raster image per page: a whole-page
-  // "preview" (always covers the full page, capped by [previewDpi]) and,
-  // once zoomed in past the preview's sharpness, one high-resolution "tile"
-  // covering just the visible window of the page (capped by
-  // [maxRenderDpi]). See TypstViewerController.currentRasterScale (and its
-  // DPI counterpart) to read back which tier — and exact resolution — is
-  // actually on screen right now.
+  // The viewer renders two tiers of raster image per page, in two stages:
+  //
+  // Stage one: a whole-page "preview" is always rasterized at the fixed
+  // [previewDpi] baseline, regardless of current zoom — this exists so
+  // every nearby page is at least legible the instant it's needed, without
+  // waiting to find out what resolution the current zoom will end up
+  // wanting. This matches pdfrx's preview tier (a fixed
+  // `onePassRenderingScaleThreshold` target).
+  //
+  // Stage two: if the *current* zoom needs more resolution than that fixed
+  // baseline provides, a sharper "tile" covering just the visible window is
+  // rasterized on top, adaptively — `min(currentZoom * devicePixelRatio *
+  // 72, maxRenderDpi)` DPI, capped by [maxRenderDpi]. Below that point (zoomed
+  // out, or zoomed in but still under the preview's baseline), the fixed
+  // preview alone is sharp enough and no tile is rendered at all.
+  //
+  // See TypstViewerController.currentRasterScale (and its DPI counterpart)
+  // to read back which tier — and exact resolution — is actually on screen
+  // right now.
 
   /// Upper bound, in DPI (dots/pixels per inch; 1 Typst point = 1/72in, so
   /// this is `pixelsPerPoint * 72`), for the high-resolution tile rendered
-  /// for the page(s) under the viewport once the view is zoomed in past
-  /// what the preview tier can show sharply.
+  /// for the page(s) under the viewport once the current zoom needs more
+  /// resolution than the fixed [previewDpi] baseline provides (stage two —
+  /// see the section intro above).
   ///
   /// The tile is rendered at `min(currentZoom * devicePixelRatio * 72,
   /// maxRenderDpi)` DPI, so this is the ceiling on how sharp the visible
@@ -110,6 +123,12 @@ class TypstViewerParams {
   /// [maxScale]). `72` DPI would mean one rendered pixel per Typst point at
   /// "100%" print scale — roughly screen resolution on a non-retina
   /// display; the default `288` is sharp on typical high-DPI displays.
+  ///
+  /// pdfrx's analogous high-res tile tier has no DPI ceiling of its own —
+  /// it scales with zoom unbounded, relying only on the zoom range itself
+  /// (its `maxScale`) to keep things sane. Set this very high (or raise
+  /// [maxScale] and this together) to reproduce that "stays sharp at
+  /// extreme zoom" behavior instead of capping out at a fixed ceiling.
   ///
   /// Raising this makes zoomed-in text/vector art sharper at the cost of
   /// render time and memory: both scale roughly with the *square* of this
@@ -134,58 +153,65 @@ class TypstViewerParams {
   /// this tradeoff against your own content and target devices.
   final double maxRenderDpi;
 
-  /// Upper bound, in DPI, for the cheap whole-page preview image that's
-  /// kept for every page near the viewport.
+  /// The fixed DPI every page near the viewport is rasterized at up front
+  /// (stage one — see the section intro above), regardless of current zoom.
   ///
-  /// The preview exists so every nearby page is at least legible the
-  /// instant it scrolls into view, before the (debounced, more expensive)
-  /// high-resolution tile for the *currently visible* page finishes
-  /// rendering. It is rendered at `min(currentZoom * devicePixelRatio * 72,
-  /// previewDpi)` DPI and stretched to fill the page while zoomed in
-  /// further, until the sharp tile is ready and painted on top.
+  /// Unlike [maxRenderDpi] this is not a ceiling that adapts down when
+  /// zoomed out: the preview always targets exactly this DPI, so every
+  /// nearby page is at least this sharp the instant it's needed, without
+  /// waiting to find out what resolution the current zoom will end up
+  /// wanting. It's replaced by a sharper, zoom-adaptive tile (capped by
+  /// [maxRenderDpi]) once the current zoom actually needs more than this
+  /// provides; below that point, this fixed preview is what's on screen.
+  /// This matches pdfrx's preview tier (a fixed
+  /// `onePassRenderingScaleThreshold` target, independent of zoom).
   ///
-  /// This should generally stay well below [maxRenderDpi]: it's paid for
-  /// *every* page near the viewport (not just the current one), so a high
-  /// value here is much more expensive in aggregate than the same value on
-  /// [maxRenderDpi].
+  /// Because it's fixed rather than adaptive, and paid for *every* page
+  /// near the viewport (not just the current one), this should generally
+  /// stay well below [maxRenderDpi] — a high value here is wasted whenever
+  /// a page is visible at a lower zoom than this DPI implies, and that
+  /// waste multiplies across every nearby page, not just the one you're
+  /// looking at.
   ///
   /// Defaults to `144.0` DPI. Profiling a full text-heavy A4 page (see
   /// [maxRenderDpi] for the benchmark command) shows this costs ~25ms —
   /// cheap enough to pay for several nearby pages sequentially during
   /// scroll without becoming perceptible, while already sharp enough that
   /// the difference versus the eventual hi-res tile is only visible in the
-  /// brief moment before that tile finishes rendering.
+  /// brief moment before that tile finishes rendering (or not at all, if
+  /// the current zoom never exceeds what this DPI already provides).
   final double previewDpi;
 
-  /// Overrides both [previewDpi] and [maxRenderDpi]: when set, every render
-  /// — preview and tile alike — targets exactly this DPI, always, no matter
-  /// the current zoom or device pixel ratio.
+  /// Overrides both [previewDpi] and [maxRenderDpi] with a single value:
+  /// when set, every render — preview *and* tile — targets exactly this
+  /// DPI, always, no matter the current zoom or device pixel ratio. This
+  /// disables stage two entirely: since preview and tile would target the
+  /// same value, the sharper tile never has anything to add, so it never
+  /// renders — there's only one raster per page, ever.
   ///
-  /// The default (`null`) behavior renders at `min(currentZoom *
-  /// devicePixelRatio * 72, cap)` for each tier — i.e. resolution follows
-  /// what's actually needed on screen, only ever spending render/memory
-  /// budget on detail that's visible, and it never looks blurry because it
-  /// never renders *less* than the screen needs either (see
-  /// [TypstViewerController.currentRasterDpi], which reads back that
-  /// need-based value — it's normal for it to read well under [previewDpi]
-  /// at a modest zoom, since that field is a ceiling, not a target).
+  /// The default (`null`) keeps stage two working normally: [previewDpi]
+  /// rasterizes every nearby page at a fixed baseline up front, and once
+  /// the current zoom needs more than that, a sharper tile (capped by
+  /// [maxRenderDpi]) takes over for the visible page. That tile genuinely
+  /// re-rasterizes from the compiled document at the new resolution — it's
+  /// not scaling up a smaller bitmap — so it stays sharp all the way up to
+  /// [maxRenderDpi] (see [TypstViewerController.currentRasterDpi] to read
+  /// back which of the two is actually on screen at any moment).
   ///
-  /// Setting [fixedRasterDpi] switches to a fixed-quality model instead:
-  /// the whole page is rasterized once at exactly this DPI and then scaled
-  /// on screen like any bitmap as you zoom — sharp near that DPI's native
-  /// resolution, increasingly blurry zoomed in further past it (it's then
-  /// genuinely magnifying an existing raster, rather than the adaptive
-  /// default's re-rasterizing-from-the-compiled-document approach), and
-  /// wastefully oversampled zoomed out far below it. Because preview and
-  /// tile target the same fixed value, the hi-res tile tier effectively
-  /// never triggers in this mode — there's only one raster per page.
+  /// Setting [fixedRasterDpi] removes that safety net: the single raster is
+  /// scaled on screen like any bitmap as you zoom past its native
+  /// resolution — sharp near that DPI, increasingly blurry further past it,
+  /// and wastefully oversampled zoomed out far below it. There's no
+  /// adaptive tile to take over, by construction.
   ///
   /// This exists for comparing the two models hands-on (the example app's
   /// rasterization panel has a toggle for it) — e.g. against pdfrx, whose
-  /// preview tier works this way (a fixed `onePassRenderingScaleThreshold`
-  /// target, defaulting to ~200 DPI) while its high-res tile tier does not
-  /// (it scales with zoom, uncapped by default). Defaults to `null`
-  /// (adaptive, resolution follows zoom).
+  /// preview tier works exactly this way (a fixed
+  /// `onePassRenderingScaleThreshold` target, defaulting to ~200 DPI, with
+  /// no adaptive fallback of its own) while its separate high-res tile tier
+  /// does not (it re-rasterizes at the actual zoom level, uncapped, which
+  /// is what actually keeps text sharp at extreme pdfrx zoom levels — not
+  /// the fixed preview DPI). Defaults to `null`.
   final double? fixedRasterDpi;
 
   /// Total memory budget, in bytes, for all cached page preview and tile

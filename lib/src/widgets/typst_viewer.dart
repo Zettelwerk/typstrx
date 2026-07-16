@@ -406,14 +406,14 @@ class _TypstViewerState extends State<TypstViewer> {
 
     final visible = _visibleRect;
     final cacheRect = visible.inflate(visible.height / 2);
-    final fixedDpi = widget.params.fixedRasterDpi;
-    final previewScale = fixedDpi != null
-        ? fixedDpi / _pointsPerInch
-        : clampDouble(
-            _currentZoom * _devicePixelRatio,
-            0.5,
-            widget.params.previewDpi / _pointsPerInch,
-          );
+    // The preview always targets previewDpi, regardless of current zoom —
+    // it's a fixed baseline (like pdfrx's onePassRenderingScaleThreshold),
+    // not scaled down when zoomed out. _updateTiles is "stage two": it
+    // renders a sharper, zoom-adaptive tile only once the current zoom
+    // actually needs more resolution than this fixed baseline provides.
+    final previewScale =
+        (widget.params.fixedRasterDpi ?? widget.params.previewDpi) /
+            _pointsPerInch;
 
     final visiblePages = <int>{};
     final toRender = <TypstPage>[];
@@ -439,8 +439,8 @@ class _TypstViewerState extends State<TypstViewer> {
   }
 
   /// Renders one high-resolution tile per visible page — the visible window
-  /// of the page at the device's true scale — whenever the preview tier's
-  /// capped scale is not sharp enough.
+  /// of the page at the device's true scale — whenever the current zoom
+  /// needs more resolution than the preview tier's fixed baseline provides.
   Future<void> _updateTiles(
     TypstDocument document,
     TypstPageLayout layout,
