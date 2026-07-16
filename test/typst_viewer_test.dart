@@ -399,7 +399,7 @@ void main() {
 
     // A partial render must have been issued: a window smaller than the
     // virtual full page, offset into it, at tile scale (zoom 4 x dpr 3
-    // clamped to maxRenderScale 4) => fullW = 595pt * 4 = 2380 px.
+    // clamped to maxRenderDpi 288 = 4x) => fullW = 595pt * 4 = 2380 px.
     final tiles = fake.renderedRegions
         .where((r) => r.w < r.fullW || r.h < r.fullH)
         .toList();

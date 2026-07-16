@@ -19,6 +19,10 @@ import 'typst_viewer_params.dart';
 part 'typst_viewer_controller.dart';
 part 'typst_viewer_selection.dart';
 
+/// 1 Typst point = 1/72 inch — the DPI <-> pixels-per-point conversion
+/// factor used throughout rasterization.
+const _pointsPerInch = 72.0;
+
 /// Positions of all pages in document coordinates (points).
 class TypstPageLayout {
   const TypstPageLayout({required this.pageRects, required this.documentSize});
@@ -405,7 +409,7 @@ class _TypstViewerState extends State<TypstViewer> {
     final previewScale = clampDouble(
       _currentZoom * _devicePixelRatio,
       0.5,
-      widget.params.previewScaleCap,
+      widget.params.previewDpi / _pointsPerInch,
     );
 
     final visiblePages = <int>{};
@@ -443,7 +447,7 @@ class _TypstViewerState extends State<TypstViewer> {
     final tileScale = clampDouble(
       _currentZoom * _devicePixelRatio,
       0.5,
-      widget.params.maxRenderScale,
+      widget.params.maxRenderDpi / _pointsPerInch,
     );
     if (tileScale <= previewScale * 1.05) {
       _cache.pruneTiles(keep: const {});

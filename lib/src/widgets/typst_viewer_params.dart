@@ -34,8 +34,8 @@ class TypstViewerParams {
     this.margin = 8.0,
     this.minScale = 0.25,
     this.maxScale = 8.0,
-    this.maxRenderScale = 4.0,
-    this.previewScaleCap = 2.0,
+    this.maxRenderDpi = 288.0,
+    this.previewDpi = 144.0,
     this.maxImageCacheBytes = 100 * 1024 * 1024,
     this.renderDelay = const Duration(milliseconds: 80),
     this.backgroundColor = const Color(0xffdddddd),
@@ -80,9 +80,9 @@ class TypstViewerParams {
   /// [TypstViewerController.setZoom].
   ///
   /// This bounds the *view* zoom, which is independent of
-  /// [maxRenderScale] — you can allow zooming in further than the
+  /// [maxRenderDpi] — you can allow zooming in further than the
   /// rasterization sharpens (the image is then upscaled/blurry) by raising
-  /// this without raising [maxRenderScale], which trades sharpness for
+  /// this without raising [maxRenderDpi], which trades sharpness for
   /// render cost.
   ///
   /// Defaults to `8.0` (800%).
@@ -91,22 +91,24 @@ class TypstViewerParams {
   // ---- rasterization quality & performance ----
   //
   // The viewer renders two tiers of raster image per page: a whole-page
-  // "preview" (always covers the full page, capped by [previewScaleCap])
-  // and, once zoomed in past the preview's sharpness, one high-resolution
-  // "tile" covering just the visible window of the page (capped by
-  // [maxRenderScale]). See TypstViewerController.currentRasterScale to read
-  // back which tier — and exact scale — is actually on screen right now.
+  // "preview" (always covers the full page, capped by [previewDpi]) and,
+  // once zoomed in past the preview's sharpness, one high-resolution "tile"
+  // covering just the visible window of the page (capped by
+  // [maxRenderDpi]). See TypstViewerController.currentRasterScale (and its
+  // DPI counterpart) to read back which tier — and exact resolution — is
+  // actually on screen right now.
 
-  /// Upper bound, in pixels per Typst point, for the high-resolution tile
-  /// rendered for the page(s) under the viewport once the view is zoomed in
-  /// past what the preview tier can show sharply.
+  /// Upper bound, in DPI (dots/pixels per inch; 1 Typst point = 1/72in, so
+  /// this is `pixelsPerPoint * 72`), for the high-resolution tile rendered
+  /// for the page(s) under the viewport once the view is zoomed in past
+  /// what the preview tier can show sharply.
   ///
-  /// The tile is rendered at `min(currentZoom * devicePixelRatio,
-  /// maxRenderScale)`, so this is the ceiling on how sharp the visible
+  /// The tile is rendered at `min(currentZoom * devicePixelRatio * 72,
+  /// maxRenderDpi)` DPI, so this is the ceiling on how sharp the visible
   /// window ever gets, regardless of how far past it the user zooms (see
-  /// [maxScale]). `72` would mean one rendered pixel per PDF/Typst point at
-  /// "100%" print scale; `4.0` (the default) is roughly 288 DPI, which is
-  /// sharp on typical high-DPI displays.
+  /// [maxScale]). `72` DPI would mean one rendered pixel per Typst point at
+  /// "100%" print scale — roughly screen resolution on a non-retina
+  /// display; the default `288` is sharp on typical high-DPI displays.
   ///
   /// Raising this makes zoomed-in text/vector art sharper at the cost of
   /// render time and memory: both scale roughly with the *square* of this
@@ -114,45 +116,45 @@ class TypstViewerParams {
   /// rejects renders whose full-page pixel budget would be exceeded (see
   /// the `RenderTooLarge` error), so pushing this very high on large pages
   /// can start failing renders rather than just being slow. Values beyond
-  /// ~4–6 rarely produce a visible improvement.
+  /// ~350–450 DPI rarely produce a visible improvement.
   ///
-  /// Defaults to `4.0` (288 DPI). This was chosen from profiling a
+  /// Defaults to `288.0` DPI. This was chosen from profiling a
   /// viewport-sized (900×700px) tile against a text-heavy A4 page on
   /// desktop (`cargo test --test render_bench -- --ignored --nocapture` in
-  /// `rust/`, release profile): render time stays under ~12ms through 4.0x
-  /// and only starts climbing steeply past ~5.0x (22ms at 5x, 48ms at 8x)
-  /// as the page's *full* raster — not just the cropped tile — grows, since
-  /// the v1 rasterizer renders the whole page and crops (see
+  /// `rust/`, release profile): render time stays under ~12ms through 288
+  /// DPI and only starts climbing steeply past ~360 DPI (22ms) as the
+  /// page's *full* raster — not just the cropped tile — grows, since the
+  /// v1 rasterizer renders the whole page and crops (see
   /// `rust/src/render.rs`). 288 DPI also comfortably exceeds what's useful
   /// for on-screen reading at typical device pixel ratios and zoom levels,
-  /// so 4.0 sits at the point of diminishing quality returns just before
+  /// so it sits at the point of diminishing quality returns just before
   /// the cost curve bends upward. The example app's rasterization panel
   /// (sliders + live render-time/size readout) is a good way to re-check
   /// this tradeoff against your own content and target devices.
-  final double maxRenderScale;
+  final double maxRenderDpi;
 
-  /// Upper bound, in pixels per Typst point, for the cheap whole-page
-  /// preview image that's kept for every page near the viewport.
+  /// Upper bound, in DPI, for the cheap whole-page preview image that's
+  /// kept for every page near the viewport.
   ///
   /// The preview exists so every nearby page is at least legible the
   /// instant it scrolls into view, before the (debounced, more expensive)
   /// high-resolution tile for the *currently visible* page finishes
-  /// rendering. It is rendered at `min(currentZoom * devicePixelRatio,
-  /// previewScaleCap)` and stretched to fill the page while zoomed in
+  /// rendering. It is rendered at `min(currentZoom * devicePixelRatio * 72,
+  /// previewDpi)` DPI and stretched to fill the page while zoomed in
   /// further, until the sharp tile is ready and painted on top.
   ///
-  /// This should generally stay well below [maxRenderScale]: it's paid for
+  /// This should generally stay well below [maxRenderDpi]: it's paid for
   /// *every* page near the viewport (not just the current one), so a high
   /// value here is much more expensive in aggregate than the same value on
-  /// [maxRenderScale].
+  /// [maxRenderDpi].
   ///
-  /// Defaults to `2.0` (144 DPI). Profiling a full text-heavy A4 page (see
-  /// [maxRenderScale] for the benchmark command) shows this costs ~25ms —
+  /// Defaults to `144.0` DPI. Profiling a full text-heavy A4 page (see
+  /// [maxRenderDpi] for the benchmark command) shows this costs ~25ms —
   /// cheap enough to pay for several nearby pages sequentially during
   /// scroll without becoming perceptible, while already sharp enough that
   /// the difference versus the eventual hi-res tile is only visible in the
   /// brief moment before that tile finishes rendering.
-  final double previewScaleCap;
+  final double previewDpi;
 
   /// Total memory budget, in bytes, for all cached page preview and tile
   /// images together.

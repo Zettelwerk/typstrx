@@ -68,11 +68,12 @@ class _EditorPageState extends State<EditorPage> {
   final _viewerController = TypstViewerController();
   TypstCompileResult? _lastResult;
 
-  // Live-adjustable rasterization params — see TypstViewerParams docs for
-  // what these trade off. Defaults match TypstViewerParams' own defaults;
-  // drag the sliders and watch the metrics panel to explore the tradeoff.
-  double _maxRenderScale = const TypstViewerParams().maxRenderScale;
-  double _previewScaleCap = const TypstViewerParams().previewScaleCap;
+  // Live-adjustable rasterization params, in DPI — see TypstViewerParams
+  // docs for what these trade off. Defaults match TypstViewerParams' own
+  // defaults; drag the sliders and watch the metrics panel to explore the
+  // tradeoff.
+  double _maxRenderDpi = const TypstViewerParams().maxRenderDpi;
+  double _previewDpi = const TypstViewerParams().previewDpi;
 
   @override
   void initState() {
@@ -132,18 +133,18 @@ class _EditorPageState extends State<EditorPage> {
                     session: widget.session,
                     controller: _viewerController,
                     params: TypstViewerParams(
-                      maxRenderScale: _maxRenderScale,
-                      previewScaleCap: _previewScaleCap,
+                      maxRenderDpi: _maxRenderDpi,
+                      previewDpi: _previewDpi,
                     ),
                   ),
                 ),
                 _RasterizationPanel(
-                  maxRenderScale: _maxRenderScale,
-                  previewScaleCap: _previewScaleCap,
-                  onMaxRenderScaleChanged: (value) =>
-                      setState(() => _maxRenderScale = value),
-                  onPreviewScaleCapChanged: (value) =>
-                      setState(() => _previewScaleCap = value),
+                  maxRenderDpi: _maxRenderDpi,
+                  previewDpi: _previewDpi,
+                  onMaxRenderDpiChanged: (value) =>
+                      setState(() => _maxRenderDpi = value),
+                  onPreviewDpiChanged: (value) =>
+                      setState(() => _previewDpi = value),
                   viewerController: _viewerController,
                 ),
                 if (diagnostics.isNotEmpty)
@@ -181,22 +182,22 @@ class _EditorPageState extends State<EditorPage> {
   }
 }
 
-/// Sliders for the two rasterization-scale caps plus a live metrics readout,
+/// Sliders for the two rasterization DPI caps plus a live metrics readout,
 /// for exploring the quality/speed/memory tradeoff hands-on. Not part of the
 /// typstrx public API — just example scaffolding.
 class _RasterizationPanel extends StatelessWidget {
   const _RasterizationPanel({
-    required this.maxRenderScale,
-    required this.previewScaleCap,
-    required this.onMaxRenderScaleChanged,
-    required this.onPreviewScaleCapChanged,
+    required this.maxRenderDpi,
+    required this.previewDpi,
+    required this.onMaxRenderDpiChanged,
+    required this.onPreviewDpiChanged,
     required this.viewerController,
   });
 
-  final double maxRenderScale;
-  final double previewScaleCap;
-  final ValueChanged<double> onMaxRenderScaleChanged;
-  final ValueChanged<double> onPreviewScaleCapChanged;
+  final double maxRenderDpi;
+  final double previewDpi;
+  final ValueChanged<double> onMaxRenderDpiChanged;
+  final ValueChanged<double> onPreviewDpiChanged;
   final TypstViewerController viewerController;
 
   @override
@@ -212,18 +213,18 @@ class _RasterizationPanel extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: _ScaleSlider(
-                  label: 'Tile cap (maxRenderScale)',
-                  value: maxRenderScale,
-                  onChanged: onMaxRenderScaleChanged,
+                child: _DpiSlider(
+                  label: 'Tile cap (maxRenderDpi)',
+                  value: maxRenderDpi,
+                  onChanged: onMaxRenderDpiChanged,
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: _ScaleSlider(
-                  label: 'Preview cap (previewScaleCap)',
-                  value: previewScaleCap,
-                  onChanged: onPreviewScaleCapChanged,
+                child: _DpiSlider(
+                  label: 'Preview cap (previewDpi)',
+                  value: previewDpi,
+                  onChanged: onPreviewDpiChanged,
                 ),
               ),
             ],
@@ -236,8 +237,6 @@ class _RasterizationPanel extends StatelessWidget {
   }
 
   String _metricsLine() {
-    final scale = viewerController.currentRasterScale;
-    final dpi = (scale * 72).round();
     final render = viewerController.lastRender;
     final renderPart = render == null
         ? 'no render yet'
@@ -246,15 +245,15 @@ class _RasterizationPanel extends StatelessWidget {
             '(${(render.byteSize / 1024).toStringAsFixed(0)} KB) in '
             '${render.renderTime.inMilliseconds} ms';
     final cacheMb = viewerController.cacheBytes / (1024 * 1024);
-    return 'on screen: ${scale.toStringAsFixed(2)}x ($dpi dpi) · '
+    return 'on screen: ${viewerController.currentRasterDpi.round()} dpi · '
         'last render: $renderPart · '
         'cache: ${cacheMb.toStringAsFixed(1)} MB / '
         '${viewerController.cachedImageCount} images';
   }
 }
 
-class _ScaleSlider extends StatelessWidget {
-  const _ScaleSlider({
+class _DpiSlider extends StatelessWidget {
+  const _DpiSlider({
     required this.label,
     required this.value,
     required this.onChanged,
@@ -271,17 +270,17 @@ class _ScaleSlider extends StatelessWidget {
         SizedBox(
           width: 190,
           child: Text(
-            '$label: ${value.toStringAsFixed(1)}',
+            '$label: ${value.round()}',
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ),
         Expanded(
           child: Slider(
             value: value,
-            min: 0.5,
-            max: 8.0,
+            min: 36.0,
+            max: 576.0,
             divisions: 30,
-            label: value.toStringAsFixed(1),
+            label: '${value.round()} dpi',
             onChanged: onChanged,
           ),
         ),

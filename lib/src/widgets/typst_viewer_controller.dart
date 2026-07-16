@@ -26,8 +26,8 @@ class TypstViewerController extends ChangeNotifier
   int get currentPageNumber => _state?._currentPageNumber ?? 0;
 
   /// The rasterization scale (in pixels per point; 1pt = 1/72in, so
-  /// `scale * 72` is the effective DPI) of the sharpest image currently
-  /// painted for [currentPageNumber].
+  /// `scale * 72` is the effective DPI — see [currentRasterDpi]) of the
+  /// sharpest image currently painted for [currentPageNumber].
   ///
   /// This is the *actual* resolution on screen right now, which lags the
   /// target resolution implied by [currentZoom] while a (re)render is in
@@ -36,11 +36,16 @@ class TypstViewerController extends ChangeNotifier
   /// notifications, so listen to it to keep a readout in sync.
   double get currentRasterScale => _state?._currentRasterScale ?? 1.0;
 
+  /// [currentRasterScale] expressed in DPI (dots/pixels per inch) —
+  /// `currentRasterScale * 72`, matching the units of
+  /// [TypstViewerParams.maxRenderDpi]/[TypstViewerParams.previewDpi].
+  double get currentRasterDpi => currentRasterScale * _pointsPerInch;
+
   /// Metrics for the most recently completed page render (preview or hi-res
   /// tile), across all pages — pixel size, scale, and wall-clock render
   /// time. Null until the first render completes. Useful for tuning
-  /// [TypstViewerParams.maxRenderScale]/[TypstViewerParams.previewScaleCap]
-  /// against real render costs.
+  /// [TypstViewerParams.maxRenderDpi]/[TypstViewerParams.previewDpi] against
+  /// real render costs.
   RasterizationMetrics? get lastRender => _state?._cache.lastRender;
 
   /// Total bytes currently held by the page image cache, across both tiers.

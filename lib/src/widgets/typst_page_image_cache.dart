@@ -87,6 +87,9 @@ class RasterizationMetrics {
   /// Pixels per point this render was rasterized at.
   final double scale;
 
+  /// [scale] expressed in DPI (dots/pixels per inch) — `scale * 72`.
+  double get dpi => scale * 72.0;
+
   /// Wall-clock render time (FFI + Rust rasterization + Dart image decode).
   final Duration renderTime;
 
