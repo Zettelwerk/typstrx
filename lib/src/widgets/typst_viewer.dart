@@ -199,6 +199,19 @@ class _TypstViewerState extends State<TypstViewer> {
     return math.sqrt(dx * dx + dy * dy);
   }
 
+  /// The rasterization scale (pixels per point) of the sharpest image
+  /// currently painted for the current page: the hi-res tile's scale if one
+  /// is cached, otherwise the whole-page preview's scale, otherwise the
+  /// current zoom (before anything has rendered).
+  double get _currentRasterScale {
+    final generation = _document?.generation ?? 0;
+    final pageNumber = _currentPageNumber;
+    if (pageNumber == 0) return _currentZoom;
+    return _cache.tileOf(pageNumber, generation)?.scale ??
+        _cache.previewOf(pageNumber)?.scale ??
+        _currentZoom;
+  }
+
   void _onMatrixChanged() {
     _scheduleRender();
   }

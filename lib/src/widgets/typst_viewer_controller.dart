@@ -25,6 +25,17 @@ class TypstViewerController extends ChangeNotifier
   /// document is loaded).
   int get currentPageNumber => _state?._currentPageNumber ?? 0;
 
+  /// The rasterization scale (in pixels per point; 1pt = 1/72in, so
+  /// `scale * 72` is the effective DPI) of the sharpest image currently
+  /// painted for [currentPageNumber].
+  ///
+  /// This is the *actual* resolution on screen right now, which lags the
+  /// target resolution implied by [currentZoom] while a (re)render is in
+  /// flight — e.g. right after zooming in, before the sharper tile has
+  /// finished rendering. Changes are included in this controller's
+  /// notifications, so listen to it to keep a readout in sync.
+  double get currentRasterScale => _state?._currentRasterScale ?? 1.0;
+
   /// Scrolls so that the top of [pageNumber] is visible, keeping the zoom.
   void goToPage(int pageNumber) {
     final state = _state;
@@ -53,10 +64,14 @@ class TypstViewerController extends ChangeNotifier
   void _attach(_TypstViewerState state) {
     _state = state;
     state._txController.addListener(notifyListeners);
+    // Also notify when cached images change — e.g. currentRasterScale
+    // updates when a sharper tile finishes rendering, not just on pan/zoom.
+    state._cache.addListener(notifyListeners);
   }
 
   void _detach() {
     _state?._txController.removeListener(notifyListeners);
+    _state?._cache.removeListener(notifyListeners);
     _state = null;
   }
 }

@@ -73,11 +73,19 @@ class _EditorPageState extends State<EditorPage> {
     super.initState();
     widget.session.results.listen(_onResult);
     widget.session.updateSource(_controller.text);
+    // Repaint the status bar whenever the viewer's pan/zoom or rendered
+    // resolution changes, so the DPI readout stays live.
+    _viewerController.addListener(_onViewerChanged);
+  }
+
+  void _onViewerChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
     _controller.dispose();
+    _viewerController.removeListener(_onViewerChanged);
     _viewerController.dispose();
     super.dispose();
   }
@@ -141,7 +149,8 @@ class _EditorPageState extends State<EditorPage> {
                     padding: const EdgeInsets.all(4),
                     child: Text(
                       'generation ${result.generation} · '
-                      '${result.elapsed.inMilliseconds} ms',
+                      '${result.elapsed.inMilliseconds} ms · '
+                      '${_formatResolution(_viewerController)}',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ),
@@ -152,4 +161,12 @@ class _EditorPageState extends State<EditorPage> {
       ),
     );
   }
+}
+
+/// Formats the viewer's current rasterization scale as both a multiplier
+/// and the equivalent DPI (1 Typst point = 1/72 inch).
+String _formatResolution(TypstViewerController controller) {
+  final scale = controller.currentRasterScale;
+  final dpi = (scale * 72).round();
+  return '${scale.toStringAsFixed(2)}x ($dpi dpi)';
 }

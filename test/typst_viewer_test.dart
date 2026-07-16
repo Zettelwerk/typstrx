@@ -171,6 +171,42 @@ void main() {
     expect(controller.currentPageNumber, 1);
   });
 
+  testWidgets(
+      'currentRasterScale reflects the sharpest cached image and updates '
+      'as tiles render', (tester) async {
+    final (session, _) = await makeSession();
+    final controller = TypstViewerController();
+    final scaleHistory = <double>[];
+    controller.addListener(() => scaleHistory.add(controller.currentRasterScale));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TypstViewer(
+          session: session,
+          controller: controller,
+          params: const TypstViewerParams(
+            renderDelay: Duration(milliseconds: 1),
+          ),
+        ),
+      ),
+    );
+    await settle(tester);
+
+    // Once the preview has rendered, the raster scale must be positive and
+    // recorded via a controller notification (not just readable after the
+    // fact) so a UI can display a live DPI readout.
+    expect(controller.currentRasterScale, greaterThan(0));
+    expect(scaleHistory, contains(controller.currentRasterScale));
+
+    // Zooming in triggers a sharper tile; the reported scale must increase
+    // to match once that tile finishes rendering.
+    final scaleAtFitWidth = controller.currentRasterScale;
+    controller.setZoom(4);
+    await settle(tester);
+
+    expect(controller.currentRasterScale, greaterThan(scaleAtFitWidth));
+  });
+
   testWidgets('plain mouse wheel pans, ctrl+wheel zooms', (tester) async {
     final (session, _) = await makeSession();
     final controller = TypstViewerController();
