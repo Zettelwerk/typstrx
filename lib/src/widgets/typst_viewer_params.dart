@@ -1,6 +1,27 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/widgets.dart';
 
 import '../document/typst_link.dart';
+
+/// Which modifier key makes mouse-wheel scroll zoom a [TypstViewer] instead
+/// of panning it. See [TypstViewerParams.wheelZoomTrigger].
+enum WheelZoomTrigger {
+  /// Wheel scroll zooms while Control is held; otherwise it pans. The
+  /// default — matches most viewers, editors, and browsers.
+  control,
+
+  /// Wheel scroll zooms while Shift is held; otherwise it pans.
+  shift,
+
+  /// Wheel scroll zooms while Alt is held; otherwise it pans.
+  alt,
+
+  /// Wheel scroll always zooms; it never pans.
+  always,
+
+  /// Wheel scroll never zooms; it always pans.
+  never,
+}
 
 /// Configuration for [TypstViewer].
 class TypstViewerParams {
@@ -21,6 +42,8 @@ class TypstViewerParams {
     this.enableTextSelection = true,
     this.selectionColor = const Color(0x553b82f6),
     this.onLinkTap,
+    this.wheelZoomTrigger = WheelZoomTrigger.control,
+    this.shouldZoomOnWheelScroll,
   });
 
   /// Space between and around pages, in points (= logical pixels at zoom 1).
@@ -66,4 +89,14 @@ class TypstViewerParams {
   /// [TypstLink.dest]) additionally navigate within the viewer by default;
   /// URL links only invoke this callback (wire it to e.g. `url_launcher`).
   final void Function(TypstLink link)? onLinkTap;
+
+  /// Which modifier key toggles mouse-wheel scroll between panning and
+  /// zooming. Ignored when [shouldZoomOnWheelScroll] is set.
+  final WheelZoomTrigger wheelZoomTrigger;
+
+  /// Overrides [wheelZoomTrigger] with custom logic: return true to zoom on
+  /// a given wheel scroll event, false to pan. Use this for triggers other
+  /// than a single modifier key (e.g. always requiring both Control and
+  /// Shift, or basing it on [PointerScrollEvent.device]).
+  final bool Function(PointerScrollEvent event)? shouldZoomOnWheelScroll;
 }

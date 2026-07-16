@@ -184,11 +184,14 @@ extension _TypstViewerSelection on _TypstViewerState {
     return null;
   }
 
-  // ---- gestures (positions are document coordinates: the gesture surface
-  // lives inside the InteractiveViewer's transformed subtree) ----
+  // ---- gestures ----
+  //
+  // The gesture surface sits above (outside) the zoom Transform, so event
+  // positions arrive in view coordinates; every handler converts to document
+  // coordinates via [_viewToDoc] before hit-testing pages/text/links.
 
   void _onTapUp(TapUpDetails details) {
-    final link = _linkAt(details.localPosition);
+    final link = _linkAt(_viewToDoc(details.localPosition));
     if (link != null) {
       _handleLinkTap(link);
       return;
@@ -214,12 +217,12 @@ extension _TypstViewerSelection on _TypstViewerState {
 
   void _onDoubleTapDown(TapDownDetails details) {
     if (!widget.params.enableTextSelection) return;
-    _selectWordAt(details.localPosition);
+    _selectWordAt(_viewToDoc(details.localPosition));
   }
 
   void _onLongPressStart(LongPressStartDetails details) {
     if (!widget.params.enableTextSelection) return;
-    _selectWordAt(details.localPosition, showToolbar: true);
+    _selectWordAt(_viewToDoc(details.localPosition), showToolbar: true);
   }
 
   void _selectWordAt(Offset docPoint, {bool showToolbar = false}) {
@@ -238,7 +241,7 @@ extension _TypstViewerSelection on _TypstViewerState {
   void _onSelectionDragStart(DragStartDetails details) {
     if (!widget.params.enableTextSelection) return;
     _toolbarAnchor = null;
-    final point = _charPointAt(details.localPosition, tolerance: 2);
+    final point = _charPointAt(_viewToDoc(details.localPosition), tolerance: 2);
     _selAnchor = point;
     _selFocus = point;
     _repaint();
@@ -246,7 +249,8 @@ extension _TypstViewerSelection on _TypstViewerState {
 
   void _onSelectionDragUpdate(DragUpdateDetails details) {
     if (_selAnchor == null) return;
-    final point = _charPointAt(details.localPosition, tolerance: 40);
+    final point =
+        _charPointAt(_viewToDoc(details.localPosition), tolerance: 40);
     if (point != null && point != _selFocus) {
       // Selecting past a character means including it: extend forward by one
       // when the focus is after the anchor.
@@ -263,14 +267,14 @@ extension _TypstViewerSelection on _TypstViewerState {
 
   void _onSecondaryTapUp(TapUpDetails details) {
     if (!_hasSelection) return;
-    _toolbarAnchor = details.localPosition;
+    _toolbarAnchor = _viewToDoc(details.localPosition);
     _repaint();
   }
 
   // ---- hover cursor ----
 
   void _onHover(PointerHoverEvent event) {
-    final point = event.localPosition;
+    final point = _viewToDoc(event.localPosition);
     final MouseCursor cursor;
     if (_linkAt(point) != null) {
       cursor = SystemMouseCursors.click;
@@ -285,7 +289,15 @@ extension _TypstViewerSelection on _TypstViewerState {
     }
   }
 
-  // ---- toolbar & handles (view coordinates, above the InteractiveViewer) ----
+  // ---- coordinate conversion ----
+  //
+  // _txController.value maps document points -> view (screen) coordinates,
+  // matching the Transform applied to the painted content.
+
+  Offset _viewToDoc(Offset viewPoint) => MatrixUtils.transformPoint(
+        Matrix4.inverted(_txController.value),
+        viewPoint,
+      );
 
   Offset _docToView(Offset docPoint) =>
       MatrixUtils.transformPoint(_txController.value, docPoint);

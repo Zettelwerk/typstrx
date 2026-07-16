@@ -79,6 +79,10 @@ class _TypstViewerState extends State<TypstViewer> {
   MouseCursor _hoverCursor = MouseCursor.defer;
   bool _lastInputWasTouch = false;
 
+  // Touch pan/pinch-zoom gesture state (see _onGestureScale*).
+  double? _gestureStartZoom;
+  Offset? _gestureReferenceFocalPoint;
+
   @override
   void initState() {
     super.initState();
@@ -280,31 +284,95 @@ class _TypstViewerState extends State<TypstViewer> {
     );
   }
 
-  // ---- wheel handling (registered on the resolver so it wins against
-  // InteractiveViewer's own scroll-to-pan) ----
+  // ---- wheel handling ----
+  //
+  // We don't use the stock InteractiveViewer for gestures (see
+  // _documentGestures/_onGestureScale* below), so this is the only mouse
+  // wheel handler in the tree — no pointerSignalResolver coordination needed.
+
+  bool _shouldZoomOnWheel(PointerScrollEvent event) {
+    final custom = widget.params.shouldZoomOnWheelScroll;
+    if (custom != null) return custom(event);
+    final keys = HardwareKeyboard.instance;
+    return switch (widget.params.wheelZoomTrigger) {
+      WheelZoomTrigger.control => keys.isControlPressed,
+      WheelZoomTrigger.shift => keys.isShiftPressed,
+      WheelZoomTrigger.alt => keys.isAltPressed,
+      WheelZoomTrigger.always => true,
+      WheelZoomTrigger.never => false,
+    };
+  }
 
   void _onPointerSignal(PointerSignalEvent event) {
     if (event is! PointerScrollEvent) return;
-    GestureBinding.instance.pointerSignalResolver.register(event, (event) {
-      final scrollEvent = event as PointerScrollEvent;
-      if (HardwareKeyboard.instance.isControlPressed) {
-        final delta =
-            -(scrollEvent.scrollDelta.dx + scrollEvent.scrollDelta.dy) / 120.0;
-        final newZoom = _currentZoom * math.pow(1.2, delta);
-        final box = context.findRenderObject() as RenderBox?;
-        final local = box?.globalToLocal(scrollEvent.position);
-        _setZoom(newZoom.toDouble(), focalPoint: local);
-      } else {
-        final matrix = _txController.value.clone()
-          ..translateByDouble(
-            -scrollEvent.scrollDelta.dx / _currentZoom,
-            -scrollEvent.scrollDelta.dy / _currentZoom,
-            0,
-            1,
-          );
-        _txController.value = _clampMatrix(matrix);
-      }
-    });
+    if (_shouldZoomOnWheel(event)) {
+      final delta = -(event.scrollDelta.dx + event.scrollDelta.dy) / 120.0;
+      final newZoom = _currentZoom * math.pow(1.2, delta);
+      final box = context.findRenderObject() as RenderBox?;
+      final local = box?.globalToLocal(event.position);
+      _setZoom(newZoom.toDouble(), focalPoint: local);
+    } else {
+      final matrix = _txController.value.clone()
+        ..translateByDouble(
+          -event.scrollDelta.dx / _currentZoom,
+          -event.scrollDelta.dy / _currentZoom,
+          0,
+          1,
+        );
+      _txController.value = _clampMatrix(matrix);
+    }
+  }
+
+  // ---- touch pan & pinch-zoom ----
+  //
+  // Mouse is deliberately excluded (see _documentGestures): on desktop,
+  // panning is wheel-driven and mouse-drag is reserved for text selection.
+  // The math mirrors Flutter's own InteractiveViewer scale handling, minus
+  // boundary/rotation handling we don't need (we clamp ourselves).
+
+  void _onGestureScaleStart(ScaleStartDetails details) {
+    _gestureStartZoom = _currentZoom;
+    _gestureReferenceFocalPoint = MatrixUtils.transformPoint(
+      Matrix4.inverted(_txController.value),
+      details.localFocalPoint,
+    );
+  }
+
+  void _onGestureScaleUpdate(ScaleUpdateDetails details) {
+    final startZoom = _gestureStartZoom;
+    final referenceFocalPoint = _gestureReferenceFocalPoint;
+    if (startZoom == null || referenceFocalPoint == null) return;
+
+    final desiredZoom = clampDouble(
+      startZoom * details.scale,
+      widget.params.minScale,
+      widget.params.maxScale,
+    );
+    final scaleChange =
+        _currentZoom == 0 ? 1.0 : desiredZoom / _currentZoom;
+
+    final matrix = _txController.value.clone();
+    if (scaleChange != 1.0) {
+      matrix.scaleByDouble(scaleChange, scaleChange, scaleChange, 1);
+    }
+
+    // Keep the reference document point pinned under the current focal
+    // point — this also carries the pan component of the gesture (which is
+    // just a scale-1.0 "pin" of a moving focal point).
+    final focalPointScene = MatrixUtils.transformPoint(
+      Matrix4.inverted(matrix),
+      details.localFocalPoint,
+    );
+    final translation = focalPointScene - referenceFocalPoint;
+    matrix.translateByDouble(translation.dx, translation.dy, 0, 1);
+
+    _txController.value = _clampMatrix(matrix);
+  }
+
+  void _onGestureScaleEnd(ScaleEndDetails details) {
+    _gestureStartZoom = null;
+    _gestureReferenceFocalPoint = null;
+    _txController.value = _clampMatrix(_txController.value);
   }
 
   // ---- rendering pipeline ----
@@ -428,16 +496,13 @@ class _TypstViewerState extends State<TypstViewer> {
                 Positioned.fill(
                   child: ColoredBox(
                     color: widget.params.backgroundColor,
-                    child: InteractiveViewer(
-                      transformationController: _txController,
-                      constrained: false,
-                      boundaryMargin: const EdgeInsets.all(double.infinity),
-                      minScale: widget.params.minScale,
-                      maxScale: widget.params.maxScale,
-                      onInteractionEnd: (_) {
-                        _txController.value =
-                            _clampMatrix(_txController.value);
-                      },
+                    // Sized explicitly to the viewport (rather than letting
+                    // it size to the transformed content) so gestures — most
+                    // importantly wheel scroll — are captured everywhere in
+                    // the view, not just where a page happens to be painted.
+                    child: SizedBox(
+                      width: viewSize.width,
+                      height: viewSize.height,
                       child: Listener(
                         onPointerSignal: _onPointerSignal,
                         onPointerDown: (event) => _lastInputWasTouch =
@@ -448,9 +513,18 @@ class _TypstViewerState extends State<TypstViewer> {
                           child: RawGestureDetector(
                             behavior: HitTestBehavior.opaque,
                             gestures: _documentGestures(),
-                            child: CustomPaint(
-                              size: layout.documentSize,
-                              painter: _TypstDocumentPainter(this),
+                            child: ClipRect(
+                              child: AnimatedBuilder(
+                                animation: _txController,
+                                builder: (context, child) => Transform(
+                                  transform: _txController.value,
+                                  child: child,
+                                ),
+                                child: CustomPaint(
+                                  size: layout.documentSize,
+                                  painter: _TypstDocumentPainter(this),
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -467,9 +541,15 @@ class _TypstViewerState extends State<TypstViewer> {
     );
   }
 
-  /// Gestures on the document surface. The selection pan recognizer is
-  /// mouse-only so one-finger drags keep panning the InteractiveViewer on
-  /// touch screens (where selection starts with a long press instead).
+  /// Gestures on the document surface.
+  ///
+  /// - Mouse: no pan/pinch recognizer here at all — desktop panning is
+  ///   wheel-driven (see [_onPointerSignal]) and mouse-drag is reserved for
+  ///   text selection ([_onSelectionDragStart] et al., mouse-only below).
+  /// - Touch/stylus: a scale recognizer provides both one-finger drag-pan and
+  ///   two-finger pinch-zoom ([_onGestureScaleStart] et al.); text selection
+  ///   on touch starts via long-press instead of drag, so there's no
+  ///   conflict with panning.
   Map<Type, GestureRecognizerFactory> _documentGestures() {
     return {
       TapGestureRecognizer:
@@ -488,6 +568,19 @@ class _TypstViewerState extends State<TypstViewer> {
           GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
         LongPressGestureRecognizer.new,
         (recognizer) => recognizer.onLongPressStart = _onLongPressStart,
+      ),
+      ScaleGestureRecognizer:
+          GestureRecognizerFactoryWithHandlers<ScaleGestureRecognizer>(
+        () => ScaleGestureRecognizer(
+          supportedDevices: {
+            PointerDeviceKind.touch,
+            PointerDeviceKind.stylus,
+          },
+        ),
+        (recognizer) => recognizer
+          ..onStart = _onGestureScaleStart
+          ..onUpdate = _onGestureScaleUpdate
+          ..onEnd = _onGestureScaleEnd,
       ),
       if (widget.params.enableTextSelection)
         PanGestureRecognizer:

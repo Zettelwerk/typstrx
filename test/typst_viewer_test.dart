@@ -1,7 +1,6 @@
-import 'dart:typed_data';
-
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:typstrx/src/document/typst_session.dart';
 import 'package:typstrx/src/rust/api/session.dart' as rust;
@@ -170,6 +169,130 @@ void main() {
     // pages — never all ten.
     expect(fake.renderedPages.toSet().length, lessThan(6));
     expect(controller.currentPageNumber, 1);
+  });
+
+  testWidgets('plain mouse wheel pans, ctrl+wheel zooms', (tester) async {
+    final (session, _) = await makeSession();
+    final controller = TypstViewerController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TypstViewer(session: session, controller: controller),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+
+    final zoomBefore = controller.currentZoom;
+    final topBefore = controller.visibleRect.top;
+
+    final testPointer = TestPointer(1, PointerDeviceKind.mouse);
+    await tester.sendEventToBinding(testPointer.hover(const Offset(400, 300)));
+    await tester.sendEventToBinding(
+      testPointer.scroll(const Offset(0, 100)),
+    );
+    await tester.pump();
+
+    expect(controller.currentZoom, zoomBefore,
+        reason: 'plain wheel must not zoom');
+    expect(controller.visibleRect.top, greaterThan(topBefore),
+        reason: 'plain wheel must pan the view downward');
+
+    // Now with Control held: should zoom, not pan.
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    final topBeforeZoom = controller.visibleRect.top;
+    await tester.sendEventToBinding(
+      testPointer.scroll(const Offset(0, -100)),
+    );
+    await tester.pump();
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+
+    expect(controller.currentZoom, greaterThan(zoomBefore),
+        reason: 'ctrl+wheel must zoom in');
+    expect(controller.visibleRect.top, isNot(topBeforeZoom));
+  });
+
+  testWidgets('wheelZoomTrigger.always makes plain wheel zoom', (
+    tester,
+  ) async {
+    final (session, _) = await makeSession();
+    final controller = TypstViewerController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TypstViewer(
+          session: session,
+          controller: controller,
+          params: const TypstViewerParams(
+            wheelZoomTrigger: WheelZoomTrigger.always,
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+
+    final zoomBefore = controller.currentZoom;
+    final testPointer = TestPointer(1, PointerDeviceKind.mouse);
+    await tester.sendEventToBinding(testPointer.hover(const Offset(400, 300)));
+    await tester.sendEventToBinding(
+      testPointer.scroll(const Offset(0, -100)),
+    );
+    await tester.pump();
+
+    expect(controller.currentZoom, greaterThan(zoomBefore));
+  });
+
+  testWidgets('touch pinch zooms and one-finger drag pans', (tester) async {
+    final (session, _) = await makeSession();
+    final controller = TypstViewerController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TypstViewer(session: session, controller: controller),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // One-finger drag pans, doesn't zoom.
+    final zoomBefore = controller.currentZoom;
+    final topBefore = controller.visibleRect.top;
+    final drag = await tester.startGesture(
+      const Offset(400, 300),
+      kind: PointerDeviceKind.touch,
+    );
+    await tester.pump(const Duration(milliseconds: 20));
+    // Several small steps: a single large jump gets entirely consumed by
+    // the recognizer's touch-slop threshold, leaving nothing for onUpdate.
+    for (var i = 0; i < 8; i++) {
+      await drag.moveBy(const Offset(0, -10));
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+    await drag.up();
+    await tester.pump(const Duration(milliseconds: 20));
+
+    expect(controller.currentZoom, zoomBefore);
+    expect(controller.visibleRect.top, greaterThan(topBefore));
+
+    // Two-finger pinch zooms.
+    final zoomBeforePinch = controller.currentZoom;
+    final p1 = await tester.startGesture(
+      const Offset(350, 300),
+      kind: PointerDeviceKind.touch,
+    );
+    final p2 = await tester.startGesture(
+      const Offset(450, 300),
+      kind: PointerDeviceKind.touch,
+    );
+    await tester.pump(const Duration(milliseconds: 20));
+    for (var i = 0; i < 8; i++) {
+      await p1.moveBy(const Offset(-6, 0));
+      await p2.moveBy(const Offset(6, 0));
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+    await p1.up();
+    await p2.up();
+    await tester.pump(const Duration(milliseconds: 20));
+
+    expect(controller.currentZoom, greaterThan(zoomBeforePinch));
   });
 
   testWidgets('goToPage scrolls and triggers renders for that page',
