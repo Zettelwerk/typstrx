@@ -8,3 +8,5 @@ export 'src/document/typst_image.dart';
 export 'src/document/typst_page.dart';
 export 'src/document/typst_session.dart';
 export 'src/typstrx_init.dart';
+export 'src/widgets/typst_viewer.dart';
+export 'src/widgets/typst_viewer_params.dart';

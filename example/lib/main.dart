@@ -1,5 +1,3 @@
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
 import 'package:typstrx/typstrx.dart';
 
@@ -47,8 +45,8 @@ class EditorPage extends StatefulWidget {
 
 class _EditorPageState extends State<EditorPage> {
   final _controller = TextEditingController(text: _initialSource);
+  final _viewerController = TypstViewerController();
   TypstCompileResult? _lastResult;
-  ui.Image? _pageImage;
 
   @override
   void initState() {
@@ -60,35 +58,12 @@ class _EditorPageState extends State<EditorPage> {
   @override
   void dispose() {
     _controller.dispose();
-    _pageImage?.dispose();
+    _viewerController.dispose();
     super.dispose();
   }
 
-  Future<void> _onResult(TypstCompileResult result) async {
-    final document = result.document;
-    ui.Image? uiImage;
-    if (document != null && document.pages.isNotEmpty) {
-      final page = document.pages.first;
-      // Phase 1: render the whole first page at 2x for a crisp preview.
-      final image = await page.render(
-        fullWidth: page.width * 2,
-        fullHeight: page.height * 2,
-      );
-      if (image != null) {
-        uiImage = await image.createImage();
-      }
-    }
-    if (!mounted) {
-      uiImage?.dispose();
-      return;
-    }
-    setState(() {
-      _lastResult = result;
-      if (uiImage != null) {
-        _pageImage?.dispose();
-        _pageImage = uiImage;
-      }
-    });
+  void _onResult(TypstCompileResult result) {
+    if (mounted) setState(() => _lastResult = result);
   }
 
   @override
@@ -119,19 +94,9 @@ class _EditorPageState extends State<EditorPage> {
             child: Column(
               children: [
                 Expanded(
-                  child: ColoredBox(
-                    color: Colors.grey.shade300,
-                    child: Center(
-                      child: _pageImage == null
-                          ? const CircularProgressIndicator()
-                          : Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: RawImage(
-                                image: _pageImage,
-                                fit: BoxFit.contain,
-                              ),
-                            ),
-                    ),
+                  child: TypstViewer(
+                    session: widget.session,
+                    controller: _viewerController,
                   ),
                 ),
                 if (diagnostics.isNotEmpty)
