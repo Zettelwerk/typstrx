@@ -3,7 +3,8 @@
 
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
-import 'api/simple.dart';
+import 'api/session.dart';
+import 'api/types.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'frb_generated.dart';
@@ -55,7 +56,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 
   @override
   Future<void> executeRustInitializers() async {
-    await api.crateApiSimpleInitApp();
+    await api.crateApiInitApp();
   }
 
   @override
@@ -66,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => -1918914929;
+  int get rustContentHash => 419570723;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -78,9 +79,50 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 }
 
 abstract class RustLibApi extends BaseApi {
-  String crateApiSimpleGreet({required String name});
+  Future<CompileResult> crateApiSessionTypstSessionCompile({
+    required TypstSession that,
+    required String source,
+  });
 
-  Future<void> crateApiSimpleInitApp();
+  Future<TypstSession> crateApiSessionTypstSessionCreate({
+    required SessionOptions options,
+  });
+
+  Future<int> crateApiSessionTypstSessionRegisterFont({
+    required TypstSession that,
+    required List<int> data,
+  });
+
+  Future<RenderedRegion> crateApiSessionTypstSessionRenderPageRegion({
+    required TypstSession that,
+    required BigInt generation,
+    required int pageIndex,
+    required int x,
+    required int y,
+    required int width,
+    required int height,
+    required int fullWidth,
+    required int fullHeight,
+    required int backgroundArgb,
+  });
+
+  Future<void> crateApiSessionTypstSessionSetFile({
+    required TypstSession that,
+    required String path,
+    required List<int> data,
+  });
+
+  Future<void> crateApiInitApp();
+
+  Future<SessionOptions> crateApiTypesSessionOptionsDefault();
+
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_TypstSession;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_TypstSession;
+
+  CrossPlatformFinalizerArg get rust_arc_decrement_strong_count_TypstSessionPtr;
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -92,34 +134,52 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   });
 
   @override
-  String crateApiSimpleGreet({required String name}) {
-    return handler.executeSync(
-      SyncTask(
-        callFfi: () {
+  Future<CompileResult> crateApiSessionTypstSessionCompile({
+    required TypstSession that,
+    required String source,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(name, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 1)!;
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTypstSession(
+            that,
+            serializer,
+          );
+          sse_encode_String(source, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 1,
+            port: port_,
+          );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_String,
+          decodeSuccessData: sse_decode_compile_result,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiSimpleGreetConstMeta,
-        argValues: [name],
+        constMeta: kCrateApiSessionTypstSessionCompileConstMeta,
+        argValues: [that, source],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiSimpleGreetConstMeta =>
-      const TaskConstMeta(debugName: "greet", argNames: ["name"]);
+  TaskConstMeta get kCrateApiSessionTypstSessionCompileConstMeta =>
+      const TaskConstMeta(
+        debugName: "TypstSession_compile",
+        argNames: ["that", "source"],
+      );
 
   @override
-  Future<void> crateApiSimpleInitApp() {
+  Future<TypstSession> crateApiSessionTypstSessionCreate({
+    required SessionOptions options,
+  }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_session_options(options, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -128,18 +188,265 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
+          decodeSuccessData:
+              sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTypstSession,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSessionTypstSessionCreateConstMeta,
+        argValues: [options],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSessionTypstSessionCreateConstMeta =>
+      const TaskConstMeta(
+        debugName: "TypstSession_create",
+        argNames: ["options"],
+      );
+
+  @override
+  Future<int> crateApiSessionTypstSessionRegisterFont({
+    required TypstSession that,
+    required List<int> data,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTypstSession(
+            that,
+            serializer,
+          );
+          sse_encode_list_prim_u_8_loose(data, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 3,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_32,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSessionTypstSessionRegisterFontConstMeta,
+        argValues: [that, data],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSessionTypstSessionRegisterFontConstMeta =>
+      const TaskConstMeta(
+        debugName: "TypstSession_register_font",
+        argNames: ["that", "data"],
+      );
+
+  @override
+  Future<RenderedRegion> crateApiSessionTypstSessionRenderPageRegion({
+    required TypstSession that,
+    required BigInt generation,
+    required int pageIndex,
+    required int x,
+    required int y,
+    required int width,
+    required int height,
+    required int fullWidth,
+    required int fullHeight,
+    required int backgroundArgb,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTypstSession(
+            that,
+            serializer,
+          );
+          sse_encode_u_64(generation, serializer);
+          sse_encode_u_32(pageIndex, serializer);
+          sse_encode_u_32(x, serializer);
+          sse_encode_u_32(y, serializer);
+          sse_encode_u_32(width, serializer);
+          sse_encode_u_32(height, serializer);
+          sse_encode_u_32(fullWidth, serializer);
+          sse_encode_u_32(fullHeight, serializer);
+          sse_encode_u_32(backgroundArgb, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 4,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_rendered_region,
+          decodeErrorData: sse_decode_typstrx_error,
+        ),
+        constMeta: kCrateApiSessionTypstSessionRenderPageRegionConstMeta,
+        argValues: [
+          that,
+          generation,
+          pageIndex,
+          x,
+          y,
+          width,
+          height,
+          fullWidth,
+          fullHeight,
+          backgroundArgb,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSessionTypstSessionRenderPageRegionConstMeta =>
+      const TaskConstMeta(
+        debugName: "TypstSession_render_page_region",
+        argNames: [
+          "that",
+          "generation",
+          "pageIndex",
+          "x",
+          "y",
+          "width",
+          "height",
+          "fullWidth",
+          "fullHeight",
+          "backgroundArgb",
+        ],
+      );
+
+  @override
+  Future<void> crateApiSessionTypstSessionSetFile({
+    required TypstSession that,
+    required String path,
+    required List<int> data,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTypstSession(
+            that,
+            serializer,
+          );
+          sse_encode_String(path, serializer);
+          sse_encode_list_prim_u_8_loose(data, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 5,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_typstrx_error,
+        ),
+        constMeta: kCrateApiSessionTypstSessionSetFileConstMeta,
+        argValues: [that, path, data],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSessionTypstSessionSetFileConstMeta =>
+      const TaskConstMeta(
+        debugName: "TypstSession_set_file",
+        argNames: ["that", "path", "data"],
+      );
+
+  @override
+  Future<void> crateApiInitApp() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 6,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiSimpleInitAppConstMeta,
+        constMeta: kCrateApiInitAppConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiSimpleInitAppConstMeta =>
+  TaskConstMeta get kCrateApiInitAppConstMeta =>
       const TaskConstMeta(debugName: "init_app", argNames: []);
+
+  @override
+  Future<SessionOptions> crateApiTypesSessionOptionsDefault() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 7,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_session_options,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiTypesSessionOptionsDefaultConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiTypesSessionOptionsDefaultConstMeta =>
+      const TaskConstMeta(debugName: "session_options_default", argNames: []);
+
+  RustArcIncrementStrongCountFnType
+  get rust_arc_increment_strong_count_TypstSession => wire
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTypstSession;
+
+  RustArcDecrementStrongCountFnType
+  get rust_arc_decrement_strong_count_TypstSession => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTypstSession;
+
+  @protected
+  TypstSession
+  dco_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTypstSession(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return TypstSessionImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  TypstSession
+  dco_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTypstSession(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return TypstSessionImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
+
+  @protected
+  TypstSession
+  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTypstSession(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return TypstSessionImpl.frbInternalDcoDecode(raw as List<dynamic>);
+  }
 
   @protected
   String dco_decode_String(dynamic raw) {
@@ -148,9 +455,181 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  bool dco_decode_bool(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as bool;
+  }
+
+  @protected
+  SessionOptions dco_decode_box_autoadd_session_options(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_session_options(raw);
+  }
+
+  @protected
+  int dco_decode_box_autoadd_u_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
+  CompileResult dco_decode_compile_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return CompileResult(
+      generation: dco_decode_u_64(arr[0]),
+      success: dco_decode_bool(arr[1]),
+      pages: dco_decode_list_page_info(arr[2]),
+      diagnostics: dco_decode_list_typst_diagnostic(arr[3]),
+      elapsedMs: dco_decode_u_64(arr[4]),
+    );
+  }
+
+  @protected
+  DiagnosticSeverity dco_decode_diagnostic_severity(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return DiagnosticSeverity.values[raw as int];
+  }
+
+  @protected
+  double dco_decode_f_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as double;
+  }
+
+  @protected
+  int dco_decode_i_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
+  List<String> dco_decode_list_String(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_String).toList();
+  }
+
+  @protected
+  List<PageInfo> dco_decode_list_page_info(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_page_info).toList();
+  }
+
+  @protected
+  List<int> dco_decode_list_prim_u_8_loose(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as List<int>;
+  }
+
+  @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as Uint8List;
+  }
+
+  @protected
+  List<TypstDiagnostic> dco_decode_list_typst_diagnostic(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_typst_diagnostic).toList();
+  }
+
+  @protected
+  String? dco_decode_opt_String(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_String(raw);
+  }
+
+  @protected
+  int? dco_decode_opt_box_autoadd_u_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_u_32(raw);
+  }
+
+  @protected
+  PageInfo dco_decode_page_info(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return PageInfo(
+      widthPt: dco_decode_f_64(arr[0]),
+      heightPt: dco_decode_f_64(arr[1]),
+    );
+  }
+
+  @protected
+  RenderedRegion dco_decode_rendered_region(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return RenderedRegion(
+      width: dco_decode_u_32(arr[0]),
+      height: dco_decode_u_32(arr[1]),
+      pixels: dco_decode_list_prim_u_8_strict(arr[2]),
+    );
+  }
+
+  @protected
+  SessionOptions dco_decode_session_options(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return SessionOptions(
+      packageCacheDir: dco_decode_opt_String(arr[0]),
+      allowPackageDownload: dco_decode_bool(arr[1]),
+    );
+  }
+
+  @protected
+  TypstDiagnostic dco_decode_typst_diagnostic(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    return TypstDiagnostic(
+      severity: dco_decode_diagnostic_severity(arr[0]),
+      message: dco_decode_String(arr[1]),
+      hints: dco_decode_list_String(arr[2]),
+      utf16Start: dco_decode_opt_box_autoadd_u_32(arr[3]),
+      utf16End: dco_decode_opt_box_autoadd_u_32(arr[4]),
+      line: dco_decode_opt_box_autoadd_u_32(arr[5]),
+      column: dco_decode_opt_box_autoadd_u_32(arr[6]),
+    );
+  }
+
+  @protected
+  TypstrxError dco_decode_typstrx_error(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    switch (raw[0]) {
+      case 0:
+        return TypstrxError_Stale();
+      case 1:
+        return TypstrxError_NoDocument();
+      case 2:
+        return TypstrxError_PageOutOfRange(pageCount: dco_decode_u_32(raw[1]));
+      case 3:
+        return TypstrxError_RenderTooLarge(message: dco_decode_String(raw[1]));
+      case 4:
+        return TypstrxError_Other(message: dco_decode_String(raw[1]));
+      default:
+        throw Exception("unreachable");
+    }
+  }
+
+  @protected
+  int dco_decode_u_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
+  BigInt dco_decode_u_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeU64(raw);
   }
 
   @protected
@@ -166,6 +645,48 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  BigInt dco_decode_usize(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeU64(raw);
+  }
+
+  @protected
+  TypstSession
+  sse_decode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTypstSession(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return TypstSessionImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  TypstSession
+  sse_decode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTypstSession(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return TypstSessionImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
+  TypstSession
+  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTypstSession(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return TypstSessionImpl.frbInternalSseDecode(
+      sse_decode_usize(deserializer),
+      sse_decode_i_32(deserializer),
+    );
+  }
+
+  @protected
   String sse_decode_String(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_list_prim_u_8_strict(deserializer);
@@ -173,10 +694,224 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  bool sse_decode_bool(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getUint8() != 0;
+  }
+
+  @protected
+  SessionOptions sse_decode_box_autoadd_session_options(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_session_options(deserializer));
+  }
+
+  @protected
+  int sse_decode_box_autoadd_u_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_u_32(deserializer));
+  }
+
+  @protected
+  CompileResult sse_decode_compile_result(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_generation = sse_decode_u_64(deserializer);
+    var var_success = sse_decode_bool(deserializer);
+    var var_pages = sse_decode_list_page_info(deserializer);
+    var var_diagnostics = sse_decode_list_typst_diagnostic(deserializer);
+    var var_elapsedMs = sse_decode_u_64(deserializer);
+    return CompileResult(
+      generation: var_generation,
+      success: var_success,
+      pages: var_pages,
+      diagnostics: var_diagnostics,
+      elapsedMs: var_elapsedMs,
+    );
+  }
+
+  @protected
+  DiagnosticSeverity sse_decode_diagnostic_severity(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return DiagnosticSeverity.values[inner];
+  }
+
+  @protected
+  double sse_decode_f_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getFloat64();
+  }
+
+  @protected
+  int sse_decode_i_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getInt32();
+  }
+
+  @protected
+  List<String> sse_decode_list_String(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <String>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_String(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<PageInfo> sse_decode_list_page_info(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <PageInfo>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_page_info(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var len_ = sse_decode_i_32(deserializer);
+    return deserializer.buffer.getUint8List(len_);
+  }
+
+  @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var len_ = sse_decode_i_32(deserializer);
     return deserializer.buffer.getUint8List(len_);
+  }
+
+  @protected
+  List<TypstDiagnostic> sse_decode_list_typst_diagnostic(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <TypstDiagnostic>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_typst_diagnostic(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  String? sse_decode_opt_String(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_String(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_u_32(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  PageInfo sse_decode_page_info(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_widthPt = sse_decode_f_64(deserializer);
+    var var_heightPt = sse_decode_f_64(deserializer);
+    return PageInfo(widthPt: var_widthPt, heightPt: var_heightPt);
+  }
+
+  @protected
+  RenderedRegion sse_decode_rendered_region(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_width = sse_decode_u_32(deserializer);
+    var var_height = sse_decode_u_32(deserializer);
+    var var_pixels = sse_decode_list_prim_u_8_strict(deserializer);
+    return RenderedRegion(
+      width: var_width,
+      height: var_height,
+      pixels: var_pixels,
+    );
+  }
+
+  @protected
+  SessionOptions sse_decode_session_options(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_packageCacheDir = sse_decode_opt_String(deserializer);
+    var var_allowPackageDownload = sse_decode_bool(deserializer);
+    return SessionOptions(
+      packageCacheDir: var_packageCacheDir,
+      allowPackageDownload: var_allowPackageDownload,
+    );
+  }
+
+  @protected
+  TypstDiagnostic sse_decode_typst_diagnostic(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_severity = sse_decode_diagnostic_severity(deserializer);
+    var var_message = sse_decode_String(deserializer);
+    var var_hints = sse_decode_list_String(deserializer);
+    var var_utf16Start = sse_decode_opt_box_autoadd_u_32(deserializer);
+    var var_utf16End = sse_decode_opt_box_autoadd_u_32(deserializer);
+    var var_line = sse_decode_opt_box_autoadd_u_32(deserializer);
+    var var_column = sse_decode_opt_box_autoadd_u_32(deserializer);
+    return TypstDiagnostic(
+      severity: var_severity,
+      message: var_message,
+      hints: var_hints,
+      utf16Start: var_utf16Start,
+      utf16End: var_utf16End,
+      line: var_line,
+      column: var_column,
+    );
+  }
+
+  @protected
+  TypstrxError sse_decode_typstrx_error(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var tag_ = sse_decode_i_32(deserializer);
+    switch (tag_) {
+      case 0:
+        return TypstrxError_Stale();
+      case 1:
+        return TypstrxError_NoDocument();
+      case 2:
+        var var_pageCount = sse_decode_u_32(deserializer);
+        return TypstrxError_PageOutOfRange(pageCount: var_pageCount);
+      case 3:
+        var var_message = sse_decode_String(deserializer);
+        return TypstrxError_RenderTooLarge(message: var_message);
+      case 4:
+        var var_message = sse_decode_String(deserializer);
+        return TypstrxError_Other(message: var_message);
+      default:
+        throw UnimplementedError('');
+    }
+  }
+
+  @protected
+  int sse_decode_u_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getUint32();
+  }
+
+  @protected
+  BigInt sse_decode_u_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getBigUint64();
   }
 
   @protected
@@ -191,21 +926,139 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  int sse_decode_i_32(SseDeserializer deserializer) {
+  BigInt sse_decode_usize(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getInt32();
+    return deserializer.buffer.getBigUint64();
   }
 
   @protected
-  bool sse_decode_bool(SseDeserializer deserializer) {
+  void
+  sse_encode_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTypstSession(
+    TypstSession self,
+    SseSerializer serializer,
+  ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getUint8() != 0;
+    sse_encode_usize(
+      (self as TypstSessionImpl).frbInternalSseEncode(move: true),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTypstSession(
+    TypstSession self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as TypstSessionImpl).frbInternalSseEncode(move: false),
+      serializer,
+    );
+  }
+
+  @protected
+  void
+  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTypstSession(
+    TypstSession self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(
+      (self as TypstSessionImpl).frbInternalSseEncode(move: null),
+      serializer,
+    );
   }
 
   @protected
   void sse_encode_String(String self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_list_prim_u_8_strict(utf8.encoder.convert(self), serializer);
+  }
+
+  @protected
+  void sse_encode_bool(bool self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putUint8(self ? 1 : 0);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_session_options(
+    SessionOptions self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_session_options(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self, serializer);
+  }
+
+  @protected
+  void sse_encode_compile_result(CompileResult self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.generation, serializer);
+    sse_encode_bool(self.success, serializer);
+    sse_encode_list_page_info(self.pages, serializer);
+    sse_encode_list_typst_diagnostic(self.diagnostics, serializer);
+    sse_encode_u_64(self.elapsedMs, serializer);
+  }
+
+  @protected
+  void sse_encode_diagnostic_severity(
+    DiagnosticSeverity self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_f_64(double self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putFloat64(self);
+  }
+
+  @protected
+  void sse_encode_i_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putInt32(self);
+  }
+
+  @protected
+  void sse_encode_list_String(List<String> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_String(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_page_info(
+    List<PageInfo> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_page_info(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_prim_u_8_loose(
+    List<int> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    serializer.buffer.putUint8List(
+      self is Uint8List ? self : Uint8List.fromList(self),
+    );
   }
 
   @protected
@@ -216,6 +1069,113 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     serializer.buffer.putUint8List(self);
+  }
+
+  @protected
+  void sse_encode_list_typst_diagnostic(
+    List<TypstDiagnostic> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_typst_diagnostic(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_String(String? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_String(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_u_32(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_page_info(PageInfo self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_64(self.widthPt, serializer);
+    sse_encode_f_64(self.heightPt, serializer);
+  }
+
+  @protected
+  void sse_encode_rendered_region(
+    RenderedRegion self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.width, serializer);
+    sse_encode_u_32(self.height, serializer);
+    sse_encode_list_prim_u_8_strict(self.pixels, serializer);
+  }
+
+  @protected
+  void sse_encode_session_options(
+    SessionOptions self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_opt_String(self.packageCacheDir, serializer);
+    sse_encode_bool(self.allowPackageDownload, serializer);
+  }
+
+  @protected
+  void sse_encode_typst_diagnostic(
+    TypstDiagnostic self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_diagnostic_severity(self.severity, serializer);
+    sse_encode_String(self.message, serializer);
+    sse_encode_list_String(self.hints, serializer);
+    sse_encode_opt_box_autoadd_u_32(self.utf16Start, serializer);
+    sse_encode_opt_box_autoadd_u_32(self.utf16End, serializer);
+    sse_encode_opt_box_autoadd_u_32(self.line, serializer);
+    sse_encode_opt_box_autoadd_u_32(self.column, serializer);
+  }
+
+  @protected
+  void sse_encode_typstrx_error(TypstrxError self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    switch (self) {
+      case TypstrxError_Stale():
+        sse_encode_i_32(0, serializer);
+      case TypstrxError_NoDocument():
+        sse_encode_i_32(1, serializer);
+      case TypstrxError_PageOutOfRange(pageCount: final pageCount):
+        sse_encode_i_32(2, serializer);
+        sse_encode_u_32(pageCount, serializer);
+      case TypstrxError_RenderTooLarge(message: final message):
+        sse_encode_i_32(3, serializer);
+        sse_encode_String(message, serializer);
+      case TypstrxError_Other(message: final message):
+        sse_encode_i_32(4, serializer);
+        sse_encode_String(message, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_u_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putUint32(self);
+  }
+
+  @protected
+  void sse_encode_u_64(BigInt self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putBigUint64(self);
   }
 
   @protected
@@ -230,14 +1190,82 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_i_32(int self, SseSerializer serializer) {
+  void sse_encode_usize(BigInt self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putInt32(self);
+    serializer.buffer.putBigUint64(self);
   }
+}
 
-  @protected
-  void sse_encode_bool(bool self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putUint8(self ? 1 : 0);
-  }
+@sealed
+class TypstSessionImpl extends RustOpaque implements TypstSession {
+  // Not to be used by end users
+  TypstSessionImpl.frbInternalDcoDecode(List<dynamic> wire)
+    : super.frbInternalDcoDecode(wire, _kStaticData);
+
+  // Not to be used by end users
+  TypstSessionImpl.frbInternalSseDecode(BigInt ptr, int externalSizeOnNative)
+    : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
+
+  static final _kStaticData = RustArcStaticData(
+    rustArcIncrementStrongCount:
+        RustLib.instance.api.rust_arc_increment_strong_count_TypstSession,
+    rustArcDecrementStrongCount:
+        RustLib.instance.api.rust_arc_decrement_strong_count_TypstSession,
+    rustArcDecrementStrongCountPtr:
+        RustLib.instance.api.rust_arc_decrement_strong_count_TypstSessionPtr,
+  );
+
+  /// Compiles `source` as the main file.
+  ///
+  /// On success the result carries a new generation and the page sizes; on
+  /// failure the previous document (if any) remains valid and renderable.
+  /// Diagnostics (errors and warnings) are always included.
+  Future<CompileResult> compile({required String source}) => RustLib
+      .instance
+      .api
+      .crateApiSessionTypstSessionCompile(that: this, source: source);
+
+  /// Registers all font faces contained in `data` (TTF/OTF, also
+  /// collections). Returns the number of faces added. Takes effect on the
+  /// next compilation.
+  Future<int> registerFont({required List<int> data}) => RustLib.instance.api
+      .crateApiSessionTypstSessionRegisterFont(that: this, data: data);
+
+  /// Renders the window `(x, y, width, height)` in pixels out of page
+  /// `page_index` (0-based) rasterized at a virtual full size of
+  /// `full_width` × `full_height` pixels.
+  ///
+  /// Fails with [`TypstrxError::Stale`] when `generation` no longer matches
+  /// the latest compiled document; callers should drop the request then.
+  Future<RenderedRegion> renderPageRegion({
+    required BigInt generation,
+    required int pageIndex,
+    required int x,
+    required int y,
+    required int width,
+    required int height,
+    required int fullWidth,
+    required int fullHeight,
+    required int backgroundArgb,
+  }) => RustLib.instance.api.crateApiSessionTypstSessionRenderPageRegion(
+    that: this,
+    generation: generation,
+    pageIndex: pageIndex,
+    x: x,
+    y: y,
+    width: width,
+    height: height,
+    fullWidth: fullWidth,
+    fullHeight: fullHeight,
+    backgroundArgb: backgroundArgb,
+  );
+
+  /// Adds or replaces an in-memory project file (image, bibliography,
+  /// module, …) that the main source can reference by `path`.
+  Future<void> setFile({required String path, required List<int> data}) =>
+      RustLib.instance.api.crateApiSessionTypstSessionSetFile(
+        that: this,
+        path: path,
+        data: data,
+      );
 }

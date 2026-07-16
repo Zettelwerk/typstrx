@@ -2,12 +2,32 @@
 name = "typstrx"
 version = "0.1.0"
 edition = "2021"
+license = "Apache-2.0"
+publish = false
 
 [lib]
-crate-type = ["cdylib", "staticlib"]
+crate-type = ["cdylib", "staticlib", "rlib"]
 
 [dependencies]
 flutter_rust_bridge = "=2.12.0"
+typst = "=0.15.0"
+typst-layout = "=0.15.0"
+typst-render = "=0.15.0"
+typst-kit = { version = "=0.15.0", default-features = false, features = [
+    "embedded-fonts",
+    "datetime",
+    "system-packages",
+    "universe-packages",
+    "system-downloader",
+] }
+comemo = "0.5"
+ecow = "0.2"
+parking_lot = "0.12"
+tiny-skia = "0.12"
+
+# OpenSSL has no system copy on Android; build it from source there only.
+[target.'cfg(target_os = "android")'.dependencies]
+typst-kit = { version = "=0.15.0", default-features = false, features = ["vendor-openssl"] }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

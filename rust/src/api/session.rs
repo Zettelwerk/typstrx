@@ -1,0 +1,213 @@
+//! The Typst compilation session exposed to Dart.
+
+use std::time::Instant;
+
+use flutter_rust_bridge::frb;
+use parking_lot::RwLock;
+use typst::diag::{Severity, SourceDiagnostic};
+use typst::ecow::EcoVec;
+use typst_layout::PagedDocument;
+use typst::{World, WorldExt};
+
+use crate::api::types::{
+    CompileResult, DiagnosticSeverity, PageInfo, RenderedRegion, SessionOptions,
+    TypstDiagnostic, TypstrxError,
+};
+use crate::render::render_region;
+use crate::world::{TypstrxWorld, WorldOptions};
+
+/// A Typst compilation session.
+///
+/// Owns a [`TypstrxWorld`] that is kept alive across compilations so Typst's
+/// built-in incremental compilation (comemo memoization) stays effective.
+/// Compilations take the write lock; rendering and text extraction take read
+/// locks and can run concurrently.
+#[frb(opaque)]
+pub struct TypstSession {
+    inner: RwLock<SessionInner>,
+}
+
+struct SessionInner {
+    world: TypstrxWorld,
+    /// Monotonically increasing id, bumped on every successful compile.
+    generation: u64,
+    compiled: Option<Compiled>,
+}
+
+struct Compiled {
+    generation: u64,
+    document: PagedDocument,
+}
+
+impl TypstSession {
+    /// Creates a new session. Fonts embedded in the library are available
+    /// immediately; additional fonts can be added with [`register_font`].
+    pub fn create(options: SessionOptions) -> TypstSession {
+        TypstSession {
+            inner: RwLock::new(SessionInner {
+                world: TypstrxWorld::new(WorldOptions {
+                    package_cache_dir: options.package_cache_dir,
+                    allow_package_download: options.allow_package_download,
+                }),
+                generation: 0,
+                compiled: None,
+            }),
+        }
+    }
+
+    /// Compiles `source` as the main file.
+    ///
+    /// On success the result carries a new generation and the page sizes; on
+    /// failure the previous document (if any) remains valid and renderable.
+    /// Diagnostics (errors and warnings) are always included.
+    pub fn compile(&self, source: String) -> CompileResult {
+        let mut inner = self.inner.write();
+        let start = Instant::now();
+
+        inner.world.set_main_source(&source);
+        let warned = typst::compile::<PagedDocument>(&inner.world);
+        // Bound comemo's memoization memory, like typst-cli does per compile.
+        comemo::evict(10);
+
+        let mut diagnostics = map_diagnostics(&inner.world, &warned.warnings);
+        let elapsed_ms = start.elapsed().as_millis() as u64;
+
+        match warned.output {
+            Ok(document) => {
+                inner.generation += 1;
+                let pages = document
+                    .pages()
+                    .iter()
+                    .map(|page| PageInfo {
+                        width_pt: page.frame.width().to_pt(),
+                        height_pt: page.frame.height().to_pt(),
+                    })
+                    .collect();
+                let generation = inner.generation;
+                inner.compiled = Some(Compiled { generation, document });
+                CompileResult {
+                    generation,
+                    success: true,
+                    pages,
+                    diagnostics,
+                    elapsed_ms,
+                }
+            }
+            Err(errors) => {
+                diagnostics.extend(map_diagnostics(&inner.world, &errors));
+                CompileResult {
+                    generation: inner.compiled.as_ref().map_or(0, |c| c.generation),
+                    success: false,
+                    pages: Vec::new(),
+                    diagnostics,
+                    elapsed_ms,
+                }
+            }
+        }
+    }
+
+    /// Renders the window `(x, y, width, height)` in pixels out of page
+    /// `page_index` (0-based) rasterized at a virtual full size of
+    /// `full_width` × `full_height` pixels.
+    ///
+    /// Fails with [`TypstrxError::Stale`] when `generation` no longer matches
+    /// the latest compiled document; callers should drop the request then.
+    pub fn render_page_region(
+        &self,
+        generation: u64,
+        page_index: u32,
+        x: u32,
+        y: u32,
+        width: u32,
+        height: u32,
+        full_width: u32,
+        full_height: u32,
+        background_argb: u32,
+    ) -> Result<RenderedRegion, TypstrxError> {
+        let inner = self.inner.read();
+        let compiled = inner.compiled.as_ref().ok_or(TypstrxError::NoDocument)?;
+        if compiled.generation != generation {
+            return Err(TypstrxError::Stale);
+        }
+        let pages = compiled.document.pages();
+        let page = pages
+            .get(page_index as usize)
+            .ok_or(TypstrxError::PageOutOfRange {
+                page_count: pages.len() as u32,
+            })?;
+        render_region(
+            page,
+            x,
+            y,
+            width,
+            height,
+            full_width,
+            full_height,
+            background_argb,
+        )
+    }
+
+    /// Registers all font faces contained in `data` (TTF/OTF, also
+    /// collections). Returns the number of faces added. Takes effect on the
+    /// next compilation.
+    pub fn register_font(&self, data: Vec<u8>) -> u32 {
+        self.inner.write().world.register_font(data)
+    }
+
+    /// Adds or replaces an in-memory project file (image, bibliography,
+    /// module, …) that the main source can reference by `path`.
+    pub fn set_file(&self, path: String, data: Vec<u8>) -> Result<(), TypstrxError> {
+        self.inner
+            .write()
+            .world
+            .set_file(&path, data)
+            .map_err(|message| TypstrxError::Other {
+                message: message.to_string(),
+            })
+    }
+}
+
+/// Converts compiler diagnostics, resolving source positions for spans that
+/// point into the main source. Offsets are UTF-16 code units so they can index
+/// the source as a Dart `String` directly.
+fn map_diagnostics(
+    world: &TypstrxWorld,
+    diagnostics: &EcoVec<SourceDiagnostic>,
+) -> Vec<TypstDiagnostic> {
+    diagnostics
+        .iter()
+        .map(|diag| {
+            let mut mapped = TypstDiagnostic {
+                severity: match diag.severity {
+                    Severity::Error => DiagnosticSeverity::Error,
+                    Severity::Warning => DiagnosticSeverity::Warning,
+                },
+                message: diag.message.to_string(),
+                hints: diag.hints.iter().map(|hint| hint.v.to_string()).collect(),
+                utf16_start: None,
+                utf16_end: None,
+                line: None,
+                column: None,
+            };
+            if diag.span.id() == Some(world.main()) {
+                if let (Some(range), Ok(source)) =
+                    (world.range(diag.span), world.source(world.main()))
+                {
+                    let lines = source.lines();
+                    mapped.utf16_start =
+                        lines.byte_to_utf16(range.start).map(|v| v as u32);
+                    mapped.utf16_end = lines.byte_to_utf16(range.end).map(|v| v as u32);
+                    if let Some(line) = lines.byte_to_line(range.start) {
+                        mapped.line = Some(line as u32 + 1);
+                        mapped.column = lines
+                            .line_to_byte(line)
+                            .and_then(|line_start| lines.byte_to_utf16(line_start))
+                            .zip(mapped.utf16_start)
+                            .map(|(line_start, start)| start - line_start as u32);
+                    }
+                }
+            }
+            mapped
+        })
+        .collect()
+}
