@@ -11,6 +11,7 @@ class CachedPageImage {
     required this.image,
     required this.scale,
     required this.generation,
+    required this.renderTime,
   });
 
   final ui.Image image;
@@ -20,6 +21,11 @@ class CachedPageImage {
 
   /// The document generation the image was rendered from.
   final int generation;
+
+  /// Wall-clock time from issuing the render call to having a decoded
+  /// [ui.Image] ready (FFI round-trip + Rust rasterization + Dart image
+  /// decode).
+  final Duration renderTime;
 
   int get byteSize => image.width * image.height * 4;
 
@@ -33,6 +39,7 @@ class CachedPageTile {
     required this.rect,
     required this.scale,
     required this.generation,
+    required this.renderTime,
   });
 
   final ui.Image image;
@@ -46,9 +53,44 @@ class CachedPageTile {
   /// The document generation the tile was rendered from.
   final int generation;
 
+  /// Wall-clock time from issuing the render call to having a decoded
+  /// [ui.Image] ready (FFI round-trip + Rust rasterization + Dart image
+  /// decode).
+  final Duration renderTime;
+
   int get byteSize => image.width * image.height * 4;
 
   void dispose() => image.dispose();
+}
+
+/// A snapshot of the most recently completed render, for diagnostics/UI
+/// (see [TypstViewerController.lastRender]).
+class RasterizationMetrics {
+  const RasterizationMetrics({
+    required this.isTile,
+    required this.width,
+    required this.height,
+    required this.scale,
+    required this.renderTime,
+  });
+
+  /// Whether this was a hi-res partial tile (`true`) or a whole-page
+  /// preview (`false`).
+  final bool isTile;
+
+  /// Rendered image width in pixels.
+  final int width;
+
+  /// Rendered image height in pixels.
+  final int height;
+
+  /// Pixels per point this render was rasterized at.
+  final double scale;
+
+  /// Wall-clock render time (FFI + Rust rasterization + Dart image decode).
+  final Duration renderTime;
+
+  int get byteSize => width * height * 4;
 }
 
 /// Holds rendered page previews and coordinates their (re-)rendering.
@@ -71,6 +113,11 @@ class TypstPageImageCache extends ChangeNotifier {
   final _renderingTiles = <int, (Rect, double)>{};
   bool _disposed = false;
 
+  /// Metrics for the most recently completed render (preview or tile),
+  /// across all pages. Null until the first render completes.
+  RasterizationMetrics? get lastRender => _lastRender;
+  RasterizationMetrics? _lastRender;
+
   /// The cached preview for the page, if any (may be stale in scale or
   /// generation — the painter stretches it while a replacement renders).
   CachedPageImage? previewOf(int pageNumber) => _previews[pageNumber];
@@ -91,6 +138,7 @@ class TypstPageImageCache extends ChangeNotifier {
     final inFlight = _rendering[pageNumber];
     if (inFlight != null && inFlight >= scale * 0.95) return;
     _rendering[pageNumber] = scale;
+    final stopwatch = Stopwatch()..start();
     try {
       final image = await page.render(
         fullWidth: page.width * scale,
@@ -98,6 +146,7 @@ class TypstPageImageCache extends ChangeNotifier {
       );
       if (image == null) return; // stale generation — drop silently
       final uiImage = await image.createImage();
+      stopwatch.stop();
       if (_disposed) {
         uiImage.dispose();
         return;
@@ -107,6 +156,14 @@ class TypstPageImageCache extends ChangeNotifier {
         image: uiImage,
         scale: scale,
         generation: page.document.generation,
+        renderTime: stopwatch.elapsed,
+      );
+      _lastRender = RasterizationMetrics(
+        isTile: false,
+        width: uiImage.width,
+        height: uiImage.height,
+        scale: scale,
+        renderTime: stopwatch.elapsed,
       );
       notifyListeners();
     } finally {
@@ -150,6 +207,7 @@ class TypstPageImageCache extends ChangeNotifier {
   ) async {
     final pageNumber = page.pageNumber;
     _renderingTiles[pageNumber] = (tileRect, scale);
+    final stopwatch = Stopwatch()..start();
     try {
       final inPage = tileRect.shift(-pageRect.topLeft);
       final image = await page.render(
@@ -162,6 +220,7 @@ class TypstPageImageCache extends ChangeNotifier {
       );
       if (image == null) return; // stale generation — drop silently
       final uiImage = await image.createImage();
+      stopwatch.stop();
       if (_disposed) {
         uiImage.dispose();
         return;
@@ -172,6 +231,14 @@ class TypstPageImageCache extends ChangeNotifier {
         rect: tileRect,
         scale: scale,
         generation: page.document.generation,
+        renderTime: stopwatch.elapsed,
+      );
+      _lastRender = RasterizationMetrics(
+        isTile: true,
+        width: uiImage.width,
+        height: uiImage.height,
+        scale: scale,
+        renderTime: stopwatch.elapsed,
       );
       notifyListeners();
     } finally {
@@ -240,6 +307,9 @@ class TypstPageImageCache extends ChangeNotifier {
   int get totalBytes =>
       _previews.values.fold(0, (sum, entry) => sum + entry.byteSize) +
       _tiles.values.fold(0, (sum, tile) => sum + tile.byteSize);
+
+  /// Number of cached images (previews + tiles) currently held.
+  int get cachedImageCount => _previews.length + _tiles.length;
 
   /// Largest distance-sorted page numbers currently cached; for tests.
   @visibleForTesting

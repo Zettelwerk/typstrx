@@ -36,6 +36,19 @@ class TypstViewerController extends ChangeNotifier
   /// notifications, so listen to it to keep a readout in sync.
   double get currentRasterScale => _state?._currentRasterScale ?? 1.0;
 
+  /// Metrics for the most recently completed page render (preview or hi-res
+  /// tile), across all pages — pixel size, scale, and wall-clock render
+  /// time. Null until the first render completes. Useful for tuning
+  /// [TypstViewerParams.maxRenderScale]/[TypstViewerParams.previewScaleCap]
+  /// against real render costs.
+  RasterizationMetrics? get lastRender => _state?._cache.lastRender;
+
+  /// Total bytes currently held by the page image cache, across both tiers.
+  int get cacheBytes => _state?._cache.totalBytes ?? 0;
+
+  /// Number of page images (previews + tiles) currently cached.
+  int get cachedImageCount => _state?._cache.cachedImageCount ?? 0;
+
   /// Scrolls so that the top of [pageNumber] is visible, keeping the zoom.
   void goToPage(int pageNumber) {
     final state = _state;

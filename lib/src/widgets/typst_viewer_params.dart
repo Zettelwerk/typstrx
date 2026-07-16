@@ -116,7 +116,19 @@ class TypstViewerParams {
   /// can start failing renders rather than just being slow. Values beyond
   /// ~4–6 rarely produce a visible improvement.
   ///
-  /// Defaults to `4.0`.
+  /// Defaults to `4.0` (288 DPI). This was chosen from profiling a
+  /// viewport-sized (900×700px) tile against a text-heavy A4 page on
+  /// desktop (`cargo test --test render_bench -- --ignored --nocapture` in
+  /// `rust/`, release profile): render time stays under ~12ms through 4.0x
+  /// and only starts climbing steeply past ~5.0x (22ms at 5x, 48ms at 8x)
+  /// as the page's *full* raster — not just the cropped tile — grows, since
+  /// the v1 rasterizer renders the whole page and crops (see
+  /// `rust/src/render.rs`). 288 DPI also comfortably exceeds what's useful
+  /// for on-screen reading at typical device pixel ratios and zoom levels,
+  /// so 4.0 sits at the point of diminishing quality returns just before
+  /// the cost curve bends upward. The example app's rasterization panel
+  /// (sliders + live render-time/size readout) is a good way to re-check
+  /// this tradeoff against your own content and target devices.
   final double maxRenderScale;
 
   /// Upper bound, in pixels per Typst point, for the cheap whole-page
@@ -134,7 +146,12 @@ class TypstViewerParams {
   /// value here is much more expensive in aggregate than the same value on
   /// [maxRenderScale].
   ///
-  /// Defaults to `2.0`.
+  /// Defaults to `2.0` (144 DPI). Profiling a full text-heavy A4 page (see
+  /// [maxRenderScale] for the benchmark command) shows this costs ~25ms —
+  /// cheap enough to pay for several nearby pages sequentially during
+  /// scroll without becoming perceptible, while already sharp enough that
+  /// the difference versus the eventual hi-res tile is only visible in the
+  /// brief moment before that tile finishes rendering.
   final double previewScaleCap;
 
   /// Total memory budget, in bytes, for all cached page preview and tile

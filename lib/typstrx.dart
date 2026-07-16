@@ -11,5 +11,6 @@ export 'src/document/typst_rect.dart';
 export 'src/document/typst_session.dart';
 export 'src/document/typst_text.dart';
 export 'src/typstrx_init.dart';
+export 'src/widgets/typst_page_image_cache.dart' show RasterizationMetrics;
 export 'src/widgets/typst_viewer.dart';
 export 'src/widgets/typst_viewer_params.dart';

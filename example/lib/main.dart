@@ -68,6 +68,12 @@ class _EditorPageState extends State<EditorPage> {
   final _viewerController = TypstViewerController();
   TypstCompileResult? _lastResult;
 
+  // Live-adjustable rasterization params — see TypstViewerParams docs for
+  // what these trade off. Defaults match TypstViewerParams' own defaults;
+  // drag the sliders and watch the metrics panel to explore the tradeoff.
+  double _maxRenderScale = const TypstViewerParams().maxRenderScale;
+  double _previewScaleCap = const TypstViewerParams().previewScaleCap;
+
   @override
   void initState() {
     super.initState();
@@ -125,7 +131,20 @@ class _EditorPageState extends State<EditorPage> {
                   child: TypstViewer(
                     session: widget.session,
                     controller: _viewerController,
+                    params: TypstViewerParams(
+                      maxRenderScale: _maxRenderScale,
+                      previewScaleCap: _previewScaleCap,
+                    ),
                   ),
+                ),
+                _RasterizationPanel(
+                  maxRenderScale: _maxRenderScale,
+                  previewScaleCap: _previewScaleCap,
+                  onMaxRenderScaleChanged: (value) =>
+                      setState(() => _maxRenderScale = value),
+                  onPreviewScaleCapChanged: (value) =>
+                      setState(() => _previewScaleCap = value),
+                  viewerController: _viewerController,
                 ),
                 if (diagnostics.isNotEmpty)
                   Container(
@@ -149,8 +168,7 @@ class _EditorPageState extends State<EditorPage> {
                     padding: const EdgeInsets.all(4),
                     child: Text(
                       'generation ${result.generation} · '
-                      '${result.elapsed.inMilliseconds} ms · '
-                      '${_formatResolution(_viewerController)}',
+                      '${result.elapsed.inMilliseconds} ms compile',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ),
@@ -163,10 +181,111 @@ class _EditorPageState extends State<EditorPage> {
   }
 }
 
-/// Formats the viewer's current rasterization scale as both a multiplier
-/// and the equivalent DPI (1 Typst point = 1/72 inch).
-String _formatResolution(TypstViewerController controller) {
-  final scale = controller.currentRasterScale;
-  final dpi = (scale * 72).round();
-  return '${scale.toStringAsFixed(2)}x ($dpi dpi)';
+/// Sliders for the two rasterization-scale caps plus a live metrics readout,
+/// for exploring the quality/speed/memory tradeoff hands-on. Not part of the
+/// typstrx public API — just example scaffolding.
+class _RasterizationPanel extends StatelessWidget {
+  const _RasterizationPanel({
+    required this.maxRenderScale,
+    required this.previewScaleCap,
+    required this.onMaxRenderScaleChanged,
+    required this.onPreviewScaleCapChanged,
+    required this.viewerController,
+  });
+
+  final double maxRenderScale;
+  final double previewScaleCap;
+  final ValueChanged<double> onMaxRenderScaleChanged;
+  final ValueChanged<double> onPreviewScaleCapChanged;
+  final TypstViewerController viewerController;
+
+  @override
+  Widget build(BuildContext context) {
+    final labelStyle = Theme.of(context).textTheme.bodySmall;
+    return Container(
+      color: Colors.indigo.shade50,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _ScaleSlider(
+                  label: 'Tile cap (maxRenderScale)',
+                  value: maxRenderScale,
+                  onChanged: onMaxRenderScaleChanged,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _ScaleSlider(
+                  label: 'Preview cap (previewScaleCap)',
+                  value: previewScaleCap,
+                  onChanged: onPreviewScaleCapChanged,
+                ),
+              ),
+            ],
+          ),
+          Text(_metricsLine(), style: labelStyle),
+          const SizedBox(height: 4),
+        ],
+      ),
+    );
+  }
+
+  String _metricsLine() {
+    final scale = viewerController.currentRasterScale;
+    final dpi = (scale * 72).round();
+    final render = viewerController.lastRender;
+    final renderPart = render == null
+        ? 'no render yet'
+        : '${render.isTile ? 'tile' : 'preview'} '
+            '${render.width}×${render.height}px '
+            '(${(render.byteSize / 1024).toStringAsFixed(0)} KB) in '
+            '${render.renderTime.inMilliseconds} ms';
+    final cacheMb = viewerController.cacheBytes / (1024 * 1024);
+    return 'on screen: ${scale.toStringAsFixed(2)}x ($dpi dpi) · '
+        'last render: $renderPart · '
+        'cache: ${cacheMb.toStringAsFixed(1)} MB / '
+        '${viewerController.cachedImageCount} images';
+  }
+}
+
+class _ScaleSlider extends StatelessWidget {
+  const _ScaleSlider({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
+  final double value;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 190,
+          child: Text(
+            '$label: ${value.toStringAsFixed(1)}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
+        Expanded(
+          child: Slider(
+            value: value,
+            min: 0.5,
+            max: 8.0,
+            divisions: 30,
+            label: value.toStringAsFixed(1),
+            onChanged: onChanged,
+          ),
+        ),
+      ],
+    );
+  }
 }
