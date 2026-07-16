@@ -6,8 +6,8 @@
 //! backend can later switch to true sub-region rendering without breaking
 //! callers.
 
-use typst_layout::Page;
 use typst::utils::Scalar;
+use typst_layout::Page;
 use typst_render::RenderOptions;
 
 use crate::api::types::{RenderedRegion, TypstrxError};
@@ -23,6 +23,7 @@ const MAX_FULL_PIXELS: u64 = 64_000_000;
 /// over `background_argb`, whose alpha is forced to opaque; with an opaque
 /// background, premultiplied and straight RGBA are identical, so no conversion
 /// pass is needed.
+#[allow(clippy::too_many_arguments)] // deliberate region-API shape
 pub fn render_region(
     page: &Page,
     x: u32,
@@ -68,11 +69,10 @@ pub fn render_region(
     let g = ((background_argb >> 8) & 0xff) as u8;
     let b = (background_argb & 0xff) as u8;
 
-    let mut canvas = tiny_skia::Pixmap::new(width, height).ok_or_else(|| {
-        TypstrxError::RenderTooLarge {
+    let mut canvas =
+        tiny_skia::Pixmap::new(width, height).ok_or_else(|| TypstrxError::RenderTooLarge {
             message: format!("cannot allocate {width}x{height} px tile"),
-        }
-    })?;
+        })?;
     canvas.fill(tiny_skia::Color::from_rgba8(r, g, b, a));
     canvas.draw_pixmap(
         -(x as i32),

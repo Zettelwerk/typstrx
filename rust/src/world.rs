@@ -97,7 +97,11 @@ impl TypstrxWorld {
         if id == self.main {
             return Err("cannot overwrite the main source via set_file".into());
         }
-        self.files.loader().files.lock().insert(id, Bytes::new(data));
+        self.files
+            .loader()
+            .files
+            .lock()
+            .insert(id, Bytes::new(data));
         self.reset();
         Ok(())
     }
@@ -162,9 +166,11 @@ struct InMemoryLoader {
 impl FileLoader for InMemoryLoader {
     fn load(&self, id: FileId) -> FileResult<Bytes> {
         match id.root() {
-            VirtualRoot::Project => self.files.lock().get(&id).cloned().ok_or_else(|| {
-                FileError::NotFound(id.vpath().get_with_slash().to_string().into())
-            }),
+            VirtualRoot::Project => {
+                self.files.lock().get(&id).cloned().ok_or_else(|| {
+                    FileError::NotFound(id.vpath().get_with_slash().to_string().into())
+                })
+            }
             VirtualRoot::Package(spec) => self.packages.obtain(spec)?.load(id.vpath()),
         }
     }

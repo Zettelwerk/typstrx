@@ -6,12 +6,12 @@ use flutter_rust_bridge::frb;
 use parking_lot::RwLock;
 use typst::diag::{Severity, SourceDiagnostic};
 use typst::ecow::EcoVec;
-use typst_layout::PagedDocument;
 use typst::{World, WorldExt};
+use typst_layout::PagedDocument;
 
 use crate::api::types::{
-    CompileResult, DiagnosticSeverity, PageInfo, PageTextData, RenderedRegion,
-    SessionOptions, TypstDiagnostic, TypstrxError,
+    CompileResult, DiagnosticSeverity, PageInfo, PageTextData, RenderedRegion, SessionOptions,
+    TypstDiagnostic, TypstrxError,
 };
 use crate::render::render_region;
 use crate::world::{TypstrxWorld, WorldOptions};
@@ -84,7 +84,10 @@ impl TypstSession {
                     })
                     .collect();
                 let generation = inner.generation;
-                inner.compiled = Some(Compiled { generation, document });
+                inner.compiled = Some(Compiled {
+                    generation,
+                    document,
+                });
                 CompileResult {
                     generation,
                     success: true,
@@ -112,6 +115,7 @@ impl TypstSession {
     ///
     /// Fails with [`TypstrxError::Stale`] when `generation` no longer matches
     /// the latest compiled document; callers should drop the request then.
+    #[allow(clippy::too_many_arguments)] // deliberate region-API shape
     pub fn render_page_region(
         &self,
         generation: u64,
@@ -218,8 +222,7 @@ fn map_diagnostics(
                     (world.range(diag.span), world.source(world.main()))
                 {
                     let lines = source.lines();
-                    mapped.utf16_start =
-                        lines.byte_to_utf16(range.start).map(|v| v as u32);
+                    mapped.utf16_start = lines.byte_to_utf16(range.start).map(|v| v as u32);
                     mapped.utf16_end = lines.byte_to_utf16(range.end).map(|v| v as u32);
                     if let Some(line) = lines.byte_to_line(range.start) {
                         mapped.line = Some(line as u32 + 1);

@@ -57,6 +57,40 @@ Future<void> main() async {
 
 See `example/` for a full split-view editor + viewer demo.
 
+## Custom fonts and project files
+
+```dart
+// Register extra font faces (TTF/OTF bytes) — available on the next compile.
+await session.registerFont(await File('MyFont.ttf').readAsBytes());
+
+// Provide in-memory project files that the source can reference.
+await session.setFile('/images/logo.png', logoBytes);
+session.updateSource('#image("/images/logo.png")');
+```
+
+`@preview` imports (Typst Universe packages) download on demand into
+`TypstSessionOptions.packageCacheDir` (pass an app-specific directory on
+mobile; cached packages work offline).
+
+## Working with the document API directly
+
+```dart
+final result = await session.compile('= Hi');
+final page = result.document!.pages.first;      // sizes in points
+final image = await page.render(fullWidth: page.width * 2); // RGBA pixels
+final text = await page.loadStructuredText();   // text + char rects
+final links = await page.loadLinks();           // URL / internal dests
+```
+
+## Roadmap
+
+- Text search widget (the text model already supports `allMatches`-style search)
+- Scroll thumbs, facing-page layouts, selection magnifier
+- `SelectionArea` integration
+- Precompiled Rust binaries (no consumer Rust toolchain needed)
+- True sub-region rendering backend (typst-svg + resvg) for very high zoom
+- Web support
+
 ## License
 
 Apache-2.0. The Typst compiler is likewise Apache-2.0 licensed;

@@ -83,7 +83,10 @@ fn render_full_page_is_not_blank() {
     assert_eq!(region.height, 842);
     assert_eq!(region.pixels.len(), 595 * 842 * 4);
     // Some pixel must be non-white (the text).
-    assert!(region.pixels.chunks(4).any(|px| px[0] != 0xff || px[1] != 0xff || px[2] != 0xff));
+    assert!(region
+        .pixels
+        .chunks(4)
+        .any(|px| px[0] != 0xff || px[1] != 0xff || px[2] != 0xff));
     // All alpha must be opaque so premultiplied == straight RGBA.
     assert!(region.pixels.chunks(4).all(|px| px[3] == 0xff));
 }
@@ -94,10 +97,30 @@ fn region_render_matches_full_render_crop() {
     let result = session.compile("= Crop test\n#lorem(40)".to_owned());
     assert!(result.success);
     let full = session
-        .render_page_region(result.generation, 0, 0, 0, 1190, 1684, 1190, 1684, 0xffffffff)
+        .render_page_region(
+            result.generation,
+            0,
+            0,
+            0,
+            1190,
+            1684,
+            1190,
+            1684,
+            0xffffffff,
+        )
         .unwrap();
     let tile = session
-        .render_page_region(result.generation, 0, 100, 200, 300, 250, 1190, 1684, 0xffffffff)
+        .render_page_region(
+            result.generation,
+            0,
+            100,
+            200,
+            300,
+            250,
+            1190,
+            1684,
+            0xffffffff,
+        )
         .unwrap();
     for row in 0..250usize {
         let full_off = ((200 + row) * 1190 + 100) * 4;
@@ -125,7 +148,8 @@ fn stale_generation_is_rejected() {
 fn page_out_of_range() {
     let session = offline_session();
     let result = session.compile("only one page".to_owned());
-    let render = session.render_page_region(result.generation, 5, 0, 0, 10, 10, 100, 141, 0xffffffff);
+    let render =
+        session.render_page_region(result.generation, 5, 0, 0, 10, 10, 100, 141, 0xffffffff);
     assert!(matches!(
         render,
         Err(TypstrxError::PageOutOfRange { page_count: 1 })
@@ -189,7 +213,11 @@ fn extracts_text_with_rects() {
     let result = session.compile("= Heading\nBody text here.".to_owned());
     assert!(result.success);
     let text = session.page_text(result.generation, 0).unwrap();
-    assert!(text.full_text.contains("Heading"), "text: {}", text.full_text);
+    assert!(
+        text.full_text.contains("Heading"),
+        "text: {}",
+        text.full_text
+    );
     assert!(text.full_text.contains("Body text here."));
     // One rect per UTF-16 code unit.
     assert_eq!(text.char_rects.len(), text.full_text.encode_utf16().count());
@@ -242,9 +270,7 @@ fn utf16_char_rects_for_emoji_and_cjk() {
 #[test]
 fn extracts_url_links() {
     let session = offline_session();
-    let result = session.compile(
-        "#link(\"https://typst.app\")[Typst] some text".to_owned(),
-    );
+    let result = session.compile("#link(\"https://typst.app\")[Typst] some text".to_owned());
     assert!(result.success);
     let text = session.page_text(result.generation, 0).unwrap();
     assert_eq!(text.links.len(), 1);
@@ -258,9 +284,21 @@ fn extracts_internal_links() {
     let session = offline_session();
     let source = "#link(<target>)[jump]\n#pagebreak()\n= Target <target>";
     let result = session.compile(source.to_owned());
-    assert!(result.success, "diagnostics: {:?}", result.diagnostics.iter().map(|d| &d.message).collect::<Vec<_>>());
+    assert!(
+        result.success,
+        "diagnostics: {:?}",
+        result
+            .diagnostics
+            .iter()
+            .map(|d| &d.message)
+            .collect::<Vec<_>>()
+    );
     let text = session.page_text(result.generation, 0).unwrap();
-    let internal: Vec<_> = text.links.iter().filter(|l| l.dest_page.is_some()).collect();
+    let internal: Vec<_> = text
+        .links
+        .iter()
+        .filter(|l| l.dest_page.is_some())
+        .collect();
     assert_eq!(internal.len(), 1);
     assert_eq!(internal[0].dest_page, Some(2));
 }
@@ -274,4 +312,27 @@ fn page_text_stale_generation_rejected() {
         session.page_text(first.generation, 0),
         Err(TypstrxError::Stale)
     ));
+}
+
+/// Network test: downloads a real package from Typst Universe. Run manually
+/// with `cargo test -- --ignored`.
+#[test]
+#[ignore]
+fn downloads_preview_package() {
+    let dir = std::env::temp_dir().join("typstrx-pkg-test");
+    let session = TypstSession::create(SessionOptions {
+        package_cache_dir: Some(dir.to_string_lossy().into_owned()),
+        allow_package_download: true,
+    });
+    let source = "#import \"@preview/cetz:0.4.2\"\n#cetz.canvas({\n  import cetz.draw: *\n  circle((0, 0))\n})";
+    let result = session.compile(source.to_owned());
+    assert!(
+        result.success,
+        "diagnostics: {:?}",
+        result
+            .diagnostics
+            .iter()
+            .map(|d| &d.message)
+            .collect::<Vec<_>>()
+    );
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:typstrx/typstrx.dart';
 
 const _initialSource = '''
@@ -14,6 +15,9 @@ by typstrx. Try selecting this text with the mouse, or follow
 
 Jump to the #link(<second>)[second page].
 
+// Typst Universe packages download on demand, e.g.:
+// #import "@preview/cetz:0.4.2"
+
 #pagebreak()
 
 = Second page <second>
@@ -24,7 +28,14 @@ Jump to the #link(<second>)[second page].
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Typstrx.init();
-  final session = await TypstSession.create();
+  // An app-specific cache directory keeps `@preview` package downloads
+  // working on platforms without the standard Typst cache dir (Android).
+  final cacheDir = await getApplicationCacheDirectory();
+  final session = await TypstSession.create(
+    options: TypstSessionOptions(
+      packageCacheDir: '${cacheDir.path}/typst-packages',
+    ),
+  );
   runApp(ExampleApp(session: session));
 }
 

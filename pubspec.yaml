@@ -14,6 +14,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # Pinned exactly on purpose: flutter_rust_bridge requires the Dart package
+  # and the Rust crate (rust/Cargo.toml) to be the same version.
   flutter_rust_bridge: 2.12.0
   freezed_annotation: ^3.1.0
   meta: ^1.18.0

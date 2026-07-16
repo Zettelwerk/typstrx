@@ -186,9 +186,7 @@ fn extract_text_item(
         let mut j = i + 1;
         while j < chars.len() {
             let (b, _) = chars[j];
-            if byte_start_x[b].is_nan()
-                || (byte_start_x[b] == x0 && byte_end_x[b] == x1)
-            {
+            if byte_start_x[b].is_nan() || (byte_start_x[b] == x0 && byte_end_x[b] == x1) {
                 j += 1;
             } else {
                 break;
@@ -208,13 +206,7 @@ fn extract_text_item(
         i = j;
     }
 
-    let bounds = transformed_rect(
-        origin_x,
-        top,
-        origin_x + total_width,
-        bottom,
-        transform,
-    );
+    let bounds = transformed_rect(origin_x, top, origin_x + total_width, bottom, transform);
     let baseline_y = Point::new(pos.x, pos.y).transform(transform).y.to_pt();
 
     Some(RawFragment {
@@ -273,13 +265,7 @@ fn resolve_location(
 
 /// Bounding box of an axis-aligned rect after applying `transform`, in pt
 /// with a y-down top-left origin (`top <= bottom`).
-fn transformed_rect(
-    left: f64,
-    top: f64,
-    right: f64,
-    bottom: f64,
-    transform: Transform,
-) -> RectPt {
+fn transformed_rect(left: f64, top: f64, right: f64, bottom: f64, transform: Transform) -> RectPt {
     if transform == Transform::identity() {
         return RectPt {
             left,
