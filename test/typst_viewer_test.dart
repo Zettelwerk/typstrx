@@ -358,6 +358,54 @@ void main() {
     expect(fake.renderedPages, isNot(contains(1)));
   });
 
+  testWidgets('a tile survives leaving the viewport and is reused on return',
+      (tester) async {
+    final (session, fake) = await makeSession();
+    final controller = TypstViewerController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TypstViewer(
+          session: session,
+          controller: controller,
+          params: const TypstViewerParams(
+            renderDelay: Duration(milliseconds: 1),
+          ),
+        ),
+      ),
+    );
+    await settle(tester);
+
+    // Zoom in far enough that stage two applies, and settle on a specific
+    // window of page 1 so the same window can be revisited exactly.
+    controller.setZoom(4);
+    controller.goToPage(1);
+    await settle(tester);
+    expect(
+      fake.renderedRegions
+          .where((r) => r.page == 1 && (r.w < r.fullW || r.h < r.fullH)),
+      isNotEmpty,
+      reason: 'zooming in should have produced a tile for page 1',
+    );
+
+    // Scroll away to another page, then back to the very same window.
+    controller.goToPage(8);
+    await settle(tester);
+    fake.renderedRegions.clear();
+    controller.goToPage(1);
+    await settle(tester);
+
+    // Page 1's tile was kept rather than pruned when it left the viewport, so
+    // returning to the same window must not re-render it. Every render pass
+    // used to drop tiles for pages that were no longer visible.
+    expect(
+      fake.renderedRegions
+          .where((r) => r.page == 1 && (r.w < r.fullW || r.h < r.fullH)),
+      isEmpty,
+      reason: 'returning to a page should reuse its retained tile',
+    );
+  });
+
   testWidgets('setZoom keeps the zoom within bounds', (tester) async {
     final (session, _) = await makeSession();
     final controller = TypstViewerController();
@@ -398,13 +446,17 @@ void main() {
     await settle(tester);
 
     // A partial render must have been issued: a window smaller than the
-    // virtual full page, offset into it, at tile scale (zoom 4 x dpr 3
-    // clamped to maxRenderDpi 288 = 4x) => fullW = 595pt * 4 = 2380 px.
+    // virtual full page, offset into it, at tile scale. Zoom 4 x dpr 3 = 12
+    // px/pt asks for more than maxRenderDpi allows, so the tile clamps to that
+    // ceiling — expressed via the param so raising the default doesn't rot
+    // this expectation.
+    const params = TypstViewerParams();
+    final clampedScale = params.maxRenderDpi / 72;
     final tiles = fake.renderedRegions
         .where((r) => r.w < r.fullW || r.h < r.fullH)
         .toList();
     expect(tiles, isNotEmpty);
-    expect(tiles.first.fullW, closeTo(595 * 4, 8));
+    expect(tiles.first.fullW, closeTo(595 * clampedScale, 8));
     expect(tiles.first.h, lessThan(tiles.first.fullH));
   });
 

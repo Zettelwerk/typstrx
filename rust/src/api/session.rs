@@ -151,6 +151,22 @@ impl TypstSession {
         )
     }
 
+    /// Runs `f` with page `page_index` of the latest compiled document.
+    ///
+    /// Crate-internal, and deliberately not part of the Dart-facing API: the
+    /// render tests need a `Page` to compare the clipped renderer against
+    /// upstream whole-page rendering.
+    #[cfg(test)]
+    pub(crate) fn with_page<R>(
+        &self,
+        page_index: usize,
+        f: impl FnOnce(&typst_layout::Page) -> R,
+    ) -> Option<R> {
+        let inner = self.inner.read();
+        let compiled = inner.compiled.as_ref()?;
+        compiled.document.pages().get(page_index).map(f)
+    }
+
     /// Extracts text and link geometry for page `page_index` (0-based).
     ///
     /// Fails with [`TypstrxError::Stale`] when `generation` no longer matches

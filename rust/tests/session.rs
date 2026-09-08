@@ -122,15 +122,24 @@ fn region_render_matches_full_render_crop() {
             0xffffffff,
         )
         .unwrap();
+    // The tile is rasterized directly into a tile-sized pixmap with the page
+    // transform shifted by its origin, so it is not bit-identical to the
+    // corresponding window of an untranslated full-page render: that shift is
+    // exact in real arithmetic but not in f32, which moves glyph antialiasing
+    // by a level here and there. The window must still be the same picture, so
+    // bound how far any channel may drift. `render::tests` covers this in depth
+    // against upstream typst-render.
+    let mut worst = 0i32;
     for row in 0..250usize {
         let full_off = ((200 + row) * 1190 + 100) * 4;
         let tile_off = row * 300 * 4;
-        assert_eq!(
-            &full.pixels[full_off..full_off + 300 * 4],
-            &tile.pixels[tile_off..tile_off + 300 * 4],
-            "row {row} differs"
-        );
+        for i in 0..300 * 4 {
+            let delta =
+                full.pixels[full_off + i] as i32 - tile.pixels[tile_off + i] as i32;
+            worst = worst.max(delta.abs());
+        }
     }
+    assert!(worst <= 32, "tile diverges from full-render crop by {worst}");
 }
 
 #[test]
@@ -160,18 +169,45 @@ fn page_out_of_range() {
 fn oversized_render_is_rejected() {
     let session = offline_session();
     let result = session.compile("hi".to_owned());
+    // The budget is on the tile actually allocated, not on the virtual page
+    // size, so this asks for a tile far past what any viewport needs.
     let render = session.render_page_region(
         result.generation,
         0,
         0,
         0,
-        100,
-        100,
+        16_000,
+        16_000,
         20_000,
         20_000,
         0xffffffff,
     );
     assert!(matches!(render, Err(TypstrxError::RenderTooLarge { .. })));
+}
+
+#[test]
+fn small_tile_of_a_huge_page_is_allowed() {
+    let session = offline_session();
+    let result = session.compile("hi".to_owned());
+    // Rendering is clipped to the requested window, so an extreme zoom — a
+    // 20000x20000 virtual page, which would once have been a 1.6 GPix
+    // allocation — costs no more than the viewport-sized tile taken out of it.
+    let render = session
+        .render_page_region(
+            result.generation,
+            0,
+            9_000,
+            9_000,
+            300,
+            200,
+            20_000,
+            20_000,
+            0xffffffff,
+        )
+        .expect("clipped render should not be bounded by the virtual page size");
+    assert_eq!(render.width, 300);
+    assert_eq!(render.height, 200);
+    assert_eq!(render.pixels.len(), 300 * 200 * 4);
 }
 
 #[test]

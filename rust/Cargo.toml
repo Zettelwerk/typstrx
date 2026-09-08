@@ -12,7 +12,13 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 flutter_rust_bridge = "=2.12.0"
 typst = "=0.15.0"
 typst-layout = "=0.15.0"
+# Upstream typst-render can only rasterize whole pages. It is kept only so the
+# render tests can assert the clipped renderer is bit-identical to cropping its
+# output; nothing in the shipping path uses it.
 typst-render = "=0.15.0"
+# Modified copy of typst-render 0.15.0 adding clipped (tile) rasterization —
+# see third_party/typst-render-clip/NOTICE.md.
+typst-render-clip = { path = "../third_party/typst-render-clip" }
 typst-kit = { version = "=0.15.0", default-features = false, features = [
     "embedded-fonts",
     "datetime",

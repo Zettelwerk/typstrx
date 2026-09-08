@@ -183,15 +183,20 @@ class TypstPageImageCache extends ChangeNotifier {
     return tile;
   }
 
-  /// Whether an equivalent tile (same window, at least this scale, same
+  /// Whether a usable tile (covering this window, at least this scale, same
   /// generation) already exists or is being rendered.
+  ///
+  /// The stored tile only has to *contain* the requested window, not match it
+  /// edge-for-edge. Tiles outlive the viewport they were rendered for, and a
+  /// pan away and back never reproduces the original rect exactly; an equality
+  /// test would miss every time and re-render a tile the cache already holds.
   bool hasFreshTile(int pageNumber, Rect rect, double scale, int generation) {
     bool matches(Rect r, double s) =>
         s >= scale * 0.95 &&
-        (r.left - rect.left).abs() < 1 &&
-        (r.top - rect.top).abs() < 1 &&
-        (r.right - rect.right).abs() < 1 &&
-        (r.bottom - rect.bottom).abs() < 1;
+        r.left <= rect.left + 1 &&
+        r.top <= rect.top + 1 &&
+        r.right >= rect.right - 1 &&
+        r.bottom >= rect.bottom - 1;
     final tile = _tiles[pageNumber];
     if (tile != null && tile.generation == generation && matches(tile.rect, tile.scale)) {
       return true;
@@ -251,33 +256,28 @@ class TypstPageImageCache extends ChangeNotifier {
     }
   }
 
-  /// Drops high-resolution tiles for pages not in [keep] (or all when zoomed
-  /// back out far enough that the preview suffices).
-  void pruneTiles({required Set<int> keep}) {
-    final stale =
-        _tiles.keys.where((pageNumber) => !keep.contains(pageNumber)).toList();
-    if (stale.isEmpty) return;
-    for (final pageNumber in stale) {
-      _tiles.remove(pageNumber)!.dispose();
-    }
-    notifyListeners();
-  }
-
   /// Evicts images of pages not in [protectedPages] until the byte budget is
   /// met, farthest from [currentPage] first.
+  ///
+  /// Tiles are eviction candidates in their own right, not just collateral of
+  /// their page's preview: tiles outlive the viewport, so a page can hold a
+  /// tile whose preview was already evicted, and keying the candidate list on
+  /// previews alone would leave those unreachable and never freed.
   void evictIfNeeded(Set<int> protectedPages, int currentPage) {
     var total = totalBytes;
     if (total <= maxBytes) return;
 
-    final evictable = _previews.keys
+    final evictable = <int>{..._previews.keys, ..._tiles.keys}
         .where((pageNumber) => !protectedPages.contains(pageNumber))
         .toList()
       ..sort((a, b) => (b - currentPage).abs() - (a - currentPage).abs());
     for (final pageNumber in evictable) {
       if (total <= maxBytes) break;
-      final removed = _previews.remove(pageNumber)!;
-      total -= removed.byteSize;
-      removed.dispose();
+      final removed = _previews.remove(pageNumber);
+      if (removed != null) {
+        total -= removed.byteSize;
+        removed.dispose();
+      }
       final tile = _tiles.remove(pageNumber);
       if (tile != null) {
         total -= tile.byteSize;

@@ -3059,6 +3059,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "typst-render-clip"
+version = "0.15.0"
+dependencies = [
+ "bytemuck",
+ "comemo",
+ "hayro",
+ "image",
+ "libm",
+ "pixglyph",
+ "resvg",
+ "tiny-skia",
+ "ttf-parser",
+ "typst-assets",
+ "typst-layout",
+ "typst-library",
+ "typst-macros",
+ "typst-timing",
+ "typst-utils",
+]
+
+[[package]]
 name = "typst-svg"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3146,6 +3167,7 @@ dependencies = [
  "typst-kit",
  "typst-layout",
  "typst-render",
+ "typst-render-clip",
 ]
 
 [[package]]

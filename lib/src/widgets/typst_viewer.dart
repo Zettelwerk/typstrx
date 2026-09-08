@@ -399,6 +399,53 @@ class _TypstViewerState extends State<TypstViewer> {
     _renderTimer = Timer(widget.params.renderDelay, _updateCachedImages);
   }
 
+  /// Stage one's fixed rasterization scale. The preview always targets
+  /// previewDpi, regardless of current zoom — a fixed baseline (like pdfrx's
+  /// onePassRenderingScaleThreshold), not scaled down when zoomed out.
+  double get _previewScale =>
+      (widget.params.fixedRasterDpi ?? widget.params.previewDpi) /
+      _pointsPerInch;
+
+  /// Rungs the adaptive tile DPI snaps up to.
+  ///
+  /// Zoom is continuous, so the resolution a tile "needs" changes by a hair on
+  /// every gesture frame. Cached tiles are only reusable at or above the
+  /// requested scale, so an unsnapped ladder invalidates the cache on every
+  /// small zoom step and re-renders continuously through a pinch. Snapping to
+  /// rungs makes a whole range of zooms reuse one tile. Rounding is always
+  /// *up*, so a snapped tile is never softer than the zoom asks for — it is at
+  /// most one rung sharper than strictly needed.
+  static const _tileDpiRungs = <double>[
+    72, 108, 144, 216, 288, 432, 576, 864, 1152,
+  ];
+
+  /// Stage two's zoom-adaptive rasterization scale, capped by maxRenderDpi.
+  double get _tileScale {
+    final fixedDpi = widget.params.fixedRasterDpi;
+    if (fixedDpi != null) return fixedDpi / _pointsPerInch;
+    final needed =
+        _currentZoom * _devicePixelRatio * widget.params.tileScaleFactor;
+    final maxScale = widget.params.maxRenderDpi / _pointsPerInch;
+    // Keeps the floor below the ceiling however low maxRenderDpi is set, so
+    // the bounds can never invert.
+    final floor = math.min(0.5, maxScale);
+    for (final rung in _tileDpiRungs) {
+      final scale = rung / _pointsPerInch;
+      if (scale >= maxScale) break;
+      if (scale >= needed) return clampDouble(scale, floor, maxScale);
+    }
+    return clampDouble(needed, floor, maxScale);
+  }
+
+  /// Whether the current zoom needs more resolution than the fixed preview
+  /// baseline provides — i.e. whether stage two applies at all right now.
+  ///
+  /// Tiles outlive the zoom level they were rendered at, so the painter gates
+  /// on this rather than on a tile merely existing: without it, zooming back
+  /// out would leave a retained hi-res tile painted as a visibly sharper patch
+  /// over the middle of an otherwise preview-resolution page.
+  bool get _tilesWanted => _tileScale > _previewScale * 1.05;
+
   Future<void> _updateCachedImages() async {
     final document = _document;
     final layout = _layout;
@@ -406,14 +453,7 @@ class _TypstViewerState extends State<TypstViewer> {
 
     final visible = _visibleRect;
     final cacheRect = visible.inflate(visible.height / 2);
-    // The preview always targets previewDpi, regardless of current zoom —
-    // it's a fixed baseline (like pdfrx's onePassRenderingScaleThreshold),
-    // not scaled down when zoomed out. _updateTiles is "stage two": it
-    // renders a sharper, zoom-adaptive tile only once the current zoom
-    // actually needs more resolution than this fixed baseline provides.
-    final previewScale =
-        (widget.params.fixedRasterDpi ?? widget.params.previewDpi) /
-            _pointsPerInch;
+    final previewScale = _previewScale;
 
     final visiblePages = <int>{};
     final toRender = <TypstPage>[];
@@ -429,12 +469,26 @@ class _TypstViewerState extends State<TypstViewer> {
 
     _cache.evictIfNeeded(visiblePages, _currentPageNumber);
 
+    // Stage two runs *first*: the hi-res tile is the only thing covering what
+    // the user is actually looking at, so it must not queue behind a full-page
+    // preview for every nearby page. Previews cost ~24ms each at the default
+    // previewDpi, so scrolling into a few fresh pages used to stall the visible
+    // window for a large fraction of a second before its tile even started.
+    // When the current zoom doesn't need a tile, this returns immediately and
+    // the previews below are the visible content anyway.
+    await _updateTiles(document, layout, visible, previewScale);
+
+    // Nearest pages first, so the page being read is sharp before its
+    // neighbours are speculatively filled in.
+    final currentPage = _currentPageNumber;
+    toRender.sort((a, b) => (a.pageNumber - currentPage)
+        .abs()
+        .compareTo((b.pageNumber - currentPage).abs()));
     for (final page in toRender) {
       if (!mounted || _document != document) return;
       await _cache.renderPreview(page, previewScale);
     }
 
-    await _updateTiles(document, layout, visible, previewScale);
     await _preloadPageText(document, visiblePages);
   }
 
@@ -447,36 +501,27 @@ class _TypstViewerState extends State<TypstViewer> {
     Rect visible,
     double previewScale,
   ) async {
-    final fixedDpi = widget.params.fixedRasterDpi;
-    final tileScale = fixedDpi != null
-        ? fixedDpi / _pointsPerInch
-        : clampDouble(
-            _currentZoom * _devicePixelRatio,
-            0.5,
-            widget.params.maxRenderDpi / _pointsPerInch,
-          );
-    if (tileScale <= previewScale * 1.05) {
-      _cache.pruneTiles(keep: const {});
-      return;
-    }
+    final tileScale = _tileScale;
+    if (!_tilesWanted) return;
 
     // A modest margin around the viewport so small pans stay sharp without
     // re-rendering.
     final tileWindow = visible.inflate(visible.shortestSide * 0.15);
-    final keep = <int>{};
     final requests = <(TypstPage, Rect, Rect)>[];
     for (var i = 0; i < layout.pageRects.length; i++) {
       final pageRect = layout.pageRects[i];
       final tileRect = pageRect.intersect(tileWindow);
       if (tileRect.isEmpty) continue;
       final pageNumber = i + 1;
-      keep.add(pageNumber);
       if (!_cache.hasFreshTile(
           pageNumber, tileRect, tileScale, document.generation)) {
         requests.add((document.pages[i], pageRect, tileRect));
       }
     }
-    _cache.pruneTiles(keep: keep);
+    // Tiles for pages that scrolled away are deliberately *not* dropped here:
+    // they stay until the byte budget evicts them (farthest page first), so
+    // panning back to a page you were just looking at is instant instead of a
+    // fresh render. evictIfNeeded treats them as first-class candidates.
 
     for (final (page, pageRect, tileRect) in requests) {
       if (!mounted || _document != document) return;
@@ -672,8 +717,13 @@ class _TypstDocumentPainter extends CustomPainter {
         );
       }
 
-      // Sharp visible-window tile on top of the stretched preview.
-      final tile = state._cache.tileOf(i + 1, document.generation);
+      // Sharp visible-window tile on top of the stretched preview. Gated on
+      // the current zoom still wanting stage two — a retained tile from a
+      // more zoomed-in state must not paint as a sharper patch once the
+      // preview alone is sharp enough.
+      final tile = state._tilesWanted
+          ? state._cache.tileOf(i + 1, document.generation)
+          : null;
       if (tile != null) {
         canvas.drawImageRect(
           tile.image,

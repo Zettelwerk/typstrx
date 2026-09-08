@@ -25,6 +25,55 @@ Jump to the #link(<second>)[second page].
 #lorem(80)
 ''';
 
+/// A large, layout-heavy document (headings, TOC, math, tables, lists across
+/// ~40 pages) generated with Typst's own `#for` loop — good for exercising
+/// pagination and rasterization performance with the [TypstViewer]'s
+/// rasterization panel sliders.
+const _stressTestSource = '''
+#set page(numbering: "1")
+#set heading(numbering: "1.1")
+
+#align(center)[
+  #text(24pt, weight: "bold")[Stress Test Document]
+
+  #text(14pt)[Generated to exercise pagination and rasterization]
+]
+
+#outline()
+
+#pagebreak()
+
+#for i in range(1, 41) [
+  = Section #i
+
+  #lorem(120)
+
+  == Section #i, subsection A
+
+  A closed form for the sum of the first #i squares:
+
+  \$ sum_(k=1)^#i k^2 = (#i (#i+1)(2 dot #i+1))/6 \$
+
+  #lorem(60)
+
+  == Section #i, subsection B
+
+  #table(
+    columns: 4,
+    [*Row*], [*A*], [*B*], [*A+B*],
+    ..range(1, 6).map(j => (
+      [#j], [#(i * j)], [#(i + j)], [#(i * j + i + j)],
+    )).flatten()
+  )
+
+  + First point for section #i
+  + Second point for section #i
+  + Third point for section #i, with some #emph[emphasis] and #strong[strength]
+
+  #pagebreak()
+]
+''';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Typstrx.init();
@@ -76,6 +125,7 @@ class _EditorPageState extends State<EditorPage> {
   double _previewDpi = const TypstViewerParams().previewDpi;
   bool _useFixedDpi = false;
   double _fixedDpi = const TypstViewerParams().previewDpi;
+  double _tileScaleFactor = const TypstViewerParams().tileScaleFactor;
 
   @override
   void initState() {
@@ -103,12 +153,43 @@ class _EditorPageState extends State<EditorPage> {
     if (mounted) setState(() => _lastResult = result);
   }
 
+  void _recompile() {
+    widget.session.compile(_controller.text);
+  }
+
+  void _loadStressTest() {
+    _controller.text = _stressTestSource;
+    // Routed through updateSource rather than compile: assigning to
+    // _controller.text does not fire the TextField's onChanged, so a debounce
+    // armed by typing just before the click would still be holding the old
+    // text and would compile it right back over the stress test. updateSource
+    // cancels that pending timer. Compiling immediately as well would work but
+    // costs a second compile, and every compile bumps the document generation,
+    // which invalidates every cached page image.
+    widget.session.updateSource(_stressTestSource);
+  }
+
   @override
   Widget build(BuildContext context) {
     final result = _lastResult;
     final diagnostics = result?.diagnostics ?? const <TypstDiagnostic>[];
     return Scaffold(
-      appBar: AppBar(title: const Text('typstrx example')),
+      appBar: AppBar(
+        title: const Text('typstrx example'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.auto_awesome_mosaic),
+            tooltip: 'Load stress test document (~40 pages)',
+            onPressed: _loadStressTest,
+          ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Recompile now',
+            onPressed: _recompile,
+          ),
+          const SizedBox(width: 24),
+        ],
+      ),
       body: Row(
         children: [
           Expanded(
@@ -138,6 +219,7 @@ class _EditorPageState extends State<EditorPage> {
                       maxRenderDpi: _maxRenderDpi,
                       previewDpi: _previewDpi,
                       fixedRasterDpi: _useFixedDpi ? _fixedDpi : null,
+                      tileScaleFactor: _tileScaleFactor,
                     ),
                   ),
                 ),
@@ -146,6 +228,7 @@ class _EditorPageState extends State<EditorPage> {
                   previewDpi: _previewDpi,
                   useFixedDpi: _useFixedDpi,
                   fixedDpi: _fixedDpi,
+                  tileScaleFactor: _tileScaleFactor,
                   onMaxRenderDpiChanged: (value) =>
                       setState(() => _maxRenderDpi = value),
                   onPreviewDpiChanged: (value) =>
@@ -154,6 +237,8 @@ class _EditorPageState extends State<EditorPage> {
                       setState(() => _useFixedDpi = value),
                   onFixedDpiChanged: (value) =>
                       setState(() => _fixedDpi = value),
+                  onTileScaleFactorChanged: (value) =>
+                      setState(() => _tileScaleFactor = value),
                   viewerController: _viewerController,
                 ),
                 if (diagnostics.isNotEmpty)
@@ -200,10 +285,12 @@ class _RasterizationPanel extends StatelessWidget {
     required this.previewDpi,
     required this.useFixedDpi,
     required this.fixedDpi,
+    required this.tileScaleFactor,
     required this.onMaxRenderDpiChanged,
     required this.onPreviewDpiChanged,
     required this.onUseFixedDpiChanged,
     required this.onFixedDpiChanged,
+    required this.onTileScaleFactorChanged,
     required this.viewerController,
   });
 
@@ -211,10 +298,12 @@ class _RasterizationPanel extends StatelessWidget {
   final double previewDpi;
   final bool useFixedDpi;
   final double fixedDpi;
+  final double tileScaleFactor;
   final ValueChanged<double> onMaxRenderDpiChanged;
   final ValueChanged<double> onPreviewDpiChanged;
   final ValueChanged<bool> onUseFixedDpiChanged;
   final ValueChanged<double> onFixedDpiChanged;
+  final ValueChanged<double> onTileScaleFactorChanged;
   final TypstViewerController viewerController;
 
   @override
@@ -259,6 +348,28 @@ class _RasterizationPanel extends StatelessWidget {
                     label: 'Preview cap (previewDpi)',
                     value: previewDpi,
                     onChanged: onPreviewDpiChanged,
+                  ),
+                ),
+              ],
+            ),
+          if (!useFixedDpi)
+            Row(
+              children: [
+                SizedBox(
+                  width: 190,
+                  child: Text(
+                    'Tile scale factor: ${tileScaleFactor.toStringAsFixed(2)}',
+                    style: labelStyle,
+                  ),
+                ),
+                Expanded(
+                  child: Slider(
+                    value: tileScaleFactor,
+                    min: 0.25,
+                    max: 3.0,
+                    divisions: 55,
+                    label: tileScaleFactor.toStringAsFixed(2),
+                    onChanged: onTileScaleFactorChanged,
                   ),
                 ),
               ],

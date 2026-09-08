@@ -34,11 +34,12 @@ class TypstViewerParams {
     this.margin = 8.0,
     this.minScale = 0.25,
     this.maxScale = 8.0,
-    this.maxRenderDpi = 288.0,
+    this.maxRenderDpi = 576.0,
     this.previewDpi = 144.0,
     this.fixedRasterDpi,
+    this.tileScaleFactor = 1.0,
     this.maxImageCacheBytes = 100 * 1024 * 1024,
-    this.renderDelay = const Duration(milliseconds: 80),
+    this.renderDelay = const Duration(milliseconds: 16),
     this.backgroundColor = const Color(0xffdddddd),
     this.pageDropShadow = const BoxShadow(
       color: Color(0x40000000),
@@ -103,9 +104,10 @@ class TypstViewerParams {
   // Stage two: if the *current* zoom needs more resolution than that fixed
   // baseline provides, a sharper "tile" covering just the visible window is
   // rasterized on top, adaptively — `min(currentZoom * devicePixelRatio *
-  // 72, maxRenderDpi)` DPI, capped by [maxRenderDpi]. Below that point (zoomed
-  // out, or zoomed in but still under the preview's baseline), the fixed
-  // preview alone is sharp enough and no tile is rendered at all.
+  // tileScaleFactor * 72, maxRenderDpi)` DPI, capped by [maxRenderDpi]. Below
+  // that point (zoomed out, or zoomed in but still under the preview's
+  // baseline), the fixed preview alone is sharp enough and no tile is rendered
+  // at all.
   //
   // See TypstViewerController.currentRasterScale (and its DPI counterpart)
   // to read back which tier — and exact resolution — is actually on screen
@@ -117,40 +119,39 @@ class TypstViewerParams {
   /// resolution than the fixed [previewDpi] baseline provides (stage two —
   /// see the section intro above).
   ///
-  /// The tile is rendered at `min(currentZoom * devicePixelRatio * 72,
-  /// maxRenderDpi)` DPI, so this is the ceiling on how sharp the visible
+  /// The tile is rendered at `min(currentZoom * devicePixelRatio *
+  /// tileScaleFactor * 72, maxRenderDpi)` DPI (see [tileScaleFactor], which
+  /// defaults to `1.0`), so this is the ceiling on how sharp the visible
   /// window ever gets, regardless of how far past it the user zooms (see
   /// [maxScale]). `72` DPI would mean one rendered pixel per Typst point at
   /// "100%" print scale — roughly screen resolution on a non-retina
-  /// display; the default `288` is sharp on typical high-DPI displays.
+  /// display; the default `576` is sharp well past what high-DPI displays
+  /// resolve, so text stays crisp deep into the zoom range.
   ///
-  /// pdfrx's analogous high-res tile tier has no DPI ceiling of its own —
-  /// it scales with zoom unbounded, relying only on the zoom range itself
-  /// (its `maxScale`) to keep things sane. Set this very high (or raise
-  /// [maxScale] and this together) to reproduce that "stays sharp at
-  /// extreme zoom" behavior instead of capping out at a fixed ceiling.
+  /// This is now a *quality* choice rather than a scaling limit. Tiles are
+  /// rasterized directly into a tile-sized buffer (see `rust/src/render.rs`),
+  /// so a tile costs what its own pixels cost — roughly constant, because the
+  /// tile is viewport-sized no matter the zoom — instead of growing with the
+  /// square of the zoom the way it did when the backend rasterized the whole
+  /// page and cropped. Measured on a text-heavy A4 page
+  /// (`cargo test --release --test tile_waste_bench -- --ignored --nocapture`
+  /// in `rust/`), a viewport tile costs ~3ms flat from 144 through 500 DPI.
+  /// Raising this therefore buys sharpness at very little cost; it is capped
+  /// only so a pathological zoom cannot ask for an unbounded buffer (the
+  /// backend rejects a tile past its pixel budget with `RenderTooLarge`).
   ///
-  /// Raising this makes zoomed-in text/vector art sharper at the cost of
-  /// render time and memory: both scale roughly with the *square* of this
-  /// value (pixel count of the tile), and the Rust backend additionally
-  /// rejects renders whose full-page pixel budget would be exceeded (see
-  /// the `RenderTooLarge` error), so pushing this very high on large pages
-  /// can start failing renders rather than just being slow. Values beyond
-  /// ~350–450 DPI rarely produce a visible improvement.
+  /// pdfrx's analogous high-res tile tier has no DPI ceiling of its own — it
+  /// scales with zoom unbounded, relying only on the zoom range itself (its
+  /// `maxScale`). Raise this and [maxScale] together to match that.
   ///
-  /// Defaults to `288.0` DPI. This was chosen from profiling a
-  /// viewport-sized (900×700px) tile against a text-heavy A4 page on
-  /// desktop (`cargo test --test render_bench -- --ignored --nocapture` in
-  /// `rust/`, release profile): render time stays under ~12ms through 288
-  /// DPI and only starts climbing steeply past ~360 DPI (22ms) as the
-  /// page's *full* raster — not just the cropped tile — grows, since the
-  /// v1 rasterizer renders the whole page and crops (see
-  /// `rust/src/render.rs`). 288 DPI also comfortably exceeds what's useful
-  /// for on-screen reading at typical device pixel ratios and zoom levels,
-  /// so it sits at the point of diminishing quality returns just before
-  /// the cost curve bends upward. The example app's rasterization panel
-  /// (sliders + live render-time/size readout) is a good way to re-check
-  /// this tradeoff against your own content and target devices.
+  /// The adaptive DPI snaps up to discrete rungs rather than tracking zoom
+  /// continuously, so a range of zoom levels reuses one cached tile instead of
+  /// re-rendering on every gesture frame; a tile is therefore never softer
+  /// than the zoom asks for, and at most one rung sharper.
+  ///
+  /// Defaults to `576.0` DPI. The example app's rasterization panel (sliders
+  /// + live render-time/size readout) is a good way to check the tradeoff
+  /// against your own content and target devices.
   final double maxRenderDpi;
 
   /// The fixed DPI every page near the viewport is rasterized at up front
@@ -204,6 +205,13 @@ class TypstViewerParams {
   /// and wastefully oversampled zoomed out far below it. There's no
   /// adaptive tile to take over, by construction.
   ///
+  /// It also opts out of what makes stage two cheap, by construction. A tile
+  /// costs roughly what the viewport costs because it is only ever rendered at
+  /// viewport size; setting this makes every render a *whole page* at this DPI,
+  /// for every page near the viewport, so cost climbs with the square of the
+  /// value and the image cache fills far faster. High values here are
+  /// correspondingly expensive in a way that [maxRenderDpi] no longer is.
+  ///
   /// This exists for comparing the two models hands-on (the example app's
   /// rasterization panel has a toggle for it) — e.g. against pdfrx, whose
   /// preview tier works exactly this way (a fixed
@@ -213,6 +221,24 @@ class TypstViewerParams {
   /// is what actually keeps text sharp at extreme pdfrx zoom levels — not
   /// the fixed preview DPI). Defaults to `null`.
   final double? fixedRasterDpi;
+
+  /// Multiplier applied to `currentZoom * devicePixelRatio` before it's
+  /// converted to DPI and clamped by [maxRenderDpi], in stage two's tile
+  /// scale calculation (see the section intro above): the tile targets
+  /// `min(currentZoom * devicePixelRatio * tileScaleFactor * 72,
+  /// maxRenderDpi)` DPI instead of the `1.0`-factor default.
+  ///
+  /// Raising it renders the tile sharper than the current zoom strictly
+  /// requires (useful for prefetching ahead of a zoom-in gesture, or
+  /// compensating for a display that under-reports its device pixel ratio);
+  /// lowering it renders a softer tile than the zoom would otherwise get,
+  /// trading sharpness for render time and memory. Ignored when
+  /// [fixedRasterDpi] is set, since stage two never runs in that mode.
+  ///
+  /// Defaults to `1.0` (no adjustment — the tile matches the zoom exactly,
+  /// up to the [maxRenderDpi] ceiling). The example app's rasterization
+  /// panel has a slider for this.
+  final double tileScaleFactor;
 
   /// Total memory budget, in bytes, for all cached page preview and tile
   /// images together.
@@ -237,7 +263,13 @@ class TypstViewerParams {
   /// scrolling; higher values reduce render churn but leave a visibly
   /// blurrier (stretched preview) view for longer after interaction stops.
   ///
-  /// Defaults to `Duration(milliseconds: 80)`.
+  /// Defaults to `Duration(milliseconds: 16)` — about one frame. The delay
+  /// used to be an order of magnitude longer, back when a discarded render
+  /// meant tens of milliseconds of wasted whole-page rasterization; a tile now
+  /// costs a few milliseconds regardless of zoom, so waiting to find out
+  /// whether the gesture has settled costs more latency than it saves work.
+  /// pdfrx, whose renders are cancellable, waits `0` on native for the same
+  /// reason.
   final Duration renderDelay;
 
   // ---- appearance ----
