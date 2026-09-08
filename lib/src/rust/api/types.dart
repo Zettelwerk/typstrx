@@ -8,7 +8,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 /// The outcome of a compilation. Returned for both successful and failed
 /// compiles; `success` tells them apart and `diagnostics` carries errors and
@@ -510,6 +510,64 @@ class TypstDiagnostic {
           utf16End == other.utf16End &&
           line == other.line &&
           column == other.column;
+}
+
+/// What kind of construct a [`TypstFoldingRange`] spans.
+enum TypstFoldingKind {
+  /// `{ ... }`
+  codeBlock,
+
+  /// `[ ... ]`
+  contentBlock,
+
+  /// A function call's argument list: `f(...)`.
+  args,
+
+  /// `(1, 2, 3)`
+  array,
+
+  /// `(key: value, ...)`
+  dict,
+
+  /// `/* ... */`
+  comment,
+}
+
+/// A collapsible region of Typst source — a code block, content block,
+/// array/dict literal, function call's argument list, or block comment.
+///
+/// Pure syntax, like [`HighlightNode`]: computed directly from whatever
+/// `source` the caller passes, with no dependency on a compiled World.
+/// Unlike [`CompletionResult`]/[`HoverResult`] there is no `generation` to
+/// check against staleness — call it again with the current buffer and the
+/// result is already current for it.
+class TypstFoldingRange {
+  /// Start of the region, in UTF-16 code units — inclusive of the opening
+  /// delimiter (e.g. the `{` of a code block).
+  final int startUtf16;
+
+  /// End of the region, in UTF-16 code units — inclusive of the closing
+  /// delimiter (e.g. the `}` of a code block).
+  final int endUtf16;
+  final TypstFoldingKind kind;
+
+  const TypstFoldingRange({
+    required this.startUtf16,
+    required this.endUtf16,
+    required this.kind,
+  });
+
+  @override
+  int get hashCode => startUtf16.hashCode ^ endUtf16.hashCode ^ kind.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TypstFoldingRange &&
+          runtimeType == other.runtimeType &&
+          startUtf16 == other.startUtf16 &&
+          endUtf16 == other.endUtf16 &&
+          kind == other.kind;
 }
 
 @freezed

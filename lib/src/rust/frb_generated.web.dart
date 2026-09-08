@@ -122,6 +122,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<TypstDiagnostic> dco_decode_list_typst_diagnostic(dynamic raw);
 
   @protected
+  List<TypstFoldingRange> dco_decode_list_typst_folding_range(dynamic raw);
+
+  @protected
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
@@ -162,6 +165,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TypstDiagnostic dco_decode_typst_diagnostic(dynamic raw);
+
+  @protected
+  TypstFoldingKind dco_decode_typst_folding_kind(dynamic raw);
+
+  @protected
+  TypstFoldingRange dco_decode_typst_folding_range(dynamic raw);
 
   @protected
   TypstTooltip dco_decode_typst_tooltip(dynamic raw);
@@ -297,6 +306,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<TypstFoldingRange> sse_decode_list_typst_folding_range(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
@@ -343,6 +357,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TypstDiagnostic sse_decode_typst_diagnostic(SseDeserializer deserializer);
+
+  @protected
+  TypstFoldingKind sse_decode_typst_folding_kind(SseDeserializer deserializer);
+
+  @protected
+  TypstFoldingRange sse_decode_typst_folding_range(
+    SseDeserializer deserializer,
+  );
 
   @protected
   TypstTooltip sse_decode_typst_tooltip(SseDeserializer deserializer);
@@ -495,6 +517,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_typst_folding_range(
+    List<TypstFoldingRange> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
@@ -557,6 +585,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_typst_diagnostic(
     TypstDiagnostic self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_typst_folding_kind(
+    TypstFoldingKind self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_typst_folding_range(
+    TypstFoldingRange self,
     SseSerializer serializer,
   );
 

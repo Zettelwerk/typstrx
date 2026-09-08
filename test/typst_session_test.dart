@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:typstrx/src/document/typst_completion.dart';
+import 'package:typstrx/src/document/typst_folding_range.dart';
 import 'package:typstrx/src/document/typst_session.dart';
 import 'package:typstrx/src/document/typst_tooltip.dart';
 import 'package:typstrx/src/rust/api/session.dart' as rust;
@@ -105,6 +106,15 @@ class FakeRustSession implements rust.TypstSession {
       fragments: [],
       links: [],
     );
+  }
+
+  final foldingRangesRequestedFor = <String>[];
+  List<rust.TypstFoldingRange> foldingRangesToReturn = const [];
+
+  @override
+  Future<List<rust.TypstFoldingRange>> foldingRanges({required String source}) async {
+    foldingRangesRequestedFor.add(source);
+    return foldingRangesToReturn;
   }
 
   @override
@@ -277,5 +287,26 @@ void main() {
     fake.tooltipToReturn = null;
     result = await session.hover(1);
     expect(result.tooltip, isNull);
+  });
+
+  test('foldingRanges converts kinds and is analyzed against the passed-in source directly', () async {
+    final fake = FakeRustSession();
+    final session = makeSession(fake);
+    fake.foldingRangesToReturn = const [
+      rust.TypstFoldingRange(startUtf16: 1, endUtf16: 20, kind: rust.TypstFoldingKind.codeBlock),
+      rust.TypstFoldingRange(startUtf16: 25, endUtf16: 40, kind: rust.TypstFoldingKind.comment),
+    ];
+
+    final ranges = await session.foldingRanges('#{ ... }');
+
+    // Unlike completions/hover, this takes the caller's own text — not
+    // whatever the native side last compiled — so no session.compile() is
+    // needed first, and the fake sees exactly what was passed.
+    expect(fake.foldingRangesRequestedFor, ['#{ ... }']);
+    expect(ranges, hasLength(2));
+    expect(ranges[0].startUtf16, 1);
+    expect(ranges[0].endUtf16, 20);
+    expect(ranges[0].kind, TypstFoldingKind.codeBlock);
+    expect(ranges[1].kind, TypstFoldingKind.comment);
   });
 }

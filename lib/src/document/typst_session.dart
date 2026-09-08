@@ -8,6 +8,7 @@ import '../rust/api/types.dart' as rust;
 import 'typst_completion.dart';
 import 'typst_diagnostic.dart';
 import 'typst_document.dart';
+import 'typst_folding_range.dart';
 import 'typst_highlight.dart';
 import 'typst_tooltip.dart';
 
@@ -154,6 +155,24 @@ class TypstSession {
   Future<TypstHighlightNode> highlight(String source) async {
     _checkDisposed();
     return TypstHighlightNode.fromRust(await _native.highlight(source: source));
+  }
+
+  /// Computes folding ranges for [source] — collapsible regions like code
+  /// blocks, content blocks, argument lists, and array/dict literals that
+  /// span more than one line. Headings are not included; see the Rust
+  /// `folding` module for why.
+  ///
+  /// Independent of [compile]/[updateSource], like [highlight]: this only
+  /// parses, so it's safe to call on every keystroke. Unlike [completions]/
+  /// [hover], there is no [lastCompiledSource] staleness to check — the
+  /// result is computed directly from [source], not the compiler's own
+  /// registered one, so it's already current for whatever the caller
+  /// passes.
+  Future<List<TypstFoldingRange>> foldingRanges(String source) async {
+    _checkDisposed();
+    return [
+      for (final r in await _native.foldingRanges(source: source)) TypstFoldingRange.fromRust(r),
+    ];
   }
 
   /// Computes completions at [cursorUtf16] in [lastCompiledSource].

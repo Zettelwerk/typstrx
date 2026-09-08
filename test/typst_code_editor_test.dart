@@ -30,6 +30,9 @@ class FakeRustSession implements rust.TypstSession {
   Completer<void>? hoverGate;
 
   @override
+  Future<List<rust.TypstFoldingRange>> foldingRanges({required String source}) async => const [];
+
+  @override
   Future<rust.HighlightNode> highlight({required String source}) async {
     return rust.HighlightNode(tag: null, text: source, children: const []);
   }

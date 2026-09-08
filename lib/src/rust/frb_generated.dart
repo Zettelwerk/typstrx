@@ -67,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 1980048530;
+  int get rustContentHash => 143438147;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -92,6 +92,11 @@ abstract class RustLibApi extends BaseApi {
 
   Future<TypstSession> crateApiSessionTypstSessionCreate({
     required SessionOptions options,
+  });
+
+  Future<List<TypstFoldingRange>> crateApiSessionTypstSessionFoldingRanges({
+    required TypstSession that,
+    required String source,
   });
 
   Future<HighlightNode> crateApiSessionTypstSessionHighlight({
@@ -268,7 +273,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<HighlightNode> crateApiSessionTypstSessionHighlight({
+  Future<List<TypstFoldingRange>> crateApiSessionTypstSessionFoldingRanges({
     required TypstSession that,
     required String source,
   }) {
@@ -285,6 +290,44 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             generalizedFrbRustBinding,
             serializer,
             funcId: 4,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_typst_folding_range,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSessionTypstSessionFoldingRangesConstMeta,
+        argValues: [that, source],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSessionTypstSessionFoldingRangesConstMeta =>
+      const TaskConstMeta(
+        debugName: "TypstSession_folding_ranges",
+        argNames: ["that", "source"],
+      );
+
+  @override
+  Future<HighlightNode> crateApiSessionTypstSessionHighlight({
+    required TypstSession that,
+    required String source,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTypstSession(
+            that,
+            serializer,
+          );
+          sse_encode_String(source, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 5,
             port: port_,
           );
         },
@@ -322,7 +365,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 5,
+            funcId: 6,
             port: port_,
           );
         },
@@ -362,7 +405,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 6,
+            funcId: 7,
             port: port_,
           );
         },
@@ -400,7 +443,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 7,
+            funcId: 8,
             port: port_,
           );
         },
@@ -454,7 +497,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 8,
+            funcId: 9,
             port: port_,
           );
         },
@@ -516,7 +559,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 9,
+            funcId: 10,
             port: port_,
           );
         },
@@ -546,7 +589,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 10,
+            funcId: 11,
             port: port_,
           );
         },
@@ -573,7 +616,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 12,
             port: port_,
           );
         },
@@ -821,6 +864,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<TypstFoldingRange> dco_decode_list_typst_folding_range(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_typst_folding_range).toList();
+  }
+
+  @protected
   String? dco_decode_opt_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_String(raw);
@@ -985,6 +1034,25 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       utf16End: dco_decode_opt_box_autoadd_u_32(arr[4]),
       line: dco_decode_opt_box_autoadd_u_32(arr[5]),
       column: dco_decode_opt_box_autoadd_u_32(arr[6]),
+    );
+  }
+
+  @protected
+  TypstFoldingKind dco_decode_typst_folding_kind(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return TypstFoldingKind.values[raw as int];
+  }
+
+  @protected
+  TypstFoldingRange dco_decode_typst_folding_range(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return TypstFoldingRange(
+      startUtf16: dco_decode_u_32(arr[0]),
+      endUtf16: dco_decode_u_32(arr[1]),
+      kind: dco_decode_typst_folding_kind(arr[2]),
     );
   }
 
@@ -1346,6 +1414,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<TypstFoldingRange> sse_decode_list_typst_folding_range(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <TypstFoldingRange>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_typst_folding_range(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -1546,6 +1628,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       utf16End: var_utf16End,
       line: var_line,
       column: var_column,
+    );
+  }
+
+  @protected
+  TypstFoldingKind sse_decode_typst_folding_kind(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return TypstFoldingKind.values[inner];
+  }
+
+  @protected
+  TypstFoldingRange sse_decode_typst_folding_range(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_startUtf16 = sse_decode_u_32(deserializer);
+    var var_endUtf16 = sse_decode_u_32(deserializer);
+    var var_kind = sse_decode_typst_folding_kind(deserializer);
+    return TypstFoldingRange(
+      startUtf16: var_startUtf16,
+      endUtf16: var_endUtf16,
+      kind: var_kind,
     );
   }
 
@@ -1895,6 +1999,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_typst_folding_range(
+    List<TypstFoldingRange> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_typst_folding_range(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -2066,6 +2182,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_typst_folding_kind(
+    TypstFoldingKind self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_typst_folding_range(
+    TypstFoldingRange self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.startUtf16, serializer);
+    sse_encode_u_32(self.endUtf16, serializer);
+    sse_encode_typst_folding_kind(self.kind, serializer);
+  }
+
+  @protected
   void sse_encode_typst_tooltip(TypstTooltip self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     switch (self) {
@@ -2169,6 +2305,22 @@ class TypstSessionImpl extends RustOpaque implements TypstSession {
     cursorUtf16: cursorUtf16,
     explicit: explicit,
   );
+
+  /// Computes folding ranges for `source` — collapsible regions like code
+  /// blocks, content blocks, argument lists, array/dict literals, and
+  /// block comments that span more than one line. See
+  /// [`crate::folding`] for why headings aren't included.
+  ///
+  /// Independent of compilation, like [`Self::highlight`]. Unlike
+  /// [`Self::completions`]/[`Self::hover`], there is no `generation` to
+  /// check: the result is computed directly from `source`, not the
+  /// World's own registered one, so it's already current for whatever the
+  /// caller passes.
+  Future<List<TypstFoldingRange>> foldingRanges({required String source}) =>
+      RustLib.instance.api.crateApiSessionTypstSessionFoldingRanges(
+        that: this,
+        source: source,
+      );
 
   /// Computes a syntax-highlighting tree for `source`.
   ///

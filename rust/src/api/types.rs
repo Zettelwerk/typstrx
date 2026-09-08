@@ -181,6 +181,42 @@ pub enum TypstTooltip {
     Code { content: String },
 }
 
+/// A collapsible region of Typst source — a code block, content block,
+/// array/dict literal, function call's argument list, or block comment.
+///
+/// Pure syntax, like [`HighlightNode`]: computed directly from whatever
+/// `source` the caller passes, with no dependency on a compiled World.
+/// Unlike [`CompletionResult`]/[`HoverResult`] there is no `generation` to
+/// check against staleness — call it again with the current buffer and the
+/// result is already current for it.
+#[derive(Debug)]
+pub struct TypstFoldingRange {
+    /// Start of the region, in UTF-16 code units — inclusive of the opening
+    /// delimiter (e.g. the `{` of a code block).
+    pub start_utf16: u32,
+    /// End of the region, in UTF-16 code units — inclusive of the closing
+    /// delimiter (e.g. the `}` of a code block).
+    pub end_utf16: u32,
+    pub kind: TypstFoldingKind,
+}
+
+/// What kind of construct a [`TypstFoldingRange`] spans.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TypstFoldingKind {
+    /// `{ ... }`
+    CodeBlock,
+    /// `[ ... ]`
+    ContentBlock,
+    /// A function call's argument list: `f(...)`.
+    Args,
+    /// `(1, 2, 3)`
+    Array,
+    /// `(key: value, ...)`
+    Dict,
+    /// `/* ... */`
+    Comment,
+}
+
 /// A rectangle in page coordinates: typographic points, top-left origin,
 /// y-down (`top <= bottom`).
 #[derive(Clone, Debug, PartialEq)]

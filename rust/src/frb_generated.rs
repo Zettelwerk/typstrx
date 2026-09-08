@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1980048530;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 143438147;
 
 // Section: executor
 
@@ -184,6 +184,60 @@ fn wire__crate__api__session__TypstSession_create_impl(
                 transform_result_sse::<_, ()>((move || {
                     let output_ok =
                         Ok::<_, ()>(crate::api::session::TypstSession::create(api_options))?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__session__TypstSession_folding_ranges_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "TypstSession_folding_ranges",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TypstSession>,
+            >>::sse_decode(&mut deserializer);
+            let api_source = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_that_guard = api_that_guard.unwrap();
+                    let output_ok =
+                        Ok::<_, ()>(crate::api::session::TypstSession::folding_ranges(
+                            &*api_that_guard,
+                            api_source,
+                        ))?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -888,6 +942,20 @@ impl SseDecode for Vec<crate::api::types::TypstDiagnostic> {
     }
 }
 
+impl SseDecode for Vec<crate::api::types::TypstFoldingRange> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::types::TypstFoldingRange>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Option<String> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1111,6 +1179,36 @@ impl SseDecode for crate::api::types::TypstDiagnostic {
     }
 }
 
+impl SseDecode for crate::api::types::TypstFoldingKind {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::types::TypstFoldingKind::CodeBlock,
+            1 => crate::api::types::TypstFoldingKind::ContentBlock,
+            2 => crate::api::types::TypstFoldingKind::Args,
+            3 => crate::api::types::TypstFoldingKind::Array,
+            4 => crate::api::types::TypstFoldingKind::Dict,
+            5 => crate::api::types::TypstFoldingKind::Comment,
+            _ => unreachable!("Invalid variant for TypstFoldingKind: {}", inner),
+        };
+    }
+}
+
+impl SseDecode for crate::api::types::TypstFoldingRange {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_startUtf16 = <u32>::sse_decode(deserializer);
+        let mut var_endUtf16 = <u32>::sse_decode(deserializer);
+        let mut var_kind = <crate::api::types::TypstFoldingKind>::sse_decode(deserializer);
+        return crate::api::types::TypstFoldingRange {
+            start_utf16: var_startUtf16,
+            end_utf16: var_endUtf16,
+            kind: var_kind,
+        };
+    }
+}
+
 impl SseDecode for crate::api::types::TypstTooltip {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1223,36 +1321,42 @@ fn pde_ffi_dispatcher_primary_impl(
             data_len,
         ),
         3 => wire__crate__api__session__TypstSession_create_impl(port, ptr, rust_vec_len, data_len),
-        4 => wire__crate__api__session__TypstSession_highlight_impl(
+        4 => wire__crate__api__session__TypstSession_folding_ranges_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        5 => wire__crate__api__session__TypstSession_hover_impl(port, ptr, rust_vec_len, data_len),
-        6 => wire__crate__api__session__TypstSession_page_text_impl(
+        5 => wire__crate__api__session__TypstSession_highlight_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        7 => wire__crate__api__session__TypstSession_register_font_impl(
+        6 => wire__crate__api__session__TypstSession_hover_impl(port, ptr, rust_vec_len, data_len),
+        7 => wire__crate__api__session__TypstSession_page_text_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        8 => wire__crate__api__session__TypstSession_render_page_region_impl(
+        8 => wire__crate__api__session__TypstSession_register_font_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        9 => {
+        9 => wire__crate__api__session__TypstSession_render_page_region_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        10 => {
             wire__crate__api__session__TypstSession_set_file_impl(port, ptr, rust_vec_len, data_len)
         }
-        10 => wire__crate__api__init_app_impl(port, ptr, rust_vec_len, data_len),
-        11 => {
+        11 => wire__crate__api__init_app_impl(port, ptr, rust_vec_len, data_len),
+        12 => {
             wire__crate__api__types__session_options_default_impl(port, ptr, rust_vec_len, data_len)
         }
         _ => unreachable!(),
@@ -1667,6 +1771,53 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::types::TypstDiagnostic>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::types::TypstFoldingKind {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::CodeBlock => 0.into_dart(),
+            Self::ContentBlock => 1.into_dart(),
+            Self::Args => 2.into_dart(),
+            Self::Array => 3.into_dart(),
+            Self::Dict => 4.into_dart(),
+            Self::Comment => 5.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::types::TypstFoldingKind
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::types::TypstFoldingKind>
+    for crate::api::types::TypstFoldingKind
+{
+    fn into_into_dart(self) -> crate::api::types::TypstFoldingKind {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::types::TypstFoldingRange {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.start_utf16.into_into_dart().into_dart(),
+            self.end_utf16.into_into_dart().into_dart(),
+            self.kind.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::types::TypstFoldingRange
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::types::TypstFoldingRange>
+    for crate::api::types::TypstFoldingRange
+{
+    fn into_into_dart(self) -> crate::api::types::TypstFoldingRange {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::types::TypstTooltip {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
@@ -1962,6 +2113,16 @@ impl SseEncode for Vec<crate::api::types::TypstDiagnostic> {
     }
 }
 
+impl SseEncode for Vec<crate::api::types::TypstFoldingRange> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::types::TypstFoldingRange>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Option<String> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -2128,6 +2289,35 @@ impl SseEncode for crate::api::types::TypstDiagnostic {
         <Option<u32>>::sse_encode(self.utf16_end, serializer);
         <Option<u32>>::sse_encode(self.line, serializer);
         <Option<u32>>::sse_encode(self.column, serializer);
+    }
+}
+
+impl SseEncode for crate::api::types::TypstFoldingKind {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::types::TypstFoldingKind::CodeBlock => 0,
+                crate::api::types::TypstFoldingKind::ContentBlock => 1,
+                crate::api::types::TypstFoldingKind::Args => 2,
+                crate::api::types::TypstFoldingKind::Array => 3,
+                crate::api::types::TypstFoldingKind::Dict => 4,
+                crate::api::types::TypstFoldingKind::Comment => 5,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::api::types::TypstFoldingRange {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u32>::sse_encode(self.start_utf16, serializer);
+        <u32>::sse_encode(self.end_utf16, serializer);
+        <crate::api::types::TypstFoldingKind>::sse_encode(self.kind, serializer);
     }
 }
 

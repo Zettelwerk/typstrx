@@ -11,7 +11,7 @@ use typst_layout::PagedDocument;
 
 use crate::api::types::{
     CompileResult, CompletionResult, DiagnosticSeverity, HighlightNode, HoverResult, PageInfo,
-    PageTextData, RenderedRegion, SessionOptions, TypstDiagnostic, TypstrxError,
+    PageTextData, RenderedRegion, SessionOptions, TypstDiagnostic, TypstFoldingRange, TypstrxError,
 };
 use crate::render::render_region;
 use crate::world::{TypstrxWorld, WorldOptions};
@@ -117,6 +117,20 @@ impl TypstSession {
     /// keystroke.
     pub fn highlight(&self, source: String) -> HighlightNode {
         crate::highlight::highlight_source(&source)
+    }
+
+    /// Computes folding ranges for `source` — collapsible regions like code
+    /// blocks, content blocks, argument lists, array/dict literals, and
+    /// block comments that span more than one line. See
+    /// [`crate::folding`] for why headings aren't included.
+    ///
+    /// Independent of compilation, like [`Self::highlight`]. Unlike
+    /// [`Self::completions`]/[`Self::hover`], there is no `generation` to
+    /// check: the result is computed directly from `source`, not the
+    /// World's own registered one, so it's already current for whatever the
+    /// caller passes.
+    pub fn folding_ranges(&self, source: String) -> Vec<TypstFoldingRange> {
+        crate::folding::folding_ranges(&source)
     }
 
     /// Computes completions at `cursor_utf16` in the source as of the last

@@ -19,6 +19,9 @@ class FakeRustSession implements rust.TypstSession {
   List<rust.TypstDiagnostic> diagnosticsToReturn = const [];
 
   @override
+  Future<List<rust.TypstFoldingRange>> foldingRanges({required String source}) async => const [];
+
+  @override
   Future<rust.HighlightNode> highlight({required String source}) async {
     highlightedSources.add(source);
     if (highlightGate != null) await highlightGate!.future;

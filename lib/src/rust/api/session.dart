@@ -33,6 +33,18 @@ abstract class TypstSession implements RustOpaqueInterface {
   static Future<TypstSession> create({required SessionOptions options}) =>
       RustLib.instance.api.crateApiSessionTypstSessionCreate(options: options);
 
+  /// Computes folding ranges for `source` — collapsible regions like code
+  /// blocks, content blocks, argument lists, array/dict literals, and
+  /// block comments that span more than one line. See
+  /// [`crate::folding`] for why headings aren't included.
+  ///
+  /// Independent of compilation, like [`Self::highlight`]. Unlike
+  /// [`Self::completions`]/[`Self::hover`], there is no `generation` to
+  /// check: the result is computed directly from `source`, not the
+  /// World's own registered one, so it's already current for whatever the
+  /// caller passes.
+  Future<List<TypstFoldingRange>> foldingRanges({required String source});
+
   /// Computes a syntax-highlighting tree for `source`.
   ///
   /// Independent of compilation: this only parses, so it touches neither

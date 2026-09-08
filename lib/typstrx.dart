@@ -5,6 +5,7 @@ library;
 export 'src/document/typst_completion.dart';
 export 'src/document/typst_diagnostic.dart';
 export 'src/document/typst_document.dart';
+export 'src/document/typst_folding_range.dart';
 export 'src/document/typst_highlight.dart';
 export 'src/document/typst_image.dart';
 export 'src/document/typst_link.dart';
