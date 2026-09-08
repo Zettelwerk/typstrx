@@ -559,7 +559,17 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
   @override
   Widget build(BuildContext context) {
     final focusNode = _focusNode;
-    final style = widget.style ?? const TextStyle(fontFamily: 'monospace', fontSize: 13);
+    // A null color here isn't "inherit from context" — EditableText has no
+    // ambient text style to fall back to, and this becomes the root of
+    // TypstEditorController's whole TextSpan tree (see buildTextSpan): any
+    // node the syntax theme doesn't color (plain prose, or a tag the theme
+    // has no entry for) inherits it verbatim. Left null, that resolved to
+    // near-white text on a light background — invisible, not merely
+    // untinted. Backfilled here rather than only in the widget's own
+    // default so a caller-supplied style that also omits a color doesn't
+    // hit the same bug.
+    final rawStyle = widget.style ?? const TextStyle(fontFamily: 'monospace', fontSize: 13);
+    final style = rawStyle.color == null ? rawStyle.copyWith(color: const Color(0xFF000000)) : rawStyle;
     final cursorColor = widget.cursorColor ?? style.color ?? const Color(0xFF000000);
     final selectionColor = widget.selectionColor ?? const Color(0x664A90D9);
 
