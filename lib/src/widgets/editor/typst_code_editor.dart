@@ -530,8 +530,22 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
                     onTap: () => _applyCompletion(item),
                     child: ListTile(
                       dense: true,
-                      title: Text(item.label),
-                      trailing: item.detail == null ? null : Text(item.detail!),
+                      title: Text(item.label, overflow: TextOverflow.ellipsis, maxLines: 1),
+                      // ListTile requires trailing to be a bounded-width widget — a
+                      // bare Text(detail) has none, and a long detail string (a
+                      // completion's one-sentence description) overflows the tile
+                      // and trips ListTile's own layout assertion.
+                      trailing: item.detail == null
+                          ? null
+                          : ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 96),
+                              child: Text(
+                                item.detail!,
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                                textAlign: TextAlign.end,
+                              ),
+                            ),
                     ),
                   ),
                 );

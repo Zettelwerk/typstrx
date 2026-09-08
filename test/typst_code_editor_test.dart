@@ -229,6 +229,30 @@ void main() {
       await session.dispose();
     });
 
+    testWidgets('a long detail string does not overflow the ListTile', (tester) async {
+      // ListTile.trailing must be a bounded-width widget; a bare Text(detail)
+      // isn't, and a long one-sentence description tripped ListTile's own
+      // layout assertion (reported against the real app via Ctrl+Space).
+      const longDetail = rust.TypstCompletion(
+        kind: rust.TypstCompletionKind.func(),
+        label: 'lorem',
+        apply: 'lorem(\${})',
+        detail: 'Generates a given amount of placeholder Lorem Ipsum text, for filling in layouts.',
+      );
+      final (_, session, controller) = await triggerCompletions(
+        tester,
+        text: '#lo',
+        cursor: 3,
+        completions: const [longDetail],
+      );
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('lorem'), findsOneWidget);
+
+      controller.dispose();
+      await session.dispose();
+    });
+
     testWidgets('arrow keys move the popup selection, not the text caret', (tester) async {
       const alpha = rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'alpha', apply: 'alpha');
       const beta = rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'beta', apply: 'beta');
