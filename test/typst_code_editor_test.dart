@@ -72,25 +72,41 @@ class FakeRustSession implements rust.TypstSession {
 }
 
 void main() {
-  // Deliberately not covering text entry through tester.enterText here: it
-  // hangs partway through the call against this widget, inside
-  // flutter_test's own showKeyboard/idle plumbing (reproduced in isolation;
-  // a plain TextEditingController in the same EditableText/gesture-detector
-  // shape doesn't hang there either — this is unrelated to
-  // TypstEditorController). Not worth chasing further given text-entry
-  // correctness is already covered at the seam EditableText actually calls
-  // (TypstEditorController.set value, in typst_editor_controller_test.dart).
-  // The tap test below covers what those unit tests can't: that focus,
-  // hit-testing, and TextSelectionGestureDetectorBuilder wiring all work
-  // against the real widget.
-  //
-  // Note for future tests in this file: don't await a raw
-  // Future.delayed(...) inside a testWidgets body the way
-  // typst_editor_controller_test.dart's plain test() bodies do — testWidgets
-  // runs in flutter_test's FakeAsync zone, where a bare delayed Future never
-  // resolves without a tester.pump() to advance the fake clock (this hung a
-  // once-tracked-down-to-the-widget "bug" here that turned out to be
-  // exactly this). Use tester.pump(duration) instead.
+  // Neither test below awaits a bare `Future<void>.delayed(...)` (unlike
+  // typst_editor_controller_test.dart's plain test() bodies, where that's
+  // fine). testWidgets runs inside flutter_test's FakeAsync zone, and a
+  // delayed Future there never resolves without a tester.pump() to advance
+  // the fake clock — awaiting one hangs the test indefinitely. That one
+  // mistake, not any real widget or gesture-detector issue, is what an
+  // earlier version of this file's commit chased for a while: it looked
+  // exactly like a hang inside `enterText`/`tap` because a passing
+  // `expect()` prints nothing, so "hung after the real work already
+  // succeeded" and "hung during the real work" were indistinguishable from
+  // the test output alone.
+  testWidgets('typing text updates the controller and calls onChanged', (tester) async {
+    final fake = FakeRustSession();
+    final session = TypstSession.forTesting(fake, const TypstSessionOptions());
+    final controller = TypstEditorController(session: session, text: 'hello');
+    String? changed;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TypstCodeEditor(controller: controller, onChanged: (text) => changed = text),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(controller.text, 'hello');
+
+    await tester.enterText(find.byType(TypstCodeEditor), 'hello world');
+    expect(controller.text, 'hello world');
+    expect(changed, 'hello world');
+
+    controller.dispose();
+    await session.dispose();
+  });
+
   testWidgets('tapping the editor requests focus (gesture wiring is live)', (tester) async {
     final fake = FakeRustSession();
     final session = TypstSession.forTesting(fake, const TypstSessionOptions());

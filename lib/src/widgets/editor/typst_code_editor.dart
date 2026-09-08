@@ -150,24 +150,23 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     final cursorColor = widget.cursorColor ?? style.color ?? const Color(0xFF000000);
     final selectionColor = widget.selectionColor ?? const Color(0x664A90D9);
 
-    // buildGestureDetector is called once, outside the focus-reactive
-    // AnimatedBuilder below, and given that (stable) result as its child —
-    // not the other way around. TextSelectionGestureDetectorBuilder tracks
-    // in-flight gesture state across callbacks; rebuilding a *fresh*
-    // detector element mid-gesture (which wrapping buildGestureDetector
-    // itself in an AnimatedBuilder(focusNode) causes, since focusing is
-    // itself the result of a tap) orphans that state. Only the part that
-    // actually depends on focus (EditableText's selectionColor) belongs
-    // inside the AnimatedBuilder.
+    // AnimatedBuilder rebuilds this whole subtree — including a fresh call
+    // to buildGestureDetector — on every focus change, purely so
+    // EditableText's selectionColor can be focus-gated the way TextField's
+    // is. That rebuild is safe: tap-to-focus and the rebuild it triggers do
+    // not fight (verified directly — see the note in
+    // test/typst_code_editor_test.dart on why an earlier attempt to work
+    // around a hang here turned out to be chasing a test bug, not a real
+    // one, and this structure was in fact fine the whole time).
     return MouseRegion(
       cursor: SystemMouseCursors.text,
       child: TextFieldTapRegion(
-        child: _gestureDetectorBuilder.buildGestureDetector(
-          behavior: HitTestBehavior.translucent,
-          child: AnimatedBuilder(
-            animation: focusNode,
-            builder: (context, _) {
-              return RepaintBoundary(
+        child: AnimatedBuilder(
+          animation: focusNode,
+          builder: (context, _) {
+            return _gestureDetectorBuilder.buildGestureDetector(
+              behavior: HitTestBehavior.translucent,
+              child: RepaintBoundary(
                 child: EditableText(
                   key: _editableTextKey,
                   controller: widget.controller,
@@ -205,9 +204,9 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
                   mouseCursor: MouseCursor.defer,
                   cursorOpacityAnimates: true,
                 ),
-              );
-            },
-          ),
+              ),
+            );
+          },
         ),
       ),
     );
