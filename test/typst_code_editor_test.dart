@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:typstrx/src/document/typst_session.dart';
 import 'package:typstrx/src/rust/api/session.dart' as rust;
@@ -10,6 +13,14 @@ import 'package:typstrx/src/widgets/editor/typst_editor_controller.dart';
 /// typst_editor_controller_test.dart, needed here too since these tests
 /// exercise a real, mounted [TypstEditorController].
 class FakeRustSession implements rust.TypstSession {
+  /// What the next `completions()` call returns.
+  List<rust.TypstCompletion> completionsToReturn = const [];
+  int applyFromUtf16ToReturn = 0;
+
+  /// When set, `completions()` blocks until this completes — for tests that
+  /// need to mutate state while a request is deliberately kept in flight.
+  Completer<void>? completionsGate;
+
   @override
   Future<rust.HighlightNode> highlight({required String source}) async {
     return rust.HighlightNode(tag: null, text: source, children: const []);
@@ -17,7 +28,12 @@ class FakeRustSession implements rust.TypstSession {
 
   @override
   Future<rust.CompletionResult> completions({required int cursorUtf16, required bool explicit}) async {
-    return rust.CompletionResult(generation: BigInt.zero, applyFromUtf16: 0, completions: const []);
+    if (completionsGate != null) await completionsGate!.future;
+    return rust.CompletionResult(
+      generation: BigInt.zero,
+      applyFromUtf16: applyFromUtf16ToReturn,
+      completions: completionsToReturn,
+    );
   }
 
   @override
@@ -72,6 +88,8 @@ class FakeRustSession implements rust.TypstSession {
 }
 
 void main() {
+
+
   // Neither test below awaits a bare `Future<void>.delayed(...)` (unlike
   // typst_editor_controller_test.dart's plain test() bodies, where that's
   // fine). testWidgets runs inside flutter_test's FakeAsync zone, and a
@@ -130,5 +148,182 @@ void main() {
     focusNode.dispose();
     controller.dispose();
     await session.dispose();
+  });
+
+  group('completion popup', () {
+    // Compiles [text] (so TypstSession.lastCompiledSource matches it —
+    // required for a completions result to be considered fresh, see
+    // TypstCodeEditor's _requestCompletions), mounts the editor, then
+    // assigns [text]/[cursor] to the controller to dispatch the triggering
+    // request and pumps once for its (synchronous, ungated-by-default) fake
+    // response to land.
+    // [focusNode], when given, is focused *before* the triggering edit
+    // below (via requestFocus, not a tap) — a tap lands wherever the finger
+    // hits, which for an expanded editor and a couple of characters of text
+    // is well past the end of the line, moving the selection there. Since
+    // TypstCodeEditor treats any selection change with no text change as
+    // "the buffer moved on, hide whatever was offered", a tap issued after
+    // the popup is already showing dismisses it before a subsequent key
+    // event reaches it.
+    Future<(FakeRustSession, TypstSession, TypstEditorController)> triggerCompletions(
+      WidgetTester tester, {
+      required String text,
+      required int cursor,
+      List<rust.TypstCompletion> completions = const [],
+      int applyFromUtf16 = 1,
+      FocusNode? focusNode,
+    }) async {
+      final fake = FakeRustSession()
+        ..completionsToReturn = completions
+        ..applyFromUtf16ToReturn = applyFromUtf16;
+      final session = TypstSession.forTesting(fake, const TypstSessionOptions());
+      await session.compile(text);
+      final controller = TypstEditorController(session: session, text: '');
+
+      await tester.pumpWidget(
+        MaterialApp(home: Scaffold(body: TypstCodeEditor(controller: controller, focusNode: focusNode))),
+      );
+      await tester.pump();
+
+      if (focusNode != null) {
+        focusNode.requestFocus();
+        await tester.pump();
+      }
+
+      controller.value = TextEditingValue(text: text, selection: TextSelection.collapsed(offset: cursor));
+      await tester.pump(const Duration(milliseconds: 1));
+      return (fake, session, controller);
+    }
+
+    const lorem = rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'lorem', apply: 'lorem(\${})');
+    const letBinding = rust.TypstCompletion(
+      kind: rust.TypstCompletionKind.syntax(),
+      label: 'let binding',
+      apply: 'let',
+    );
+
+    testWidgets('a trigger shows a popup filtered to completions matching the typed prefix', (tester) async {
+      final (_, session, controller) = await triggerCompletions(
+        tester,
+        text: '#lo',
+        cursor: 3,
+        completions: const [lorem, letBinding],
+      );
+
+      expect(find.text('lorem'), findsOneWidget);
+      expect(find.text('let binding'), findsNothing, reason: "'let' does not start with the typed 'lo'");
+
+      controller.dispose();
+      await session.dispose();
+    });
+
+    testWidgets('arrow keys move the popup selection, not the text caret', (tester) async {
+      const alpha = rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'alpha', apply: 'alpha');
+      const beta = rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'beta', apply: 'beta');
+      final focusNode = FocusNode();
+      final (_, session, controller) = await triggerCompletions(
+        tester,
+        text: '#l',
+        cursor: 2,
+        completions: const [alpha, beta],
+        applyFromUtf16: 2,
+        focusNode: focusNode,
+      );
+      expect(find.text('alpha'), findsOneWidget);
+      expect(find.text('beta'), findsOneWidget);
+      final caretBefore = controller.selection.baseOffset;
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      expect(controller.selection.baseOffset, caretBefore, reason: 'arrow-down navigates the popup, not the caret');
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      // applyFromUtf16 (2) equals the cursor (2): an empty replace range, so
+      // 'beta' is inserted right there rather than replacing anything.
+      expect(controller.text, '#lbeta', reason: 'arrow-down moved the popup selection to the second item');
+
+      focusNode.dispose();
+      controller.dispose();
+      await session.dispose();
+    });
+
+    testWidgets('escape dismisses the popup', (tester) async {
+      final focusNode = FocusNode();
+      final (_, session, controller) = await triggerCompletions(
+        tester,
+        text: '#l',
+        cursor: 2,
+        completions: const [lorem],
+        focusNode: focusNode,
+      );
+      expect(find.text('lorem'), findsOneWidget);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+
+      expect(find.text('lorem'), findsNothing);
+
+      focusNode.dispose();
+      controller.dispose();
+      await session.dispose();
+    });
+
+    testWidgets('enter applies the completion with its snippet stripped and the caret at the placeholder', (
+      tester,
+    ) async {
+      final focusNode = FocusNode();
+      final (_, session, controller) = await triggerCompletions(
+        tester,
+        text: '#l',
+        cursor: 2,
+        completions: const [lorem],
+        focusNode: focusNode,
+      );
+      expect(find.text('lorem'), findsOneWidget);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+
+      // applyFromUtf16 (1, right after '#') to the cursor (2) is replaced by
+      // 'lorem(${})' with its placeholder stripped: 'lorem()', caret
+      // between the parens.
+      expect(controller.text, '#lorem()');
+      expect(controller.selection, const TextSelection.collapsed(offset: 7));
+
+      focusNode.dispose();
+      controller.dispose();
+      await session.dispose();
+    });
+
+    testWidgets('a completion result that arrives after the buffer moved on is not shown', (tester) async {
+      final fake = FakeRustSession()
+        ..completionsToReturn = const [lorem]
+        ..applyFromUtf16ToReturn = 1
+        ..completionsGate = Completer<void>();
+      final session = TypstSession.forTesting(fake, const TypstSessionOptions());
+      await session.compile('#l');
+      final controller = TypstEditorController(session: session, text: '');
+
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: TypstCodeEditor(controller: controller))));
+      await tester.pump();
+
+      controller.value = const TextEditingValue(text: '#l', selection: TextSelection.collapsed(offset: 2));
+      await tester.pump(const Duration(milliseconds: 1));
+
+      // The buffer moves on (represented here by the native side's own
+      // registered source changing, exactly the case
+      // TypstSession.lastCompiledSource exists to detect) while the
+      // completions() call above is still gated/in flight.
+      await session.compile('#x');
+
+      fake.completionsGate!.complete();
+      await tester.pump(const Duration(milliseconds: 1));
+
+      expect(find.text('lorem'), findsNothing, reason: 'stale result must not be shown');
+
+      controller.dispose();
+      await session.dispose();
+    });
   });
 }

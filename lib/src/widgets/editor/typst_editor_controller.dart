@@ -44,6 +44,11 @@ class TypstEditorController extends TextEditingController {
   final TypstSession _session;
   late StreamSubscription<TypstCompileResult> _resultsSubscription;
 
+  /// The session backing this controller — for editor chrome built on top
+  /// (e.g. a completion popup) that needs [TypstSession.completions]/
+  /// [TypstSession.hover]/[TypstSession.lastCompiledSource] directly.
+  TypstSession get session => _session;
+
   /// The tag → style mapping used to color source. Assigning a new value
   /// repaints without recomputing the highlight tree.
   TypstSyntaxTheme theme;

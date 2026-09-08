@@ -1,9 +1,18 @@
 import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart'
-    show AdaptiveTextSelectionToolbar, desktopTextSelectionControls, materialTextSelectionControls;
+    show
+        AdaptiveTextSelectionToolbar,
+        Colors,
+        InkWell,
+        ListTile,
+        Material,
+        Theme,
+        desktopTextSelectionControls,
+        materialTextSelectionControls;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import '../../document/typst_completion.dart';
 import 'typst_editor_controller.dart';
 
 Widget _defaultContextMenuBuilder(BuildContext context, EditableTextState editableTextState) {
@@ -11,6 +20,36 @@ Widget _defaultContextMenuBuilder(BuildContext context, EditableTextState editab
     return SystemContextMenu.editableText(editableTextState: editableTextState);
   }
   return AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState);
+}
+
+/// Strips `${...}` snippet placeholders from a completion's [apply] text
+/// (Typst-ide's own snippet syntax — e.g. `lorem(${})`, `${lhs} + ${rhs}`,
+/// or occasionally a numbered `${2:2}` tab-stop), returning the plain text
+/// with every placeholder removed and the offset of the first one (or the
+/// end of the text, if there were none) for the caret to land on.
+///
+/// The content between `${` and `}` (a hint name, or a tab-stop number and
+/// default) is discarded rather than kept, uniformly for both forms — v1
+/// doesn't cycle through multiple tab-stops, so keeping e.g. "lhs" as
+/// literal inserted text would be a visible half-measure, not a real
+/// feature.
+({String text, int caretOffset}) _stripSnippetPlaceholders(String apply) {
+  final buffer = StringBuffer();
+  int? firstPlaceholderOffset;
+  var i = 0;
+  while (i < apply.length) {
+    if (apply[i] == r'$' && i + 1 < apply.length && apply[i + 1] == '{') {
+      final end = apply.indexOf('}', i + 2);
+      if (end != -1) {
+        firstPlaceholderOffset ??= buffer.length;
+        i = end + 1;
+        continue;
+      }
+    }
+    buffer.write(apply[i]);
+    i++;
+  }
+  return (text: buffer.toString(), caretOffset: firstPlaceholderOffset ?? buffer.length);
 }
 
 /// A Typst source editor built directly on [EditableText], so future editor
@@ -115,19 +154,274 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
   @override
   bool get selectionEnabled => true;
 
+  // --- completion popup ---
+  OverlayEntry? _completionOverlay;
+  List<TypstCompletion> _completions = const [];
+  int _completionApplyFrom = 0;
+  int _selectedCompletionIndex = 0;
+  int _completionRequestId = 0;
+  String? _lastControllerText;
+  TextSelection? _lastControllerSelection;
+  FocusNode? _keyHandlerNode;
+  FocusOnKeyEventCallback? _previousOnKeyEvent;
+
+  // Set for the duration of _applyCompletion's own `controller.value =`
+  // assignment, so _onControllerChanged's synchronous notification from
+  // that assignment doesn't dispatch a fresh completions request for the
+  // text we just inserted (or, worse, re-show a popup right after the
+  // caller picked an item).
+  bool _applyingCompletion = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _lastControllerText = widget.controller.text;
+    _lastControllerSelection = widget.controller.selection;
+    widget.controller.addListener(_onControllerChanged);
+    _installKeyHandler(_focusNode);
+  }
+
   @override
   void didUpdateWidget(TypstCodeEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_onControllerChanged);
+      widget.controller.addListener(_onControllerChanged);
+      _lastControllerText = widget.controller.text;
+      _lastControllerSelection = widget.controller.selection;
+      _hideCompletionPopup();
+    }
     if (oldWidget.focusNode == null && widget.focusNode != null) {
       _internalFocusNode?.dispose();
       _internalFocusNode = null;
+    }
+    final currentNode = _focusNode;
+    if (!identical(_keyHandlerNode, currentNode)) {
+      if (_keyHandlerNode != null) _uninstallKeyHandler(_keyHandlerNode!);
+      _installKeyHandler(currentNode);
     }
   }
 
   @override
   void dispose() {
+    widget.controller.removeListener(_onControllerChanged);
+    if (_keyHandlerNode != null) _uninstallKeyHandler(_keyHandlerNode!);
+    _completionOverlay?.remove();
     _internalFocusNode?.dispose();
     super.dispose();
+  }
+
+  // A caller-supplied FocusNode's onKeyEvent is chained rather than
+  // overwritten, so this doesn't clobber the app's own key handling on it —
+  // at the cost that if the caller assigns onKeyEvent again *after* this
+  // runs, they clobber ours instead and popup keys stop working. Acceptable:
+  // this is an edge case in an already-advanced customization.
+  void _installKeyHandler(FocusNode node) {
+    _previousOnKeyEvent = node.onKeyEvent;
+    node.onKeyEvent = _handleKeyEvent;
+    _keyHandlerNode = node;
+  }
+
+  void _uninstallKeyHandler(FocusNode node) {
+    if (identical(node.onKeyEvent, _handleKeyEvent)) {
+      node.onKeyEvent = _previousOnKeyEvent;
+    }
+    _previousOnKeyEvent = null;
+    _keyHandlerNode = null;
+  }
+
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is KeyDownEvent || event is KeyRepeatEvent) {
+      if (_completions.isNotEmpty) {
+        switch (event.logicalKey) {
+          case LogicalKeyboardKey.arrowDown:
+            _moveCompletionSelection(1);
+            return KeyEventResult.handled;
+          case LogicalKeyboardKey.arrowUp:
+            _moveCompletionSelection(-1);
+            return KeyEventResult.handled;
+          case LogicalKeyboardKey.enter:
+          case LogicalKeyboardKey.numpadEnter:
+          case LogicalKeyboardKey.tab:
+            _applyCompletion(_completions[_selectedCompletionIndex]);
+            return KeyEventResult.handled;
+          case LogicalKeyboardKey.escape:
+            _hideCompletionPopup();
+            return KeyEventResult.handled;
+        }
+      }
+      if (event is KeyDownEvent &&
+          event.logicalKey == LogicalKeyboardKey.space &&
+          HardwareKeyboard.instance.isControlPressed) {
+        _requestCompletions(explicit: true);
+        return KeyEventResult.handled;
+      }
+    }
+    return _previousOnKeyEvent?.call(node, event) ?? KeyEventResult.ignored;
+  }
+
+  void _onControllerChanged() {
+    final controller = widget.controller;
+    final text = controller.text;
+    final selection = controller.selection;
+    final textChanged = text != _lastControllerText;
+    final selectionChanged = selection != _lastControllerSelection;
+    _lastControllerText = text;
+    _lastControllerSelection = selection;
+    if (_applyingCompletion) {
+      // Tracking above stays accurate either way; just skip reacting to a
+      // change _applyCompletion made itself (see the field's doc comment).
+      return;
+    }
+    if (!textChanged && !selectionChanged) {
+      // Genuinely nothing changed — e.g. EditableText re-asserting the same
+      // value on the controller for its own bookkeeping. Nothing to react
+      // to either way; in particular, not a reason to hide an open popup.
+      return;
+    }
+    if (!textChanged) {
+      // A pure selection/caret move (arrow keys, a click, programmatic) —
+      // whatever was being offered was for the old position.
+      _hideCompletionPopup();
+      return;
+    }
+    if (!selection.isCollapsed) {
+      _hideCompletionPopup();
+      return;
+    }
+    _requestCompletions(explicit: false);
+  }
+
+  void _requestCompletions({required bool explicit}) {
+    final controller = widget.controller;
+    final selection = controller.selection;
+    if (!selection.isValid || !selection.isCollapsed) {
+      _hideCompletionPopup();
+      return;
+    }
+    final cursor = selection.baseOffset;
+    final requestId = ++_completionRequestId;
+    controller.session.completions(cursor, explicit: explicit).then((result) {
+      if (!mounted || requestId != _completionRequestId) return;
+      // Value-aware analysis (field-access completions) reflects whatever
+      // the native side last compiled, not necessarily this live buffer —
+      // see TypstSession.lastCompiledSource. If the buffer or the cursor
+      // has moved on since this request was dispatched, applying at
+      // result.applyFromUtf16 could land at the wrong place, so discard
+      // rather than show a result that no longer matches reality. While
+      // typing continuously this discards often; the next keystroke's
+      // request (or an explicit trigger once compiling catches up) works.
+      final stillFresh =
+          controller.session.lastCompiledSource == controller.text &&
+          controller.selection.isCollapsed &&
+          controller.selection.baseOffset == cursor;
+      if (!stillFresh) {
+        if (explicit) _hideCompletionPopup();
+        return;
+      }
+      final prefix = cursor >= result.applyFromUtf16
+          ? controller.text.substring(result.applyFromUtf16, cursor)
+          : '';
+      final prefixLower = prefix.toLowerCase();
+      final filtered = [
+        for (final c in result.completions)
+          if (c.apply.toLowerCase().startsWith(prefixLower)) c,
+      ];
+      _completions = filtered;
+      _completionApplyFrom = result.applyFromUtf16;
+      _selectedCompletionIndex = 0;
+      if (filtered.isEmpty) {
+        _hideCompletionPopup();
+      } else {
+        _showCompletionPopup();
+      }
+    });
+  }
+
+  void _moveCompletionSelection(int delta) {
+    if (_completions.isEmpty) return;
+    final count = _completions.length;
+    _selectedCompletionIndex = (_selectedCompletionIndex + delta) % count;
+    if (_selectedCompletionIndex < 0) _selectedCompletionIndex += count;
+    _completionOverlay?.markNeedsBuild();
+  }
+
+  void _applyCompletion(TypstCompletion item) {
+    final controller = widget.controller;
+    final selection = controller.selection;
+    if (!selection.isValid || !selection.isCollapsed || selection.baseOffset < _completionApplyFrom) {
+      _hideCompletionPopup();
+      return;
+    }
+    final cursor = selection.baseOffset;
+    final stripped = _stripSnippetPlaceholders(item.apply);
+    final text = controller.text;
+    final newText = text.replaceRange(_completionApplyFrom, cursor, stripped.text);
+    _applyingCompletion = true;
+    controller.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: _completionApplyFrom + stripped.caretOffset),
+    );
+    _applyingCompletion = false;
+    _hideCompletionPopup();
+  }
+
+  void _showCompletionPopup() {
+    if (_completionOverlay == null) {
+      _completionOverlay = OverlayEntry(builder: _buildCompletionOverlay);
+      Overlay.of(context).insert(_completionOverlay!);
+    } else {
+      _completionOverlay!.markNeedsBuild();
+    }
+  }
+
+  void _hideCompletionPopup() {
+    _completionOverlay?.remove();
+    _completionOverlay = null;
+    _completions = const [];
+  }
+
+  Widget _buildCompletionOverlay(BuildContext context) {
+    final renderEditable = _editableTextKey.currentState?.renderEditable;
+    final selection = widget.controller.selection;
+    if (renderEditable == null || !selection.isValid || _completions.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final caretRect = renderEditable.getLocalRectForCaret(TextPosition(offset: selection.baseOffset));
+    final anchor = renderEditable.localToGlobal(caretRect.bottomLeft);
+    return Positioned(
+      left: anchor.dx,
+      top: anchor.dy + 4,
+      child: TextFieldTapRegion(
+        child: Material(
+          elevation: 4,
+          borderRadius: BorderRadius.circular(4),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 320, maxHeight: 200),
+            child: ListView.builder(
+              padding: EdgeInsets.zero,
+              shrinkWrap: true,
+              itemCount: _completions.length,
+              itemBuilder: (context, index) {
+                final item = _completions[index];
+                final selected = index == _selectedCompletionIndex;
+                return Material(
+                  color: selected ? Theme.of(context).highlightColor : Colors.transparent,
+                  child: InkWell(
+                    onTap: () => _applyCompletion(item),
+                    child: ListTile(
+                      dense: true,
+                      title: Text(item.label),
+                      trailing: item.detail == null ? null : Text(item.detail!),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   TextSelectionControls _defaultSelectionControls() {
