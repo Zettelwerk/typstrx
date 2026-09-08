@@ -198,16 +198,25 @@ class _EditorPageState extends State<EditorPage> {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(8),
-              child: TextField(
-                controller: _controller,
-                maxLines: null,
-                expands: true,
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'Typst source',
-                ),
-                onChanged: widget.session.updateSource,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Typst source', style: Theme.of(context).textTheme.labelSmall),
+                  const SizedBox(height: 4),
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Theme.of(context).colorScheme.outline),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      padding: const EdgeInsets.all(8),
+                      child: TypstCodeEditor(
+                        controller: _controller,
+                        onChanged: widget.session.updateSource,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
