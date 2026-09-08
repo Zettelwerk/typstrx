@@ -203,7 +203,12 @@ void main() {
       }
 
       controller.value = TextEditingValue(text: text, selection: TextSelection.collapsed(offset: cursor));
-      await tester.pump(const Duration(milliseconds: 1));
+      // Past _completionDebounceDelay (150ms): the implicit trigger no
+      // longer fires immediately, see typst_code_editor.dart's
+      // _scheduleCompletions. session.compile(text) above already matches
+      // what's assigned here, so the request's own "compile if stale"
+      // step is a no-op — this is purely waiting out the debounce timer.
+      await tester.pump(const Duration(milliseconds: 160));
       return (fake, session, controller);
     }
 
@@ -224,6 +229,36 @@ void main() {
 
       expect(find.text('lorem'), findsOneWidget);
       expect(find.text('let binding'), findsNothing, reason: "'let' does not start with the typed 'lo'");
+
+      controller.dispose();
+      await session.dispose();
+    });
+
+    testWidgets('an implicit trigger compiles first when the World has not caught up to this text', (
+      tester,
+    ) async {
+      // Unlike the triggerCompletions helper (which pre-compiles to isolate
+      // other behavior), this deliberately does NOT call session.compile()
+      // before the edit — reproducing the actual reported bug: a host
+      // app's own page-render compile is debounced and, in real typing,
+      // essentially never catches up before a naive freshness check would
+      // run. lastCompiledSource is null here at request time; the fix is
+      // that _runCompletionsRequest compiles itself when it doesn't match.
+      final fake = FakeRustSession()
+        ..completionsToReturn = const [lorem]
+        ..applyFromUtf16ToReturn = 1;
+      final session = TypstSession.forTesting(fake, const TypstSessionOptions());
+      final controller = TypstEditorController(session: session, text: '');
+
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: TypstCodeEditor(controller: controller))));
+      await tester.pump();
+      expect(session.lastCompiledSource, isNull, reason: 'nothing has compiled yet — this is the point');
+
+      controller.value = const TextEditingValue(text: '#lo', selection: TextSelection.collapsed(offset: 3));
+      await tester.pump(const Duration(milliseconds: 160));
+
+      expect(find.text('lorem'), findsOneWidget);
+      expect(session.lastCompiledSource, '#lo');
 
       controller.dispose();
       await session.dispose();
@@ -345,7 +380,11 @@ void main() {
       await tester.pump();
 
       controller.value = const TextEditingValue(text: '#l', selection: TextSelection.collapsed(offset: 2));
-      await tester.pump(const Duration(milliseconds: 1));
+      // Past _completionDebounceDelay: dispatches the request, which
+      // reaches completions() (gated, held open) since lastCompiledSource
+      // already matches '#l' from the compile() above — the "compile if
+      // stale" step is a no-op here too.
+      await tester.pump(const Duration(milliseconds: 160));
 
       // The buffer moves on (represented here by the native side's own
       // registered source changing, exactly the case

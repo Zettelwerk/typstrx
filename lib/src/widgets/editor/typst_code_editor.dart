@@ -21,6 +21,14 @@ import 'typst_editor_controller.dart';
 /// How long the mouse must rest over a token before a hover request fires.
 const _hoverDebounceDelay = Duration(milliseconds: 300);
 
+/// How long an edit must go unfollowed by another before an implicit
+/// (typing-triggered) completions request fires. Short relative to
+/// [_hoverDebounceDelay] — this gates a request that itself blocks on a
+/// compile (see [_TypstCodeEditorState._requestCompletions]), so coalescing
+/// a fast typing burst into one request matters more here than for hover,
+/// which never compiles anything.
+const _completionDebounceDelay = Duration(milliseconds: 150);
+
 Widget _defaultContextMenuBuilder(BuildContext context, EditableTextState editableTextState) {
   if (SystemContextMenu.isSupportedByField(editableTextState)) {
     return SystemContextMenu.editableText(editableTextState: editableTextState);
@@ -166,6 +174,7 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
   int _completionApplyFrom = 0;
   int _selectedCompletionIndex = 0;
   int _completionRequestId = 0;
+  Timer? _completionDebounce;
   String? _lastControllerText;
   TextSelection? _lastControllerSelection;
   FocusNode? _keyHandlerNode;
@@ -202,6 +211,7 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
       widget.controller.addListener(_onControllerChanged);
       _lastControllerText = widget.controller.text;
       _lastControllerSelection = widget.controller.selection;
+      _completionDebounce?.cancel();
       _hideCompletionPopup();
       _cancelHover();
     }
@@ -220,6 +230,7 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
   void dispose() {
     widget.controller.removeListener(_onControllerChanged);
     if (_keyHandlerNode != null) _uninstallKeyHandler(_keyHandlerNode!);
+    _completionDebounce?.cancel();
     _completionOverlay?.remove();
     _hoverDebounce?.cancel();
     _hoverOverlay?.remove();
@@ -309,10 +320,21 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
       _hideCompletionPopup();
       return;
     }
-    _requestCompletions(explicit: false);
+    _scheduleCompletions();
+  }
+
+  // Debounced entry point for a typing-triggered request — see
+  // _completionDebounceDelay's doc comment for why this needs its own
+  // (short) debounce rather than firing on every keystroke directly.
+  // Ctrl+Space's explicit trigger calls _requestCompletions directly,
+  // bypassing this: an explicit ask should be immediate.
+  void _scheduleCompletions() {
+    _completionDebounce?.cancel();
+    _completionDebounce = Timer(_completionDebounceDelay, () => _requestCompletions(explicit: false));
   }
 
   void _requestCompletions({required bool explicit}) {
+    _completionDebounce?.cancel();
     final controller = widget.controller;
     final selection = controller.selection;
     if (!selection.isValid || !selection.isCollapsed) {
@@ -320,42 +342,62 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
       return;
     }
     final cursor = selection.baseOffset;
+    final text = controller.text;
     final requestId = ++_completionRequestId;
-    controller.session.completions(cursor, explicit: explicit).then((result) {
+    _runCompletionsRequest(requestId: requestId, text: text, cursor: cursor, explicit: explicit);
+  }
+
+  // completions() itself resolves in single-digit milliseconds, but
+  // typst-ide's analysis reads the World's own registered Source, which
+  // only updates when something calls TypstSession.compile — normally a
+  // host app's own page-render compile, debounced (deliberately: to avoid
+  // recompiling a whole document on every keystroke) far more coarsely
+  // than completions need. Comparing against whatever that debounce last
+  // landed meant a request dispatched by typing was always checked against
+  // a World that hadn't caught up to the very edit that triggered it — so
+  // it never once passed. Compiling directly here, only when the World
+  // doesn't already match, decouples completions from that cycle (and from
+  // whether a host wires up page rendering via updateSource at all).
+  Future<void> _runCompletionsRequest({
+    required int requestId,
+    required String text,
+    required int cursor,
+    required bool explicit,
+  }) async {
+    final controller = widget.controller;
+    if (controller.session.lastCompiledSource != text) {
+      await controller.session.compile(text);
       if (!mounted || requestId != _completionRequestId) return;
-      // Value-aware analysis (field-access completions) reflects whatever
-      // the native side last compiled, not necessarily this live buffer —
-      // see TypstSession.lastCompiledSource. If the buffer or the cursor
-      // has moved on since this request was dispatched, applying at
-      // result.applyFromUtf16 could land at the wrong place, so discard
-      // rather than show a result that no longer matches reality. While
-      // typing continuously this discards often; the next keystroke's
-      // request (or an explicit trigger once compiling catches up) works.
-      final stillFresh =
-          controller.session.lastCompiledSource == controller.text &&
-          controller.selection.isCollapsed &&
-          controller.selection.baseOffset == cursor;
-      if (!stillFresh) {
-        if (explicit) _hideCompletionPopup();
-        return;
-      }
-      final prefix = cursor >= result.applyFromUtf16
-          ? controller.text.substring(result.applyFromUtf16, cursor)
-          : '';
-      final prefixLower = prefix.toLowerCase();
-      final filtered = [
-        for (final c in result.completions)
-          if (c.apply.toLowerCase().startsWith(prefixLower)) c,
-      ];
-      _completions = filtered;
-      _completionApplyFrom = result.applyFromUtf16;
-      _selectedCompletionIndex = 0;
-      if (filtered.isEmpty) {
-        _hideCompletionPopup();
-      } else {
-        _showCompletionPopup();
-      }
-    });
+    }
+    final result = await controller.session.completions(cursor, explicit: explicit);
+    if (!mounted || requestId != _completionRequestId) return;
+    // Still guards the buffer or cursor having moved on while the above was
+    // in flight — the compile above can take a while on a large document,
+    // and typing doesn't wait for it.
+    final stillFresh =
+        controller.session.lastCompiledSource == controller.text &&
+        controller.selection.isCollapsed &&
+        controller.selection.baseOffset == cursor;
+    if (!stillFresh) {
+      if (explicit) _hideCompletionPopup();
+      return;
+    }
+    final prefix = cursor >= result.applyFromUtf16
+        ? controller.text.substring(result.applyFromUtf16, cursor)
+        : '';
+    final prefixLower = prefix.toLowerCase();
+    final filtered = [
+      for (final c in result.completions)
+        if (c.apply.toLowerCase().startsWith(prefixLower)) c,
+    ];
+    _completions = filtered;
+    _completionApplyFrom = result.applyFromUtf16;
+    _selectedCompletionIndex = 0;
+    if (filtered.isEmpty) {
+      _hideCompletionPopup();
+    } else {
+      _showCompletionPopup();
+    }
   }
 
   void _moveCompletionSelection(int delta) {
