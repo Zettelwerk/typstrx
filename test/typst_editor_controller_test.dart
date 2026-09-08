@@ -229,4 +229,173 @@ void main() {
     controller.dispose();
     await session.dispose();
   });
+
+  group('auto-closing brackets', () {
+    // Every text-changing `.value =` below also dispatches a highlight
+    // request (see `_requestHighlight`); `settle()` drains it so a test's
+    // `dispose()` doesn't race a `FakeRustSession.highlight` future that's
+    // still in flight, the same way the highlighting tests above do.
+    ({TypstEditorController controller, TypstSession session}) makeAutoCloseController({
+      String text = '',
+      Map<String, String>? pairs,
+      int? caret,
+    }) {
+      final session = makeSession(FakeRustSession());
+      final controller = pairs == null
+          ? TypstEditorController(session: session, text: text)
+          : TypstEditorController(session: session, text: text, autoClosePairs: pairs);
+      controller.selection = TextSelection.collapsed(offset: caret ?? text.length);
+      return (controller: controller, session: session);
+    }
+
+    Future<void> settle() => Future<void>.delayed(Duration.zero);
+
+    test('typing an opener inserts its closer and places the caret between them', () async {
+      const pairs = {'(': ')', '[': ']', '{': '}', '"': '"'};
+      for (final entry in pairs.entries) {
+        final env = makeAutoCloseController();
+        env.controller.value = TextEditingValue(text: entry.key, selection: const TextSelection.collapsed(offset: 1));
+        expect(env.controller.text, '${entry.key}${entry.value}', reason: entry.key);
+        expect(env.controller.selection, const TextSelection.collapsed(offset: 1), reason: entry.key);
+        await settle();
+        env.controller.dispose();
+        await env.session.dispose();
+      }
+    });
+
+    test('typing a closer that matches a pending auto-close types over it instead of duplicating', () async {
+      final env = makeAutoCloseController();
+      env.controller.value = const TextEditingValue(text: '(', selection: TextSelection.collapsed(offset: 1));
+      expect(env.controller.text, '()');
+
+      // What the text input system delivers when ')' is typed at the caret,
+      // before this controller's correction: a naive insertion.
+      env.controller.value = const TextEditingValue(text: '())', selection: TextSelection.collapsed(offset: 2));
+      expect(env.controller.text, '()', reason: 'no duplicate close inserted');
+      expect(env.controller.selection, const TextSelection.collapsed(offset: 2));
+      await settle();
+      env.controller.dispose();
+      await env.session.dispose();
+    });
+
+    test('backspace right after an opener deletes its auto-inserted closer too', () async {
+      final env = makeAutoCloseController();
+      env.controller.value = const TextEditingValue(text: '(', selection: TextSelection.collapsed(offset: 1));
+      expect(env.controller.text, '()');
+
+      env.controller.value = const TextEditingValue(text: ')', selection: TextSelection.collapsed(offset: 0));
+      expect(env.controller.text, '', reason: 'the auto-inserted ) is deleted along with (');
+      expect(env.controller.selection, const TextSelection.collapsed(offset: 0));
+      await settle();
+      env.controller.dispose();
+      await env.session.dispose();
+    });
+
+    test('backspace elsewhere does not delete a paired closer, but tracking survives it', () async {
+      final env = makeAutoCloseController(text: 'a');
+      env.controller.value = const TextEditingValue(text: 'a(', selection: TextSelection.collapsed(offset: 2));
+      expect(env.controller.text, 'a()');
+
+      // Move the caret to just after 'a' and backspace it — unrelated to
+      // the pending pair sitting at index 2.
+      env.controller.selection = const TextSelection.collapsed(offset: 1);
+      env.controller.value = const TextEditingValue(text: '()', selection: TextSelection.collapsed(offset: 0));
+      expect(env.controller.text, '()', reason: 'only the unrelated character is deleted');
+
+      // The pending closer's tracked offset shifted down by one rather than
+      // being dropped: typing ')' at the caret, now between '(' and ')',
+      // still types over rather than duplicating.
+      env.controller.selection = const TextSelection.collapsed(offset: 1);
+      env.controller.value = const TextEditingValue(text: '())', selection: TextSelection.collapsed(offset: 2));
+      expect(env.controller.text, '()', reason: 'pending tracking survived the unrelated backspace');
+      await settle();
+      env.controller.dispose();
+      await env.session.dispose();
+    });
+
+    test('does not add a closer when the caret is right before a word character', () async {
+      final env = makeAutoCloseController(text: 'foo', caret: 0);
+      env.controller.value = const TextEditingValue(text: '(foo', selection: TextSelection.collapsed(offset: 1));
+      expect(env.controller.text, '(foo', reason: 'no closer added before a word character');
+      expect(env.controller.selection, const TextSelection.collapsed(offset: 1));
+      await settle();
+      env.controller.dispose();
+      await env.session.dispose();
+    });
+
+    test('does not pair while an IME composition is active', () async {
+      final env = makeAutoCloseController();
+      env.controller.value = const TextEditingValue(
+        text: '(',
+        selection: TextSelection.collapsed(offset: 1),
+        composing: TextRange(start: 0, end: 1),
+      );
+      expect(env.controller.text, '(', reason: 'no closer added mid-composition');
+      await settle();
+      env.controller.dispose();
+      await env.session.dispose();
+    });
+
+    test('a bulk text assignment is never treated as typing', () async {
+      final env = makeAutoCloseController();
+      env.controller.value = const TextEditingValue(text: '(', selection: TextSelection.collapsed(offset: 1));
+      expect(env.controller.text, '()');
+
+      const replacement = 'unrelated replacement';
+      env.controller.text = replacement;
+      expect(env.controller.text, replacement);
+
+      final end = replacement.length;
+      env.controller.selection = TextSelection.collapsed(offset: end);
+      env.controller.value = TextEditingValue(
+        text: '$replacement)',
+        selection: TextSelection.collapsed(offset: end + 1),
+      );
+      expect(env.controller.text, '$replacement)', reason: 'bulk assignment left no pairing artifacts behind');
+      await settle();
+      env.controller.dispose();
+      await env.session.dispose();
+    });
+
+    test('nested pairs type over correctly in LIFO order', () async {
+      final env = makeAutoCloseController();
+      env.controller.value = const TextEditingValue(text: '(', selection: TextSelection.collapsed(offset: 1));
+      expect(env.controller.text, '()');
+
+      env.controller.value = const TextEditingValue(text: '([)', selection: TextSelection.collapsed(offset: 2));
+      expect(env.controller.text, '([])');
+      expect(env.controller.selection, const TextSelection.collapsed(offset: 2));
+
+      // Type over the inner ']' first, then the outer ')'.
+      env.controller.value = const TextEditingValue(text: '([]])', selection: TextSelection.collapsed(offset: 3));
+      expect(env.controller.text, '([])');
+      expect(env.controller.selection, const TextSelection.collapsed(offset: 3));
+
+      env.controller.value = const TextEditingValue(text: '([]))', selection: TextSelection.collapsed(offset: 4));
+      expect(env.controller.text, '([])');
+      expect(env.controller.selection, const TextSelection.collapsed(offset: 4));
+      await settle();
+      env.controller.dispose();
+      await env.session.dispose();
+    });
+
+    test('autoClosePairs can be customized or disabled entirely', () async {
+      final disabled = makeAutoCloseController(pairs: const {});
+      disabled.controller.value = const TextEditingValue(text: '(', selection: TextSelection.collapsed(offset: 1));
+      expect(disabled.controller.text, '(', reason: 'empty map disables auto-closing');
+      await settle();
+      disabled.controller.dispose();
+      await disabled.session.dispose();
+
+      final custom = makeAutoCloseController(pairs: const {'<': '>'});
+      custom.controller.value = const TextEditingValue(text: '<', selection: TextSelection.collapsed(offset: 1));
+      expect(custom.controller.text, '<>', reason: 'a pair outside the default set still auto-closes');
+
+      custom.controller.value = const TextEditingValue(text: '<(>', selection: TextSelection.collapsed(offset: 2));
+      expect(custom.controller.text, '<(>', reason: '( is not in this custom map, so it is left unpaired');
+      await settle();
+      custom.controller.dispose();
+      await custom.session.dispose();
+    });
+  });
 }
