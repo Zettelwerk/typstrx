@@ -30,8 +30,10 @@ android {
     }
 
     // Bumping the plugin compileSdkVersion requires all clients of this plugin
-    // to bump the version in their app.
-    compileSdkVersion 33
+    // to bump the version in their app. 33 (the original scaffold default)
+    // now hard-fails the build: current Flutter/androidx transitive deps
+    // (lifecycle-runtime, fragment, exifinterface, ...) require 34+.
+    compileSdkVersion 36
 
     // Use the NDK version
     // declared in /android/app/build.gradle file of the Flutter project.
