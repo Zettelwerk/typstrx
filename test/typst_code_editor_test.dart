@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,6 +22,13 @@ class FakeRustSession implements rust.TypstSession {
   /// need to mutate state while a request is deliberately kept in flight.
   Completer<void>? completionsGate;
 
+  /// What the next `hover()` call returns.
+  rust.TypstTooltip? tooltipToReturn;
+
+  /// When set, `hover()` blocks until this completes — same purpose as
+  /// [completionsGate], for hover's own staleness test.
+  Completer<void>? hoverGate;
+
   @override
   Future<rust.HighlightNode> highlight({required String source}) async {
     return rust.HighlightNode(tag: null, text: source, children: const []);
@@ -38,7 +46,8 @@ class FakeRustSession implements rust.TypstSession {
 
   @override
   Future<rust.HoverResult> hover({required int cursorUtf16}) async {
-    return rust.HoverResult(generation: BigInt.zero, tooltip: null);
+    if (hoverGate != null) await hoverGate!.future;
+    return rust.HoverResult(generation: BigInt.zero, tooltip: tooltipToReturn);
   }
 
   @override
@@ -321,6 +330,70 @@ void main() {
       await tester.pump(const Duration(milliseconds: 1));
 
       expect(find.text('lorem'), findsNothing, reason: 'stale result must not be shown');
+
+      controller.dispose();
+      await session.dispose();
+    });
+  });
+
+  group('hover tooltip', () {
+    // Moves a real (non-touch) pointer to [target] without ever pressing a
+    // button, so MouseTracker treats it as a hover rather than a drag —
+    // MouseRegion.onHover only fires for the former.
+    Future<void> hoverTo(WidgetTester tester, Offset target) async {
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(gesture.removePointer);
+      await gesture.addPointer(location: Offset.zero);
+      await tester.pump();
+      await gesture.moveTo(target);
+    }
+
+    testWidgets('hovering over the source shows the tooltip content', (tester) async {
+      final fake = FakeRustSession()..tooltipToReturn = const rust.TypstTooltip.text(content: 'a heading');
+      final session = TypstSession.forTesting(fake, const TypstSessionOptions());
+      await session.compile('= Heading');
+      final controller = TypstEditorController(session: session, text: '= Heading');
+
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: TypstCodeEditor(controller: controller))));
+      await tester.pump();
+
+      // A few pixels into the editor's top-left corner, where the first
+      // line of text renders — see _onHover's vertical-bounds check for
+      // why a point that isn't actually on a line (e.g. the center of an
+      // expands:true editor much taller than one line) must not trigger a
+      // request in the first place.
+      await hoverTo(tester, tester.getTopLeft(find.byType(TypstCodeEditor)) + const Offset(4, 4));
+      await tester.pump(const Duration(milliseconds: 350));
+
+      expect(find.text('a heading'), findsOneWidget);
+
+      controller.dispose();
+      await session.dispose();
+    });
+
+    testWidgets('a hover result that arrives after the buffer moved on is not shown', (tester) async {
+      final fake = FakeRustSession()
+        ..tooltipToReturn = const rust.TypstTooltip.text(content: 'a heading')
+        ..hoverGate = Completer<void>();
+      final session = TypstSession.forTesting(fake, const TypstSessionOptions());
+      await session.compile('= Heading');
+      final controller = TypstEditorController(session: session, text: '= Heading');
+
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: TypstCodeEditor(controller: controller))));
+      await tester.pump();
+
+      await hoverTo(tester, tester.getTopLeft(find.byType(TypstCodeEditor)) + const Offset(4, 4));
+      await tester.pump(const Duration(milliseconds: 350));
+
+      // The buffer moves on (represented here by the native side's own
+      // registered source changing) while the hover() call above is still
+      // gated/in flight.
+      await session.compile('= Other');
+
+      fake.hoverGate!.complete();
+      await tester.pump(const Duration(milliseconds: 1));
+
+      expect(find.text('a heading'), findsNothing, reason: 'stale hover result must not be shown');
 
       controller.dispose();
       await session.dispose();

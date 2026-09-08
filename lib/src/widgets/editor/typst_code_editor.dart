@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart'
     show
@@ -13,7 +15,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../document/typst_completion.dart';
+import '../../document/typst_tooltip.dart';
 import 'typst_editor_controller.dart';
+
+/// How long the mouse must rest over a token before a hover request fires.
+const _hoverDebounceDelay = Duration(milliseconds: 300);
 
 Widget _defaultContextMenuBuilder(BuildContext context, EditableTextState editableTextState) {
   if (SystemContextMenu.isSupportedByField(editableTextState)) {
@@ -172,6 +178,13 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
   // caller picked an item).
   bool _applyingCompletion = false;
 
+  // --- hover tooltip ---
+  OverlayEntry? _hoverOverlay;
+  TypstTooltip? _hoverTooltip;
+  TextPosition? _hoverPosition;
+  int _hoverRequestId = 0;
+  Timer? _hoverDebounce;
+
   @override
   void initState() {
     super.initState();
@@ -190,6 +203,7 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
       _lastControllerText = widget.controller.text;
       _lastControllerSelection = widget.controller.selection;
       _hideCompletionPopup();
+      _cancelHover();
     }
     if (oldWidget.focusNode == null && widget.focusNode != null) {
       _internalFocusNode?.dispose();
@@ -207,6 +221,8 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     widget.controller.removeListener(_onControllerChanged);
     if (_keyHandlerNode != null) _uninstallKeyHandler(_keyHandlerNode!);
     _completionOverlay?.remove();
+    _hoverDebounce?.cancel();
+    _hoverOverlay?.remove();
     _internalFocusNode?.dispose();
     super.dispose();
   }
@@ -268,6 +284,10 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     final selectionChanged = selection != _lastControllerSelection;
     _lastControllerText = text;
     _lastControllerSelection = selection;
+    // Any real text or caret change means whatever was under the mouse
+    // when the tooltip was requested is no longer what the tooltip
+    // describes — independent of the completion-popup logic below.
+    if (textChanged || selectionChanged) _cancelHover();
     if (_applyingCompletion) {
       // Tracking above stays accurate either way; just skip reacting to a
       // change _applyCompletion made itself (see the field's doc comment).
@@ -381,6 +401,105 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     _completions = const [];
   }
 
+  void _onHover(PointerHoverEvent event) {
+    _hoverDebounce?.cancel();
+    // The two overlays would otherwise visually collide; a shown completion
+    // popup takes priority over starting a new hover request. Gated on the
+    // overlay itself (not `_completions`, which _requestCompletions sets
+    // before deciding whether to show anything).
+    if (_completionOverlay != null) return;
+    final renderEditable = _editableTextKey.currentState?.renderEditable;
+    if (renderEditable == null) return;
+    final position = renderEditable.getPositionForPoint(event.position);
+    final caretRect = renderEditable.getLocalRectForCaret(position);
+    final localPoint = renderEditable.globalToLocal(event.position);
+    if (localPoint.dy < caretRect.top || localPoint.dy > caretRect.bottom) {
+      // getPositionForPoint always snaps to the nearest character, even
+      // when the pointer is well below/above any actual line (e.g. in the
+      // empty space of an `expands: true` editor shorter than its pane) —
+      // checking the point falls within that character's own line rules
+      // that out rather than showing a tooltip anchored far from the mouse.
+      _cancelHover();
+      return;
+    }
+    _hoverDebounce = Timer(_hoverDebounceDelay, () => _requestHover(position));
+  }
+
+  void _onHoverExit(PointerExitEvent event) => _cancelHover();
+
+  void _requestHover(TextPosition position) {
+    final controller = widget.controller;
+    final requestId = ++_hoverRequestId;
+    controller.session.hover(position.offset).then((result) {
+      if (!mounted || requestId != _hoverRequestId) return;
+      // See _requestCompletions for why lastCompiledSource is the gate.
+      if (controller.session.lastCompiledSource != controller.text || result.tooltip == null) {
+        _hideHoverPopup();
+        return;
+      }
+      _hoverTooltip = result.tooltip;
+      _hoverPosition = position;
+      _showHoverPopup();
+    });
+  }
+
+  void _cancelHover() {
+    _hoverDebounce?.cancel();
+    _hoverDebounce = null;
+    _hoverRequestId++;
+    _hideHoverPopup();
+  }
+
+  void _showHoverPopup() {
+    if (_hoverOverlay == null) {
+      _hoverOverlay = OverlayEntry(builder: _buildHoverOverlay);
+      Overlay.of(context).insert(_hoverOverlay!);
+    } else {
+      _hoverOverlay!.markNeedsBuild();
+    }
+  }
+
+  void _hideHoverPopup() {
+    _hoverOverlay?.remove();
+    _hoverOverlay = null;
+    _hoverTooltip = null;
+    _hoverPosition = null;
+  }
+
+  Widget _buildHoverOverlay(BuildContext context) {
+    final renderEditable = _editableTextKey.currentState?.renderEditable;
+    final tooltip = _hoverTooltip;
+    final position = _hoverPosition;
+    if (renderEditable == null || tooltip == null || position == null) {
+      return const SizedBox.shrink();
+    }
+    final caretRect = renderEditable.getLocalRectForCaret(position);
+    final anchor = renderEditable.localToGlobal(caretRect.bottomLeft);
+    return Positioned(
+      left: anchor.dx,
+      top: anchor.dy + 4,
+      // Read-only content: unlike the completion popup, nothing here is
+      // tappable, so it must not intercept pointer events at all — doing
+      // so would fight the editor's own MouseRegion for hover/exit.
+      child: IgnorePointer(
+        child: Material(
+          elevation: 4,
+          borderRadius: BorderRadius.circular(4),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 400),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Text(
+                tooltip.content,
+                style: tooltip.kind == TypstTooltipKind.code ? const TextStyle(fontFamily: 'monospace') : null,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildCompletionOverlay(BuildContext context) {
     final renderEditable = _editableTextKey.currentState?.renderEditable;
     final selection = widget.controller.selection;
@@ -454,6 +573,8 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     // one, and this structure was in fact fine the whole time).
     return MouseRegion(
       cursor: SystemMouseCursors.text,
+      onHover: _onHover,
+      onExit: _onHoverExit,
       child: TextFieldTapRegion(
         child: AnimatedBuilder(
           animation: focusNode,
