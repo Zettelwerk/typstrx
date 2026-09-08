@@ -53,6 +53,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double dco_decode_box_autoadd_f_64(dynamic raw);
 
   @protected
+  HighlightTag dco_decode_box_autoadd_highlight_tag(dynamic raw);
+
+  @protected
   SessionOptions dco_decode_box_autoadd_session_options(dynamic raw);
 
   @protected
@@ -68,6 +71,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double dco_decode_f_64(dynamic raw);
 
   @protected
+  HighlightNode dco_decode_highlight_node(dynamic raw);
+
+  @protected
+  HighlightTag dco_decode_highlight_tag(dynamic raw);
+
+  @protected
   int dco_decode_i_32(dynamic raw);
 
   @protected
@@ -75,6 +84,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<String> dco_decode_list_String(dynamic raw);
+
+  @protected
+  List<HighlightNode> dco_decode_list_highlight_node(dynamic raw);
 
   @protected
   List<LinkData> dco_decode_list_link_data(dynamic raw);
@@ -102,6 +114,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   double? dco_decode_opt_box_autoadd_f_64(dynamic raw);
+
+  @protected
+  HighlightTag? dco_decode_opt_box_autoadd_highlight_tag(dynamic raw);
 
   @protected
   int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
@@ -173,6 +188,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double sse_decode_box_autoadd_f_64(SseDeserializer deserializer);
 
   @protected
+  HighlightTag sse_decode_box_autoadd_highlight_tag(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   SessionOptions sse_decode_box_autoadd_session_options(
     SseDeserializer deserializer,
   );
@@ -192,6 +212,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double sse_decode_f_64(SseDeserializer deserializer);
 
   @protected
+  HighlightNode sse_decode_highlight_node(SseDeserializer deserializer);
+
+  @protected
+  HighlightTag sse_decode_highlight_tag(SseDeserializer deserializer);
+
+  @protected
   int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
@@ -199,6 +225,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
+
+  @protected
+  List<HighlightNode> sse_decode_list_highlight_node(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<LinkData> sse_decode_list_link_data(SseDeserializer deserializer);
@@ -230,6 +261,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   double? sse_decode_opt_box_autoadd_f_64(SseDeserializer deserializer);
+
+  @protected
+  HighlightTag? sse_decode_opt_box_autoadd_highlight_tag(
+    SseDeserializer deserializer,
+  );
 
   @protected
   int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
@@ -304,6 +340,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_highlight_tag(
+    HighlightTag self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_session_options(
     SessionOptions self,
     SseSerializer serializer,
@@ -325,6 +367,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_f_64(double self, SseSerializer serializer);
 
   @protected
+  void sse_encode_highlight_node(HighlightNode self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_highlight_tag(HighlightTag self, SseSerializer serializer);
+
+  @protected
   void sse_encode_i_32(int self, SseSerializer serializer);
 
   @protected
@@ -332,6 +380,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_highlight_node(
+    List<HighlightNode> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_link_data(List<LinkData> self, SseSerializer serializer);
@@ -368,6 +422,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_box_autoadd_f_64(double? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_highlight_tag(
+    HighlightTag? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);

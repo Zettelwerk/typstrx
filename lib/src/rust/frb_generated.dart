@@ -67,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => 602791988;
+  int get rustContentHash => 728213169;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -86,6 +86,11 @@ abstract class RustLibApi extends BaseApi {
 
   Future<TypstSession> crateApiSessionTypstSessionCreate({
     required SessionOptions options,
+  });
+
+  Future<HighlightNode> crateApiSessionTypstSessionHighlight({
+    required TypstSession that,
+    required String source,
   });
 
   Future<PageTextData> crateApiSessionTypstSessionPageText({
@@ -212,6 +217,44 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<HighlightNode> crateApiSessionTypstSessionHighlight({
+    required TypstSession that,
+    required String source,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTypstSession(
+            that,
+            serializer,
+          );
+          sse_encode_String(source, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 3,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_highlight_node,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSessionTypstSessionHighlightConstMeta,
+        argValues: [that, source],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSessionTypstSessionHighlightConstMeta =>
+      const TaskConstMeta(
+        debugName: "TypstSession_highlight",
+        argNames: ["that", "source"],
+      );
+
+  @override
   Future<PageTextData> crateApiSessionTypstSessionPageText({
     required TypstSession that,
     required BigInt generation,
@@ -230,7 +273,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 3,
+            funcId: 4,
             port: port_,
           );
         },
@@ -268,7 +311,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 4,
+            funcId: 5,
             port: port_,
           );
         },
@@ -322,7 +365,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 5,
+            funcId: 6,
             port: port_,
           );
         },
@@ -384,7 +427,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 6,
+            funcId: 7,
             port: port_,
           );
         },
@@ -414,7 +457,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 7,
+            funcId: 8,
             port: port_,
           );
         },
@@ -441,7 +484,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 8,
+            funcId: 9,
             port: port_,
           );
         },
@@ -513,6 +556,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  HighlightTag dco_decode_box_autoadd_highlight_tag(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_highlight_tag(raw);
+  }
+
+  @protected
   SessionOptions dco_decode_box_autoadd_session_options(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_session_options(raw);
@@ -552,6 +601,25 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  HighlightNode dco_decode_highlight_node(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return HighlightNode(
+      tag: dco_decode_opt_box_autoadd_highlight_tag(arr[0]),
+      text: dco_decode_String(arr[1]),
+      children: dco_decode_list_highlight_node(arr[2]),
+    );
+  }
+
+  @protected
+  HighlightTag dco_decode_highlight_tag(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return HighlightTag.values[raw as int];
+  }
+
+  @protected
   int dco_decode_i_32(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as int;
@@ -576,6 +644,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<String> dco_decode_list_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_String).toList();
+  }
+
+  @protected
+  List<HighlightNode> dco_decode_list_highlight_node(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_highlight_node).toList();
   }
 
   @protected
@@ -630,6 +704,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   double? dco_decode_opt_box_autoadd_f_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_f_64(raw);
+  }
+
+  @protected
+  HighlightTag? dco_decode_opt_box_autoadd_highlight_tag(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_highlight_tag(raw);
   }
 
   @protected
@@ -838,6 +918,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  HighlightTag sse_decode_box_autoadd_highlight_tag(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_highlight_tag(deserializer));
+  }
+
+  @protected
   SessionOptions sse_decode_box_autoadd_session_options(
     SseDeserializer deserializer,
   ) {
@@ -884,6 +972,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  HighlightNode sse_decode_highlight_node(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_tag = sse_decode_opt_box_autoadd_highlight_tag(deserializer);
+    var var_text = sse_decode_String(deserializer);
+    var var_children = sse_decode_list_highlight_node(deserializer);
+    return HighlightNode(tag: var_tag, text: var_text, children: var_children);
+  }
+
+  @protected
+  HighlightTag sse_decode_highlight_tag(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return HighlightTag.values[inner];
+  }
+
+  @protected
   int sse_decode_i_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getInt32();
@@ -914,6 +1018,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <String>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_String(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<HighlightNode> sse_decode_list_highlight_node(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <HighlightNode>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_highlight_node(deserializer));
     }
     return ans_;
   }
@@ -1013,6 +1131,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_f_64(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  HighlightTag? sse_decode_opt_box_autoadd_highlight_tag(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_highlight_tag(deserializer));
     } else {
       return null;
     }
@@ -1236,6 +1367,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_highlight_tag(
+    HighlightTag self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_highlight_tag(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_session_options(
     SessionOptions self,
     SseSerializer serializer,
@@ -1276,6 +1416,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_highlight_node(HighlightNode self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_opt_box_autoadd_highlight_tag(self.tag, serializer);
+    sse_encode_String(self.text, serializer);
+    sse_encode_list_highlight_node(self.children, serializer);
+  }
+
+  @protected
+  void sse_encode_highlight_tag(HighlightTag self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
   void sse_encode_i_32(int self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putInt32(self);
@@ -1297,6 +1451,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_String(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_highlight_node(
+    List<HighlightNode> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_highlight_node(item, serializer);
     }
   }
 
@@ -1396,6 +1562,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_f_64(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_highlight_tag(
+    HighlightTag? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_highlight_tag(self, serializer);
     }
   }
 
@@ -1559,6 +1738,17 @@ class TypstSessionImpl extends RustOpaque implements TypstSession {
       .instance
       .api
       .crateApiSessionTypstSessionCompile(that: this, source: source);
+
+  /// Computes a syntax-highlighting tree for `source`.
+  ///
+  /// Independent of compilation: this only parses, so it touches neither
+  /// the session's lock nor its incremental-compile state, and cannot
+  /// contend with an in-flight compile or render. Safe to call on every
+  /// keystroke.
+  Future<HighlightNode> highlight({required String source}) => RustLib
+      .instance
+      .api
+      .crateApiSessionTypstSessionHighlight(that: this, source: source);
 
   /// Extracts text and link geometry for page `page_index` (0-based).
   ///

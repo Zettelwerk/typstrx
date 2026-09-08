@@ -7,6 +7,7 @@ import '../rust/api/session.dart' as rust;
 import '../rust/api/types.dart' as rust;
 import 'typst_diagnostic.dart';
 import 'typst_document.dart';
+import 'typst_highlight.dart';
 
 /// Configuration for [TypstSession.create].
 class TypstSessionOptions {
@@ -127,6 +128,16 @@ class TypstSession {
   Future<TypstCompileResult> compile(String source) {
     _checkDisposed();
     return _serialized(() => _compileNow(source));
+  }
+
+  /// Computes a syntax-highlighting tree for [source].
+  ///
+  /// Independent of [compile]/[updateSource]: this only parses, so it never
+  /// contends with an in-flight compile or render and is safe to call on
+  /// every keystroke.
+  Future<TypstHighlightNode> highlight(String source) async {
+    _checkDisposed();
+    return TypstHighlightNode.fromRust(await _native.highlight(source: source));
   }
 
   /// Registers all font faces in [data] (TTF/OTF, also collections) for

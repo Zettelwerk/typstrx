@@ -19,6 +19,9 @@ typst-render = "=0.15.0"
 # Modified copy of typst-render 0.15.0 adding clipped (tile) rasterization —
 # see third_party/typst-render-clip/NOTICE.md.
 typst-render-clip = { path = "../third_party/typst-render-clip" }
+# Parser + syntax tree + Tag-based highlighting categorization, used directly
+# for editor syntax highlighting (independent of compilation).
+typst-syntax = "=0.15.0"
 typst-kit = { version = "=0.15.0", default-features = false, features = [
     "embedded-fonts",
     "datetime",

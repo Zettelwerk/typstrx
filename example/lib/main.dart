@@ -113,7 +113,7 @@ class EditorPage extends StatefulWidget {
 }
 
 class _EditorPageState extends State<EditorPage> {
-  final _controller = TextEditingController(text: _initialSource);
+  late final _controller = TypstEditorController(session: widget.session, text: _initialSource);
   final _viewerController = TypstViewerController();
   TypstCompileResult? _lastResult;
 
@@ -130,6 +130,9 @@ class _EditorPageState extends State<EditorPage> {
   @override
   void initState() {
     super.initState();
+    // Independent of _controller's own results subscription (which drives
+    // its diagnostic squiggles) — results is a broadcast stream, so this
+    // copy is purely for the diagnostics list/status shown below the editor.
     widget.session.results.listen(_onResult);
     widget.session.updateSource(_controller.text);
     // Repaint the status bar whenever the viewer's pan/zoom or rendered

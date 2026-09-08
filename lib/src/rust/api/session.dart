@@ -24,6 +24,14 @@ abstract class TypstSession implements RustOpaqueInterface {
   static Future<TypstSession> create({required SessionOptions options}) =>
       RustLib.instance.api.crateApiSessionTypstSessionCreate(options: options);
 
+  /// Computes a syntax-highlighting tree for `source`.
+  ///
+  /// Independent of compilation: this only parses, so it touches neither
+  /// the session's lock nor its incremental-compile state, and cannot
+  /// contend with an in-flight compile or render. Safe to call on every
+  /// keystroke.
+  Future<HighlightNode> highlight({required String source});
+
   /// Extracts text and link geometry for page `page_index` (0-based).
   ///
   /// Fails with [`TypstrxError::Stale`] when `generation` no longer matches

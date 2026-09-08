@@ -68,6 +68,11 @@ class FakeRustSession implements rust.TypstSession {
   }
 
   @override
+  Future<rust.HighlightNode> highlight({required String source}) async {
+    return rust.HighlightNode(tag: null, text: source, children: const []);
+  }
+
+  @override
   Future<int> registerFont({required List<int> data}) async => 1;
 
   @override

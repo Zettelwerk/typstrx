@@ -8,7 +8,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `eq`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`
 
 /// The outcome of a compilation. Returned for both successful and failed
 /// compiles; `success` tells them apart and `diagnostics` carries errors and
@@ -62,6 +62,65 @@ class CompileResult {
 
 /// Severity of a [`TypstDiagnostic`].
 enum DiagnosticSeverity { error, warning }
+
+/// One node of a syntax-highlighting tree for Typst source.
+///
+/// Mirrors the shape of the parse tree: a node with `children` is a grouping
+/// construct (e.g. strong emphasis, a heading) and its own `text` is empty; a
+/// node with no children is a leaf and `text` is its literal source text.
+/// Concatenating every leaf's `text` in tree order reproduces the exact
+/// source that was highlighted, so offsets never need to cross the bridge —
+/// a caller can track them by summing leaf text lengths while walking.
+class HighlightNode {
+  /// The highlighting category, if any. `None` for plain/ungrouped nodes.
+  final HighlightTag? tag;
+
+  /// This node's literal text, non-empty only for leaves.
+  final String text;
+
+  /// Child nodes, non-empty only for non-leaves.
+  final List<HighlightNode> children;
+
+  const HighlightNode({this.tag, required this.text, required this.children});
+
+  @override
+  int get hashCode => tag.hashCode ^ text.hashCode ^ children.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is HighlightNode &&
+          runtimeType == other.runtimeType &&
+          tag == other.tag &&
+          text == other.text &&
+          children == other.children;
+}
+
+/// A syntax-highlighting category, mirroring `typst_syntax::Tag`.
+enum HighlightTag {
+  comment,
+  punctuation,
+  escape,
+  strong,
+  emph,
+  link,
+  raw,
+  label,
+  ref,
+  heading,
+  listMarker,
+  listTerm,
+  mathDelimiter,
+  mathOperator,
+  mathGroupingParens,
+  keyword,
+  operator_,
+  number,
+  string,
+  function,
+  interpolated,
+  error,
+}
 
 /// A link region on a page. Either `url` or the `dest_*` fields are set.
 class LinkData {

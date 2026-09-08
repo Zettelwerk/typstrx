@@ -70,6 +70,50 @@ pub struct TypstDiagnostic {
     pub column: Option<u32>,
 }
 
+/// One node of a syntax-highlighting tree for Typst source.
+///
+/// Mirrors the shape of the parse tree: a node with `children` is a grouping
+/// construct (e.g. strong emphasis, a heading) and its own `text` is empty; a
+/// node with no children is a leaf and `text` is its literal source text.
+/// Concatenating every leaf's `text` in tree order reproduces the exact
+/// source that was highlighted, so offsets never need to cross the bridge —
+/// a caller can track them by summing leaf text lengths while walking.
+pub struct HighlightNode {
+    /// The highlighting category, if any. `None` for plain/ungrouped nodes.
+    pub tag: Option<HighlightTag>,
+    /// This node's literal text, non-empty only for leaves.
+    pub text: String,
+    /// Child nodes, non-empty only for non-leaves.
+    pub children: Vec<HighlightNode>,
+}
+
+/// A syntax-highlighting category, mirroring `typst_syntax::Tag`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HighlightTag {
+    Comment,
+    Punctuation,
+    Escape,
+    Strong,
+    Emph,
+    Link,
+    Raw,
+    Label,
+    Ref,
+    Heading,
+    ListMarker,
+    ListTerm,
+    MathDelimiter,
+    MathOperator,
+    MathGroupingParens,
+    Keyword,
+    Operator,
+    Number,
+    String,
+    Function,
+    Interpolated,
+    Error,
+}
+
 /// A rectangle in page coordinates: typographic points, top-left origin,
 /// y-down (`top <= bottom`).
 #[derive(Clone, Debug, PartialEq)]

@@ -27,6 +27,11 @@ class FakeRustSession implements rust.TypstSession {
   }
 
   @override
+  Future<rust.HighlightNode> highlight({required String source}) async {
+    return rust.HighlightNode(tag: null, text: source, children: const []);
+  }
+
+  @override
   Future<rust.RenderedRegion> renderPageRegion({
     required BigInt generation,
     required int pageIndex,

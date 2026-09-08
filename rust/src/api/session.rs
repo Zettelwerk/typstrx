@@ -10,8 +10,8 @@ use typst::{World, WorldExt};
 use typst_layout::PagedDocument;
 
 use crate::api::types::{
-    CompileResult, DiagnosticSeverity, PageInfo, PageTextData, RenderedRegion, SessionOptions,
-    TypstDiagnostic, TypstrxError,
+    CompileResult, DiagnosticSeverity, HighlightNode, PageInfo, PageTextData, RenderedRegion,
+    SessionOptions, TypstDiagnostic, TypstrxError,
 };
 use crate::render::render_region;
 use crate::world::{TypstrxWorld, WorldOptions};
@@ -107,6 +107,16 @@ impl TypstSession {
                 }
             }
         }
+    }
+
+    /// Computes a syntax-highlighting tree for `source`.
+    ///
+    /// Independent of compilation: this only parses, so it touches neither
+    /// the session's lock nor its incremental-compile state, and cannot
+    /// contend with an in-flight compile or render. Safe to call on every
+    /// keystroke.
+    pub fn highlight(&self, source: String) -> HighlightNode {
+        crate::highlight::highlight_source(&source)
     }
 
     /// Renders the window `(x, y, width, height)` in pixels out of page

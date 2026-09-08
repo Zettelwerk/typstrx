@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 602791988;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 728213169;
 
 // Section: executor
 
@@ -127,6 +127,58 @@ fn wire__crate__api__session__TypstSession_create_impl(
                 transform_result_sse::<_, ()>((move || {
                     let output_ok = Result::<_, ()>::Ok(
                         crate::api::session::TypstSession::create(api_options),
+                    )?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__session__TypstSession_highlight_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "TypstSession_highlight",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TypstSession>,
+            >>::sse_decode(&mut deserializer);
+            let api_source = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_that_guard = api_that_guard.unwrap();
+                    let output_ok = Result::<_, ()>::Ok(
+                        crate::api::session::TypstSession::highlight(&*api_that_guard, api_source),
                     )?;
                     Ok(output_ok)
                 })())
@@ -516,6 +568,52 @@ impl SseDecode for f64 {
     }
 }
 
+impl SseDecode for crate::api::types::HighlightNode {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_tag = <Option<crate::api::types::HighlightTag>>::sse_decode(deserializer);
+        let mut var_text = <String>::sse_decode(deserializer);
+        let mut var_children = <Vec<crate::api::types::HighlightNode>>::sse_decode(deserializer);
+        return crate::api::types::HighlightNode {
+            tag: var_tag,
+            text: var_text,
+            children: var_children,
+        };
+    }
+}
+
+impl SseDecode for crate::api::types::HighlightTag {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::types::HighlightTag::Comment,
+            1 => crate::api::types::HighlightTag::Punctuation,
+            2 => crate::api::types::HighlightTag::Escape,
+            3 => crate::api::types::HighlightTag::Strong,
+            4 => crate::api::types::HighlightTag::Emph,
+            5 => crate::api::types::HighlightTag::Link,
+            6 => crate::api::types::HighlightTag::Raw,
+            7 => crate::api::types::HighlightTag::Label,
+            8 => crate::api::types::HighlightTag::Ref,
+            9 => crate::api::types::HighlightTag::Heading,
+            10 => crate::api::types::HighlightTag::ListMarker,
+            11 => crate::api::types::HighlightTag::ListTerm,
+            12 => crate::api::types::HighlightTag::MathDelimiter,
+            13 => crate::api::types::HighlightTag::MathOperator,
+            14 => crate::api::types::HighlightTag::MathGroupingParens,
+            15 => crate::api::types::HighlightTag::Keyword,
+            16 => crate::api::types::HighlightTag::Operator,
+            17 => crate::api::types::HighlightTag::Number,
+            18 => crate::api::types::HighlightTag::String,
+            19 => crate::api::types::HighlightTag::Function,
+            20 => crate::api::types::HighlightTag::Interpolated,
+            21 => crate::api::types::HighlightTag::Error,
+            _ => unreachable!("Invalid variant for HighlightTag: {}", inner),
+        };
+    }
+}
+
 impl SseDecode for i32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -548,6 +646,18 @@ impl SseDecode for Vec<String> {
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
             ans_.push(<String>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::types::HighlightNode> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::types::HighlightNode>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -645,6 +755,17 @@ impl SseDecode for Option<f64> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<f64>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::api::types::HighlightTag> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::types::HighlightTag>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -851,29 +972,35 @@ fn pde_ffi_dispatcher_primary_impl(
             wire__crate__api__session__TypstSession_compile_impl(port, ptr, rust_vec_len, data_len)
         }
         2 => wire__crate__api__session__TypstSession_create_impl(port, ptr, rust_vec_len, data_len),
-        3 => wire__crate__api__session__TypstSession_page_text_impl(
+        3 => wire__crate__api__session__TypstSession_highlight_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        4 => wire__crate__api__session__TypstSession_register_font_impl(
+        4 => wire__crate__api__session__TypstSession_page_text_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        5 => wire__crate__api__session__TypstSession_render_page_region_impl(
+        5 => wire__crate__api__session__TypstSession_register_font_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        6 => {
+        6 => wire__crate__api__session__TypstSession_render_page_region_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        7 => {
             wire__crate__api__session__TypstSession_set_file_impl(port, ptr, rust_vec_len, data_len)
         }
-        7 => wire__crate__api__init_app_impl(port, ptr, rust_vec_len, data_len),
-        8 => {
+        8 => wire__crate__api__init_app_impl(port, ptr, rust_vec_len, data_len),
+        9 => {
             wire__crate__api__types__session_options_default_impl(port, ptr, rust_vec_len, data_len)
         }
         _ => unreachable!(),
@@ -951,6 +1078,69 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::types::DiagnosticSeverity>
     for crate::api::types::DiagnosticSeverity
 {
     fn into_into_dart(self) -> crate::api::types::DiagnosticSeverity {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::types::HighlightNode {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.tag.into_into_dart().into_dart(),
+            self.text.into_into_dart().into_dart(),
+            self.children.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::types::HighlightNode
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::types::HighlightNode>
+    for crate::api::types::HighlightNode
+{
+    fn into_into_dart(self) -> crate::api::types::HighlightNode {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::types::HighlightTag {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Comment => 0.into_dart(),
+            Self::Punctuation => 1.into_dart(),
+            Self::Escape => 2.into_dart(),
+            Self::Strong => 3.into_dart(),
+            Self::Emph => 4.into_dart(),
+            Self::Link => 5.into_dart(),
+            Self::Raw => 6.into_dart(),
+            Self::Label => 7.into_dart(),
+            Self::Ref => 8.into_dart(),
+            Self::Heading => 9.into_dart(),
+            Self::ListMarker => 10.into_dart(),
+            Self::ListTerm => 11.into_dart(),
+            Self::MathDelimiter => 12.into_dart(),
+            Self::MathOperator => 13.into_dart(),
+            Self::MathGroupingParens => 14.into_dart(),
+            Self::Keyword => 15.into_dart(),
+            Self::Operator => 16.into_dart(),
+            Self::Number => 17.into_dart(),
+            Self::String => 18.into_dart(),
+            Self::Function => 19.into_dart(),
+            Self::Interpolated => 20.into_dart(),
+            Self::Error => 21.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::types::HighlightTag
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::types::HighlightTag>
+    for crate::api::types::HighlightTag
+{
+    fn into_into_dart(self) -> crate::api::types::HighlightTag {
         self
     }
 }
@@ -1224,6 +1414,51 @@ impl SseEncode for f64 {
     }
 }
 
+impl SseEncode for crate::api::types::HighlightNode {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Option<crate::api::types::HighlightTag>>::sse_encode(self.tag, serializer);
+        <String>::sse_encode(self.text, serializer);
+        <Vec<crate::api::types::HighlightNode>>::sse_encode(self.children, serializer);
+    }
+}
+
+impl SseEncode for crate::api::types::HighlightTag {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::types::HighlightTag::Comment => 0,
+                crate::api::types::HighlightTag::Punctuation => 1,
+                crate::api::types::HighlightTag::Escape => 2,
+                crate::api::types::HighlightTag::Strong => 3,
+                crate::api::types::HighlightTag::Emph => 4,
+                crate::api::types::HighlightTag::Link => 5,
+                crate::api::types::HighlightTag::Raw => 6,
+                crate::api::types::HighlightTag::Label => 7,
+                crate::api::types::HighlightTag::Ref => 8,
+                crate::api::types::HighlightTag::Heading => 9,
+                crate::api::types::HighlightTag::ListMarker => 10,
+                crate::api::types::HighlightTag::ListTerm => 11,
+                crate::api::types::HighlightTag::MathDelimiter => 12,
+                crate::api::types::HighlightTag::MathOperator => 13,
+                crate::api::types::HighlightTag::MathGroupingParens => 14,
+                crate::api::types::HighlightTag::Keyword => 15,
+                crate::api::types::HighlightTag::Operator => 16,
+                crate::api::types::HighlightTag::Number => 17,
+                crate::api::types::HighlightTag::String => 18,
+                crate::api::types::HighlightTag::Function => 19,
+                crate::api::types::HighlightTag::Interpolated => 20,
+                crate::api::types::HighlightTag::Error => 21,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
 impl SseEncode for i32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -1248,6 +1483,16 @@ impl SseEncode for Vec<String> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <String>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::types::HighlightNode> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::types::HighlightNode>::sse_encode(item, serializer);
         }
     }
 }
@@ -1328,6 +1573,16 @@ impl SseEncode for Option<f64> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <f64>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::api::types::HighlightTag> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::types::HighlightTag>::sse_encode(value, serializer);
         }
     }
 }
