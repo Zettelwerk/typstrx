@@ -93,5 +93,9 @@ final links = await page.loadLinks();           // URL / internal dests
 
 ## License
 
-Apache-2.0. The Typst compiler is likewise Apache-2.0 licensed;
-`typstrx` is not affiliated with or endorsed by the Typst project.
+Apache-2.0. The Typst compiler is likewise Apache-2.0 licensed.
+`third_party/typst-render-clip` vendors a modified copy of Typst's
+`typst-render` crate (also Apache-2.0); see its
+[`NOTICE.md`](third_party/typst-render-clip/NOTICE.md) for the change list,
+as required by section 4(b) of the license. `typstrx` is not affiliated with
+or endorsed by the Typst project.
