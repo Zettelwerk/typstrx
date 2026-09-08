@@ -32,6 +32,19 @@ class FakeRustSession implements rust.TypstSession {
   }
 
   @override
+  Future<rust.CompletionResult> completions({
+    required int cursorUtf16,
+    required bool explicit,
+  }) async {
+    return rust.CompletionResult(generation: BigInt.zero, applyFromUtf16: 0, completions: const []);
+  }
+
+  @override
+  Future<rust.HoverResult> hover({required int cursorUtf16}) async {
+    return rust.HoverResult(generation: BigInt.zero, tooltip: null);
+  }
+
+  @override
   Future<rust.RenderedRegion> renderPageRegion({
     required BigInt generation,
     required int pageIndex,

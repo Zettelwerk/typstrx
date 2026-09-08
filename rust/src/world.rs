@@ -127,6 +127,12 @@ impl TypstrxWorld {
     }
 }
 
+impl typst_ide::IdeWorld for TypstrxWorld {
+    fn upcast(&self) -> &dyn World {
+        self
+    }
+}
+
 impl World for TypstrxWorld {
     fn library(&self) -> &LazyHash<Library> {
         &self.library

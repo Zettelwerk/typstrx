@@ -1,0 +1,13 @@
+targets:
+  $default:
+    sources:
+      exclude:
+        # example/ is its own pub package (path-deps on this one, not the
+        # reverse); this root build_runner run has no reason to touch it.
+        # Its platform folders also contain
+        # example/{linux,windows}/flutter/ephemeral/.plugin_symlinks/typstrx,
+        # a symlink back to this repo root, which without this exclusion
+        # sends the default `example/**` source glob back through
+        # example/.fvm's full Flutter SDK copies (tens of thousands of
+        # files, minutes of wasted scanning).
+        - example/**

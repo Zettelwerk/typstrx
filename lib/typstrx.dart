@@ -2,6 +2,7 @@
 /// compiler.
 library;
 
+export 'src/document/typst_completion.dart';
 export 'src/document/typst_diagnostic.dart';
 export 'src/document/typst_document.dart';
 export 'src/document/typst_highlight.dart';
@@ -11,6 +12,7 @@ export 'src/document/typst_page.dart';
 export 'src/document/typst_rect.dart';
 export 'src/document/typst_session.dart';
 export 'src/document/typst_text.dart';
+export 'src/document/typst_tooltip.dart';
 export 'src/typstrx_init.dart';
 export 'src/widgets/editor/typst_editor_controller.dart';
 export 'src/widgets/editor/typst_syntax_theme.dart';

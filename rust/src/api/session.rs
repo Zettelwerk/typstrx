@@ -10,8 +10,8 @@ use typst::{World, WorldExt};
 use typst_layout::PagedDocument;
 
 use crate::api::types::{
-    CompileResult, DiagnosticSeverity, HighlightNode, PageInfo, PageTextData, RenderedRegion,
-    SessionOptions, TypstDiagnostic, TypstrxError,
+    CompileResult, CompletionResult, DiagnosticSeverity, HighlightNode, HoverResult, PageInfo,
+    PageTextData, RenderedRegion, SessionOptions, TypstDiagnostic, TypstrxError,
 };
 use crate::render::render_region;
 use crate::world::{TypstrxWorld, WorldOptions};
@@ -117,6 +117,50 @@ impl TypstSession {
     /// keystroke.
     pub fn highlight(&self, source: String) -> HighlightNode {
         crate::highlight::highlight_source(&source)
+    }
+
+    /// Computes completions at `cursor_utf16` in the source as of the last
+    /// `compile()` call (successful or not). See [`CompletionResult`] for
+    /// why it isn't computed against whatever the caller's live buffer
+    /// currently holds, and how to detect when the two have diverged.
+    pub fn completions(&self, cursor_utf16: u32, explicit: bool) -> CompletionResult {
+        let inner = self.inner.read();
+        let generation = inner.generation;
+        let doc = inner.compiled.as_ref().map(|c| &c.document);
+        let Ok(source) = inner.world.source(inner.world.main()) else {
+            return CompletionResult {
+                generation,
+                apply_from_utf16: cursor_utf16,
+                completions: Vec::new(),
+            };
+        };
+        let (apply_from_utf16, completions) =
+            crate::completion::complete(&inner.world, doc, &source, cursor_utf16, explicit);
+        CompletionResult {
+            generation,
+            apply_from_utf16,
+            completions,
+        }
+    }
+
+    /// Computes a hover tooltip at `cursor_utf16` in the source as of the
+    /// last `compile()` call. See [`CompletionResult`] for what `generation`
+    /// means and why this doesn't use the caller's live buffer directly.
+    pub fn hover(&self, cursor_utf16: u32) -> HoverResult {
+        let inner = self.inner.read();
+        let generation = inner.generation;
+        let doc = inner.compiled.as_ref().map(|c| &c.document);
+        let Ok(source) = inner.world.source(inner.world.main()) else {
+            return HoverResult {
+                generation,
+                tooltip: None,
+            };
+        };
+        let tooltip = crate::completion::hover(&inner.world, doc, &source, cursor_utf16);
+        HoverResult {
+            generation,
+            tooltip,
+        }
     }
 
     /// Renders the window `(x, y, width, height)` in pixels out of page

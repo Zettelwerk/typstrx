@@ -114,6 +114,73 @@ pub enum HighlightTag {
     Error,
 }
 
+/// The result of computing completions at a cursor position.
+///
+/// Completions are analyzed against the source as of the last `compile()`
+/// call (successful or not) — value-aware completions (e.g. field access)
+/// need the World's own registered `Source` to resolve, which only reflects
+/// edits once they have gone through `compile()`. `generation` identifies
+/// that state: compare it against the `generation` of the document
+/// currently displayed (from the last successful `compile()`) and discard
+/// the result if they don't match, rather than applying `apply_from_utf16`
+/// against a buffer it wasn't computed for.
+pub struct CompletionResult {
+    /// The generation this analysis ran against.
+    pub generation: u64,
+    /// Where the completions apply from, in UTF-16 code units. Applying a
+    /// completion means replacing the source range from this offset to the
+    /// cursor with the chosen [`TypstCompletion::apply`].
+    pub apply_from_utf16: u32,
+    pub completions: Vec<TypstCompletion>,
+}
+
+/// The result of computing a hover tooltip. See [`CompletionResult`] for
+/// what `generation` means and why it's needed.
+pub struct HoverResult {
+    pub generation: u64,
+    pub tooltip: Option<TypstTooltip>,
+}
+
+/// An autocompletion option.
+pub struct TypstCompletion {
+    pub kind: TypstCompletionKind,
+    /// The text shown in the completion list.
+    pub label: String,
+    /// The text to insert, already defaulted to `label` when Typst didn't
+    /// supply one. May contain snippet placeholders like `${name}` or an
+    /// empty tab stop `${}`; there is no numbering — stops are visited in
+    /// the order they appear in the string.
+    pub apply: String,
+    /// An optional one-sentence description.
+    pub detail: Option<String>,
+}
+
+/// A kind of item that can be completed, mirroring `typst_ide::CompletionKind`.
+pub enum TypstCompletionKind {
+    Syntax,
+    Func,
+    Type,
+    Param,
+    Constant,
+    Path,
+    Package,
+    Label,
+    Font,
+    /// A symbol (e.g. a math shorthand). `notation` is its literal
+    /// shorthand/name, not user-facing text.
+    Symbol { notation: String },
+}
+
+/// A hover tooltip, mirroring `typst_ide::Tooltip`.
+#[derive(Debug)]
+pub enum TypstTooltip {
+    /// Plain text.
+    Text { content: String },
+    /// A string of Typst code, e.g. a function signature — callers may want
+    /// to render this in a monospace/code style.
+    Code { content: String },
+}
+
 /// A rectangle in page coordinates: typographic points, top-left origin,
 /// y-down (`top <= bottom`).
 #[derive(Clone, Debug, PartialEq)]

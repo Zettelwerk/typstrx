@@ -5,9 +5,11 @@ import 'package:meta/meta.dart';
 
 import '../rust/api/session.dart' as rust;
 import '../rust/api/types.dart' as rust;
+import 'typst_completion.dart';
 import 'typst_diagnostic.dart';
 import 'typst_document.dart';
 import 'typst_highlight.dart';
+import 'typst_tooltip.dart';
 
 /// Configuration for [TypstSession.create].
 class TypstSessionOptions {
@@ -79,6 +81,7 @@ class TypstSession {
 
   TypstDocument? _document;
   bool _disposed = false;
+  String? _lastCompiledSource;
 
   /// Serializes native compile calls.
   Future<void> _lock = Future.value();
@@ -102,6 +105,19 @@ class TypstSession {
 
   /// The latest successfully compiled document, if any.
   TypstDocument? get document => _document;
+
+  /// The exact source text used for the most recent [compile] call
+  /// (successful or not) — null before the first one.
+  ///
+  /// [completions] and [hover] analyze this text, not necessarily whatever
+  /// is in a caller's live buffer right now: value-aware analysis (field
+  /// access completions, "show computed value" hover) needs the compiler's
+  /// own internal state, which only reflects an edit once it has gone
+  /// through [compile]. Compare this against the buffer's current text
+  /// before applying a [TypstCompletionResult]/[TypstHoverResult] — if they
+  /// differ, the buffer has moved on since the analysis ran and the result
+  /// should be discarded rather than applied at the wrong position.
+  String? get lastCompiledSource => _lastCompiledSource;
 
   /// Every compilation result, including failed ones (with diagnostics).
   Stream<TypstCompileResult> get results => _results.stream;
@@ -138,6 +154,24 @@ class TypstSession {
   Future<TypstHighlightNode> highlight(String source) async {
     _checkDisposed();
     return TypstHighlightNode.fromRust(await _native.highlight(source: source));
+  }
+
+  /// Computes completions at [cursorUtf16] in [lastCompiledSource].
+  ///
+  /// See [lastCompiledSource] for why this doesn't take a `source`
+  /// parameter, and what a caller must check before using the result.
+  Future<TypstCompletionResult> completions(int cursorUtf16, {bool explicit = false}) async {
+    _checkDisposed();
+    return TypstCompletionResult.fromRust(
+      await _native.completions(cursorUtf16: cursorUtf16, explicit: explicit),
+    );
+  }
+
+  /// Computes a hover tooltip at [cursorUtf16] in [lastCompiledSource]. See
+  /// [lastCompiledSource] for what a caller must check before using it.
+  Future<TypstHoverResult> hover(int cursorUtf16) async {
+    _checkDisposed();
+    return TypstHoverResult.fromRust(await _native.hover(cursorUtf16: cursorUtf16));
   }
 
   /// Registers all font faces in [data] (TTF/OTF, also collections) for
@@ -227,6 +261,10 @@ class TypstSession {
 
   Future<TypstCompileResult> _compileNow(String source) async {
     final raw = await _native.compile(source: source);
+    // Unconditional: the native side registers `source` as the compiler's
+    // main file regardless of whether compilation succeeded, which is
+    // exactly what completions/hover analyze — see `lastCompiledSource`.
+    _lastCompiledSource = source;
     final result = TypstCompileResult(
       document: raw.success
           ? TypstDocument(

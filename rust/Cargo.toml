@@ -9,7 +9,7 @@ publish = false
 crate-type = ["cdylib", "staticlib", "rlib"]
 
 [dependencies]
-flutter_rust_bridge = "=2.12.0"
+flutter_rust_bridge = "=2.13.0"
 typst = "=0.15.0"
 typst-layout = "=0.15.0"
 # Upstream typst-render can only rasterize whole pages. It is kept only so the
@@ -22,6 +22,9 @@ typst-render-clip = { path = "../third_party/typst-render-clip" }
 # Parser + syntax tree + Tag-based highlighting categorization, used directly
 # for editor syntax highlighting (independent of compilation).
 typst-syntax = "=0.15.0"
+# IDE support (completion, hover) built on typst/typst-layout, which are
+# already in the tree — adds no new transitive dependencies of its own.
+typst-ide = "=0.15.0"
 typst-kit = { version = "=0.15.0", default-features = false, features = [
     "embedded-fonts",
     "datetime",

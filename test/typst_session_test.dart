@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:typstrx/src/document/typst_completion.dart';
 import 'package:typstrx/src/document/typst_session.dart';
+import 'package:typstrx/src/document/typst_tooltip.dart';
 import 'package:typstrx/src/rust/api/session.dart' as rust;
 import 'package:typstrx/src/rust/api/types.dart' as rust;
 
@@ -15,10 +17,21 @@ class FakeRustSession implements rust.TypstSession {
   /// Compilations block until [finishCompile] is called when set.
   Completer<void>? gate;
 
+  var nextCompileSucceeds = true;
+
   @override
   Future<rust.CompileResult> compile({required String source}) async {
     compiledSources.add(source);
     if (gate != null) await gate!.future;
+    if (!nextCompileSucceeds) {
+      return rust.CompileResult(
+        generation: BigInt.from(generation),
+        success: false,
+        pages: const [],
+        diagnostics: const [],
+        elapsedMs: BigInt.zero,
+      );
+    }
     generation++;
     return rust.CompileResult(
       generation: BigInt.from(generation),
@@ -26,6 +39,33 @@ class FakeRustSession implements rust.TypstSession {
       pages: [const rust.PageInfo(widthPt: 595, heightPt: 842)],
       diagnostics: [],
       elapsedMs: BigInt.zero,
+    );
+  }
+
+  /// What `completions`/`hover` report as their analysis generation —
+  /// settable so tests can simulate it lagging behind [generation].
+  var analysisGeneration = 0;
+  List<rust.TypstCompletion> completionsToReturn = const [];
+  int applyFromUtf16ToReturn = 0;
+  rust.TypstTooltip? tooltipToReturn;
+
+  @override
+  Future<rust.CompletionResult> completions({
+    required int cursorUtf16,
+    required bool explicit,
+  }) async {
+    return rust.CompletionResult(
+      generation: BigInt.from(analysisGeneration),
+      applyFromUtf16: applyFromUtf16ToReturn,
+      completions: completionsToReturn,
+    );
+  }
+
+  @override
+  Future<rust.HoverResult> hover({required int cursorUtf16}) async {
+    return rust.HoverResult(
+      generation: BigInt.from(analysisGeneration),
+      tooltip: tooltipToReturn,
     );
   }
 
@@ -171,5 +211,71 @@ void main() {
     expect(fake.compiledSources, isEmpty);
     expect(fake.isDisposed, isTrue);
     expect(() => session.compile('x'), throwsStateError);
+  });
+
+  test('lastCompiledSource tracks the most recent compile call, including failures', () async {
+    final fake = FakeRustSession();
+    final session = makeSession(fake);
+    expect(session.lastCompiledSource, isNull);
+
+    await session.compile('good');
+    expect(session.lastCompiledSource, 'good');
+
+    fake.nextCompileSucceeds = false;
+    await session.compile('broken(');
+    expect(
+      session.lastCompiledSource,
+      'broken(',
+      reason: 'the native side registers the source regardless of success',
+    );
+  });
+
+  test('completions converts kinds, including the data-carrying Symbol variant', () async {
+    final fake = FakeRustSession();
+    final session = makeSession(fake);
+    fake.analysisGeneration = 3;
+    fake.applyFromUtf16ToReturn = 5;
+    fake.completionsToReturn = const [
+      rust.TypstCompletion(
+        kind: rust.TypstCompletionKind.func(),
+        label: 'lorem',
+        apply: 'lorem(\${})',
+        detail: 'Lorem ipsum text.',
+      ),
+      rust.TypstCompletion(
+        kind: rust.TypstCompletionKind.symbol(notation: 'alpha'),
+        label: 'alpha',
+        apply: 'alpha',
+      ),
+    ];
+
+    final result = await session.completions(10);
+    expect(result.generation, 3);
+    expect(result.applyFromUtf16, 5);
+    expect(result.completions, hasLength(2));
+    expect(result.completions[0].kind.tag, TypstCompletionKindTag.func);
+    expect(result.completions[0].kind.notation, isNull);
+    expect(result.completions[0].detail, 'Lorem ipsum text.');
+    expect(result.completions[1].kind.tag, TypstCompletionKindTag.symbol);
+    expect(result.completions[1].kind.notation, 'alpha');
+  });
+
+  test('hover converts Text/Code tooltips and null', () async {
+    final fake = FakeRustSession();
+    final session = makeSession(fake);
+
+    fake.tooltipToReturn = const rust.TypstTooltip.text(content: 'A box.');
+    var result = await session.hover(1);
+    expect(result.tooltip?.kind, TypstTooltipKind.text);
+    expect(result.tooltip?.content, 'A box.');
+
+    fake.tooltipToReturn = const rust.TypstTooltip.code(content: '3');
+    result = await session.hover(1);
+    expect(result.tooltip?.kind, TypstTooltipKind.code);
+    expect(result.tooltip?.content, '3');
+
+    fake.tooltipToReturn = null;
+    result = await session.hover(1);
+    expect(result.tooltip, isNull);
   });
 }
