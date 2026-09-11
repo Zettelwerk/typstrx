@@ -34,3 +34,6 @@ migrate_working_dir/
 
 # Rust
 rust/target/
+
+# FVM Version Cache
+.fvm/

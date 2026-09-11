@@ -163,6 +163,7 @@ extension _TypstViewerSelection on _TypstViewerState {
     _handleDragPoint = null;
     _handleDragFixedEnd = null;
     _handleDragMovingPoint = null;
+    _handleDragGrabOffset = null;
     _repaint();
   }
 
@@ -480,19 +481,34 @@ extension _TypstViewerSelection on _TypstViewerState {
           top: view.dy,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onPanStart: (_) {
+            onPanStart: (details) {
               _draggingHandleIsStart = isStart;
               _handleDragFixedEnd = isStart ? selection.$2 : selection.$1;
               _handleDragMovingPoint = point;
-              _handleDragPoint = anchor;
+              // The row's center, not the box edge `anchor` itself — see
+              // the matching comment in _onHandleDrag for why.
+              _handleDragPoint = _docToView(rect.center);
+              // A human finger rarely lands exactly on the anchor pixel —
+              // it lands somewhere on the visible 30x30 flag, which for the
+              // start handle hangs up-left of the text edge and for the end
+              // handle hangs down-right of it (see the flag placement
+              // comment above). Capturing that initial offset and re-adding
+              // it every frame (_onHandleDrag) keeps hit-testing pinned to
+              // "anchor + how far the finger has moved" instead of
+              // "wherever the finger literally is" — without it, the
+              // vertical component of that grab offset alone (up to a full
+              // flag height) was enough to make the drag pick the wrong
+              // character/row.
+              _handleDragGrabOffset = anchor - (details.globalPosition - _viewOrigin());
               _repaint();
             },
-            onPanUpdate: (details) => _onHandleDrag(details, isStart),
+            onPanUpdate: _onHandleDrag,
             onPanEnd: (_) {
               _draggingHandleIsStart = null;
               _handleDragPoint = null;
               _handleDragFixedEnd = null;
               _handleDragMovingPoint = null;
+              _handleDragGrabOffset = null;
               _repaint();
             },
             child: CustomPaint(
@@ -564,33 +580,63 @@ extension _TypstViewerSelection on _TypstViewerState {
   // Keeps the *other* handle's position stable across the whole drag by
   // referencing the value captured once in onPanStart (_handleDragFixedEnd)
   // rather than re-deriving "the other endpoint" from _normalizedSelection
-  // each frame. That re-derivation was the previous bug: _normalizedSelection
+  // each frame. That re-derivation was an earlier bug: _normalizedSelection
   // swaps its two points as soon as the dragged one crosses the other, so
   // whichever of _selAnchor/_selFocus this function treated as "the fixed
   // side" would suddenly become last frame's *moving* value instead of the
   // true fixed one — collapsing the selection to a near-zero span one frame
   // after crossing, instead of properly flipping which handle is which.
-  void _onHandleDrag(DragUpdateDetails details, bool isStart) {
+  void _onHandleDrag(DragUpdateDetails details) {
     final fixed = _handleDragFixedEnd;
     if (fixed == null) return;
-    // The handle lives in view coordinates; convert to document space.
-    final viewPoint = details.globalPosition - _viewOrigin();
-    _handleDragPoint = viewPoint; // follows the finger regardless of hit-test below
+    // The handle lives in view coordinates; convert to document space. The
+    // grab offset captured in onPanStart is re-added here so the pinned
+    // point tracks "anchor + finger delta since the drag started" rather
+    // than the raw finger position — see that handler's comment.
+    final rawViewPoint = details.globalPosition - _viewOrigin();
+    final viewPoint = rawViewPoint + (_handleDragGrabOffset ?? Offset.zero);
+    _handleDragPoint = viewPoint; // fallback while nothing's hit yet; refined below once a char is
     final docPoint = MatrixUtils.transformPoint(Matrix4.inverted(_txController.value), viewPoint);
-    final point = _charPointAt(docPoint, tolerance: 40);
-    if (point == null) {
+    final char = _charPointAt(docPoint, tolerance: 40);
+    if (char == null) {
       _repaint(); // still need to redraw the magnifier at its new position
       return;
     }
-    // Selecting past a character means including it: the "end"-style
-    // (exclusive, one-past-last) convention this handle started with stays
-    // fixed for the whole gesture, regardless of which side of `fixed` the
-    // finger ends up on.
-    final moving = isStart ? point : _SelPoint(point.pageIndex, point.charIndex + 1);
+    // The magnifier's *vertical* focus locks onto the hit character's own
+    // row center rather than following the (grab-offset-compensated)
+    // finger's literal y — pdfrx's own magnified content rect is likewise
+    // centered on the character's height with only slight (~0.2x) vertical
+    // jitter, never tied straight to the touch point. Without this, the
+    // compensated y can coincide with a character rect's *edge* (its full
+    // line-height box, not just its visible ink) rather than its center —
+    // reachable in particular by holding the finger steady vertically
+    // while sliding it horizontally — leaving the magnifier sampling
+    // mostly blank leading space instead of the selected text. Horizontal
+    // still follows the finger directly: pdfrx's own rect is far more
+    // permissive there (±2x the char height) since precisely which column
+    // the finger is over matters less once the row itself is locked in.
+    final charRect = _charRectInDocument(char, isStart: true);
+    if (charRect != null) {
+      _handleDragPoint = Offset(viewPoint.dx, _docToView(charRect.center).dy);
+    }
+    // Which side of the selection `char` becomes is decided by its
+    // relationship to `fixed`, never by which literal handle (start or
+    // end) is under the finger — that used to be a fixed per-drag
+    // "isStart ? char : char+1" rule, and it could put `moving` exactly on
+    // top of `fixed` (e.g. dragging the end handle left until it lands on
+    // the untouched start boundary: char+1 == fixed) collapsing the
+    // selection to empty, tearing down the very handles mid-drag that were
+    // supposed to keep receiving this gesture. Comparing to `fixed` here
+    // instead guarantees `moving` always lands strictly on one side of it:
+    // >= fixed becomes the exclusive end (char+1, so it's strictly greater,
+    // never equal), < fixed stays the inclusive start (char, already
+    // strictly less) — self-consistent with how _normalizedSelection sorts
+    // and renders start/end either way, so which handle is physically
+    // being dragged no longer needs to be threaded through this function.
+    final moving = char.compareTo(fixed) >= 0 ? _SelPoint(char.pageIndex, char.charIndex + 1) : char;
     // Matches selection.$1/$2's own convention (the render loop's `point`,
     // used for the isDragging comparison there) rather than the raw
-    // hit-tested character — those two differ by exactly the +1 above for
-    // an "end"-style drag.
+    // hit-tested character — those two can differ by the +1 above.
     _handleDragMovingPoint = moving;
     if (moving.compareTo(fixed) <= 0) {
       _selAnchor = moving;

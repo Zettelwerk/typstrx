@@ -95,6 +95,11 @@ class _TypstViewerState extends State<TypstViewer> {
   // the other from corrupting the selection.
   _SelPoint? _handleDragFixedEnd;
   _SelPoint? _handleDragMovingPoint;
+  // The (view-space) offset from wherever the finger first touched down to
+  // the handle's actual text-edge anchor point, captured once at drag start
+  // — see _onHandleDrag for why every later frame re-adds this rather than
+  // hit-testing the raw finger position directly.
+  Offset? _handleDragGrabOffset;
 
   // Touch pan/pinch-zoom gesture state (see _onGestureScale*).
   double? _gestureStartZoom;

@@ -580,25 +580,154 @@ void main() {
       final handleCenter = tester.getCenter(handles.first);
       final drag = await tester.startGesture(handleCenter, kind: PointerDeviceKind.touch);
       await tester.pump(const Duration(milliseconds: 20));
-      await drag.moveBy(const Offset(20, 0));
+      await drag.moveBy(const Offset(15, 0));
       await tester.pump(const Duration(milliseconds: 20));
 
       expect(find.byType(RawMagnifier), findsOneWidget, reason: 'shown while a handle is being dragged');
 
-      // The magnifier floats clear above the finger (~1cm, not merely
-      // resting on top of it) rather than nearly touching it.
+      // The magnifier floats clear above the finger (~1cm above the actual
+      // text row, not merely resting on top of it) rather than nearly
+      // touching it. `handleCenter` (a natural touch point on the visible
+      // flag's bounding box, not literally the row itself) is off from the
+      // row center by a few px — for the start handle specifically, whose
+      // flag hangs *above* the row, grabbing at the box's geometric center
+      // eats into that clearance more than for the end handle (see below):
+      // still a real, positive gap, just not the full ~1cm from this exact
+      // synthetic grab point. See the row-locking test below for a precise
+      // check pinned to the row's own center.
       final fingerY = handleCenter.dy;
       final magnifierBottom = tester.getRect(find.byType(RawMagnifier)).bottom;
       expect(
         fingerY - magnifierBottom,
-        greaterThan(30),
-        reason: 'the magnifier should sit well clear of the fingertip, not almost touch it',
+        greaterThan(5),
+        reason: 'the magnifier should sit clear of the fingertip, not touch or overlap it',
       );
 
       await drag.up();
       await tester.pump(const Duration(milliseconds: 20));
 
       expect(find.byType(RawMagnifier), findsNothing, reason: 'hidden again once the drag ends');
+    },
+  );
+
+  testWidgets(
+    'the magnifier tracks the actual text row, not wherever within the flag '
+    'the finger first grabbed it',
+    (tester) async {
+      final (session, _) = await makeSession();
+      final controller = TypstViewerController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: TypstViewer(
+            session: session,
+            controller: controller,
+            params: const TypstViewerParams(
+              renderDelay: Duration(milliseconds: 1),
+            ),
+          ),
+        ),
+      );
+      await settle(tester);
+
+      const zoom = 800 / 611;
+      Offset docToView(Offset doc) => Offset(doc.dx * zoom, doc.dy * zoom);
+      final wordPoint = docToView(const Offset(8 + 60, 8 + 110));
+
+      final press = await tester.startGesture(wordPoint, kind: PointerDeviceKind.touch);
+      await tester.pump(const Duration(milliseconds: 600));
+      await press.up();
+      await tester.pump();
+
+      bool isHandle(Widget w) => w is GestureDetector && w.onPanStart != null && w.onPanUpdate != null;
+      final handles = find.byWidgetPredicate(isHandle);
+      expect(handles, findsNWidgets(2));
+
+      // The end handle's flag hangs below-right of the actual text edge
+      // (see typst_viewer_selection.dart), so its own top-left corner is
+      // that edge — grabbing at the flag's visual center (as a real finger
+      // naturally would) touches down ~15px below-right of it. The row's
+      // own *center* (per the fixture: chars are 20pt tall, so 10pt/13
+      // view px above that bottom edge) is the value that actually
+      // matters — not the edge itself, which sits at the very bottom of
+      // the character's box, past its visible ink.
+      final endHandleRect = tester.getRect(handles.last);
+      final rowBottom = endHandleRect.topLeft.dy;
+      final rowCenter = rowBottom - 10 * zoom;
+      final grabPoint = endHandleRect.center;
+
+      final drag = await tester.startGesture(grabPoint, kind: PointerDeviceKind.touch);
+      await tester.pump(const Duration(milliseconds: 20));
+      // Horizontal-only movement: the finger's height above the true text
+      // row never changes from wherever it first grabbed.
+      await drag.moveBy(const Offset(15, 0));
+      await tester.pump(const Duration(milliseconds: 20));
+
+      // Without compensating for the grab offset, the magnifier centers on
+      // the raw (still ~15px low) finger position instead of the row, and
+      // ends up showing the line below the actual selection. Without also
+      // locking to the row's *center* (rather than the edge the grab
+      // offset is itself defined against), it would instead sample the
+      // very bottom of the character's box — past the ink, into blank
+      // leading space.
+      final magnifierBottom = tester.getRect(find.byType(RawMagnifier)).bottom;
+      expect(
+        magnifierBottom,
+        moreOrLessEquals(rowCenter - 39, epsilon: 3),
+        reason: 'the magnifier should stay pinned to the text row the finger grabbed, not drift by the grab offset',
+      );
+
+      await drag.up();
+    },
+  );
+
+  testWidgets(
+    'grabbing a handle off-anchor extends the selection by the actual net '
+    'finger movement, not the raw touch position',
+    (tester) async {
+      final (session, _) = await makeSession();
+      final controller = TypstViewerController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: TypstViewer(
+            session: session,
+            controller: controller,
+            params: const TypstViewerParams(renderDelay: Duration(milliseconds: 1)),
+          ),
+        ),
+      );
+      await settle(tester);
+
+      const zoom = 800 / 611;
+      Offset docToView(Offset doc) => Offset(doc.dx * zoom, doc.dy * zoom);
+      final wordPoint = docToView(const Offset(8 + 60, 8 + 110));
+      final press = await tester.startGesture(wordPoint, kind: PointerDeviceKind.touch);
+      await tester.pump(const Duration(milliseconds: 600));
+      await press.up();
+      await tester.pump();
+      expect(controller.selectedText, 'HELLO');
+
+      bool isHandle(Widget w) => w is GestureDetector && w.onPanStart != null && w.onPanUpdate != null;
+      final handles = find.byWidgetPredicate(isHandle);
+      // The end handle's flag hangs below-right of the text edge, so its
+      // visual center — where a real finger naturally lands — is off the
+      // true anchor both vertically (already covered above) and
+      // horizontally.
+      final grabPoint = tester.getRect(handles.last).center;
+
+      final drag = await tester.startGesture(grabPoint, kind: PointerDeviceKind.touch);
+      await tester.pump(const Duration(milliseconds: 20));
+      await drag.moveBy(const Offset(15, 0));
+      await tester.pump(const Duration(milliseconds: 20));
+
+      // Without re-adding the horizontal grab offset each frame the same
+      // way as the vertical one, the hit-tested character would land one
+      // column further right than this net finger movement actually
+      // implies ('HELLO W' instead of 'HELLO ').
+      expect(controller.selectedText, 'HELLO ');
+
+      await drag.up();
     },
   );
 
