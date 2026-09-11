@@ -1304,6 +1304,27 @@ void main() {
       await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     }
 
+    testWidgets('the context menu shows a Toggle Comment entry', (tester) async {
+      final (session, controller, focusNode) = await mount(
+        tester,
+        text: 'foo',
+        selection: const TextSelection.collapsed(offset: 3),
+      );
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byType(TypstCodeEditor)),
+        kind: PointerDeviceKind.mouse,
+        buttons: kSecondaryButton,
+      );
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(find.text('Toggle Comment'), findsOneWidget);
+
+      focusNode.dispose();
+      session.dispose();
+    });
+
     testWidgets('comments the current line for a collapsed caret', (tester) async {
       final (session, controller, focusNode) = await mount(
         tester,

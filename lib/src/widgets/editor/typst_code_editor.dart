@@ -6,8 +6,8 @@ import 'package:flutter/material.dart'
         AdaptiveTextSelectionToolbar,
         Material,
         TextMagnifier,
-        desktopTextSelectionControls,
-        materialTextSelectionControls;
+        desktopTextSelectionHandleControls,
+        materialTextSelectionHandleControls;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -237,10 +237,14 @@ class TypstCodeEditor extends StatefulWidget {
   /// translucent blue.
   final Color? selectionColor;
 
-  /// Selection handles/toolbar. Defaults to [desktopTextSelectionControls]
-  /// on desktop platforms and [materialTextSelectionControls] elsewhere —
+  /// Selection handles/toolbar. Defaults to [desktopTextSelectionHandleControls]
+  /// on desktop platforms and [materialTextSelectionHandleControls] elsewhere —
   /// a reasonable cross-platform default, not a platform-native match on
   /// every platform (Cupertino styling isn't wired up). Override for that.
+  ///
+  /// Must be null or a `TextSelectionHandleControls`-mixin instance for
+  /// [contextMenuBuilder] (and its "Toggle Comment" entry) to take effect —
+  /// see [_defaultSelectionControls].
   final TextSelectionControls? selectionControls;
 
   /// The loupe shown while dragging a selection handle or the caret on a
@@ -1155,16 +1159,24 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     );
   }
 
+  // The plain `desktopTextSelectionControls`/`materialTextSelectionControls`
+  // instances make `EditableText` fall back to `TextSelectionControls`'s own
+  // deprecated `buildToolbar` (the plain copy/cut/paste menu) instead of
+  // `contextMenuBuilder` — see `TextSelectionOverlay.showToolbar`, which
+  // only honors `contextMenuBuilder` when `selectionControls` is null or a
+  // `TextSelectionHandleControls` mixin instance. Without the `*Handle*`
+  // variants here, `_buildDefaultContextMenu`'s "Toggle Comment" entry (and
+  // any caller-supplied `contextMenuBuilder`) is silently never shown.
   TextSelectionControls _defaultSelectionControls() {
     switch (defaultTargetPlatform) {
       case TargetPlatform.linux:
       case TargetPlatform.macOS:
       case TargetPlatform.windows:
-        return desktopTextSelectionControls;
+        return desktopTextSelectionHandleControls;
       case TargetPlatform.android:
       case TargetPlatform.iOS:
       case TargetPlatform.fuchsia:
-        return materialTextSelectionControls;
+        return materialTextSelectionHandleControls;
     }
   }
 
