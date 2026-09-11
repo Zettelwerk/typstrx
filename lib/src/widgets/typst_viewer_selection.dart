@@ -145,6 +145,17 @@ extension _TypstViewerSelection on _TypstViewerState {
     _selAnchor = null;
     _selFocus = null;
     _toolbarAnchor = null;
+    // Normally cleared by the dragged handle's own onPanEnd — but a lost or
+    // interrupted gesture (the platform never delivering an up/cancel event
+    // for whatever reason) would otherwise leave the magnifier stuck on
+    // screen forever, with no handle left to drag and thus no way for the
+    // user to ever trigger that onPanEnd. Clearing it here too means at
+    // least tapping anywhere to dismiss the selection also recovers from
+    // that.
+    _draggingHandleIsStart = null;
+    _handleDragPoint = null;
+    _handleDragFixedEnd = null;
+    _handleDragMovingPoint = null;
     _repaint();
   }
 
@@ -397,10 +408,24 @@ extension _TypstViewerSelection on _TypstViewerState {
     final toolbarAnchor = _toolbarAnchor;
     if (selection != null && toolbarAnchor != null) {
       final view = _docToView(toolbarAnchor);
+      // The default `view.dy - 56` placement assumes nothing else occupies
+      // that space above the touch point — true for a mouse selection
+      // (no handles), but not for a touch one: the start handle's own
+      // flag reaches a further _handleSize above the selection's top edge
+      // (see the loop below), and a short selection's toolbar can land
+      // right on top of it otherwise. Push the toolbar up further still
+      // when that handle's box would otherwise reach into it — 48 is a
+      // rough estimate of the toolbar's own height, since its real size
+      // isn't known until after it's laid out.
+      final startRect = _lastInputWasTouch ? _charRectInDocument(selection.$1, isStart: true) : null;
+      final defaultTop = view.dy - 56;
+      final top = startRect == null
+          ? defaultTop
+          : math.min(defaultTop, _docToView(startRect.topLeft).dy - _handleSize - 48 - 8);
       widgets.add(Positioned(
         key: const ValueKey('selection-toolbar'),
         left: math.max(view.dx - 40, 8),
-        top: math.max(view.dy - 56, 8),
+        top: math.max(top, 8),
         child: Material(
           elevation: 4,
           borderRadius: BorderRadius.circular(8),
