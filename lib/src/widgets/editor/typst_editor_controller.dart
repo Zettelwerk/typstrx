@@ -30,6 +30,7 @@ class TypstEditorController extends TextEditingController {
     this.errorColor = const Color(0xFFD73A49),
     this.warningColor = const Color(0xFFE36209),
     this.autoClosePairs = const {'(': ')', '[': ']', '{': '}', '"': '"'},
+    this.indentUnit = '  ',
     String text = '',
   }) : _session = session,
        theme = theme ?? TypstSyntaxTheme.defaultTheme,
@@ -60,15 +61,24 @@ class TypstEditorController extends TextEditingController {
   Color warningColor;
 
   /// Typed-opener → auto-inserted-closer pairs applied as the user types
-  /// (see [_applyAutoClose]). Assigning a new map takes effect on the next
-  /// edit; pass `{}` to disable auto-closing entirely.
+  /// (see [_applyAutoClose]) — also what a newline between a pair (see
+  /// [_afterNewline]) and wrapping a selection (see [_applyAutoClose]) key
+  /// off of. Assigning a new map takes effect on the next edit; pass `{}`
+  /// to disable all three.
   ///
   /// Deliberately excludes `$`, Typst's math-mode delimiter: unlike a
-  /// bracket it toggles a mode rather than opening a well-nested region, and
-  /// is at least as often typed to wrap an existing selection (which this
-  /// never does — see [_applyAutoClose]) as to open a fresh one. Add it
+  /// bracket it toggles a mode rather than opening a well-nested region, so
+  /// auto-closing/wrapping it is more often wrong than right (`$x$` typed
+  /// as `$x` would auto-close to `$x$$`, not what was intended). Add it
   /// yourself here if that heuristic still works for how you use it.
   Map<String, String> autoClosePairs;
+
+  /// Inserted once per [TypstCodeEditor]'s Tab (see its key handling) and
+  /// once per indent level by [_afterNewline] when Enter opens a new block
+  /// inside a bracket pair. Two spaces by default, matching the indentation
+  /// typst-ide's own snippets use (e.g. a function call's `(\n  ${}\n)`
+  /// newline-argument template).
+  String indentUnit;
 
   /// Offsets in the current [text] of closer characters *this controller*
   /// inserted (not ones the user typed themselves), so that a matching
@@ -124,36 +134,40 @@ class TypstEditorController extends TextEditingController {
     if (textChanged) _requestHighlight();
   }
 
-  /// Implements auto-closing brackets/quotes on top of whatever edit the
-  /// text input system already produced, by comparing it against [oldValue]
-  /// (the controller's value just before this edit).
+  /// Implements auto-closing brackets/quotes, wrapping a selection in a
+  /// typed pair, and smart-indenting a newline — all on top of whatever
+  /// edit the text input system already produced, by comparing it
+  /// structurally against [oldValue] (the controller's value just before
+  /// this edit).
   ///
-  /// Only two edit shapes are recognized — a single character inserted at a
-  /// collapsed caret, and a single character deleted by backspace at a
-  /// collapsed caret — matched structurally (identical text on both sides
-  /// of the change point) rather than assumed from the selection alone.
-  /// Anything else (paste, IME composition committing multiple characters,
-  /// a programmatic bulk `text =` assignment, replacing a selection) falls
-  /// through unchanged and resets [_pendingAutoClose], on the same
-  /// safety-over-guessing principle as the rest of this method:
+  /// Only a handful of edit shapes are recognized — matched structurally
+  /// (identical text on both sides of the change point) rather than assumed
+  /// from the selection alone:
   ///
-  ///  * Typing an opener inserts its closer right after the caret and
-  ///    leaves the caret between them — unless the character right after
-  ///    the caret is a word character, so typing `(` before `foo` gives
-  ///    `(foo`, not `(foo)`.
-  ///  * Typing a closer that matches one this controller just auto-inserted
-  ///    at the caret types over it instead of duplicating it.
-  ///  * Backspacing an opener whose very next character is a closer this
+  ///  * A single character inserted at a collapsed caret. Typing an opener
+  ///    inserts its closer right after the caret and leaves the caret
+  ///    between them — unless the character right after the caret is a word
+  ///    character, so typing `(` before `foo` gives `(foo`, not `(foo)`.
+  ///    Typing a closer that matches one this controller just auto-inserted
+  ///    at the caret types over it instead of duplicating it. A single `\n`
+  ///    is handled separately — see [_afterNewline].
+  ///  * A single character deleted by backspace at a collapsed caret.
+  ///    Backspacing an opener whose very next character is a closer this
   ///    controller auto-inserted deletes both, not just the opener.
-  ///  * A non-collapsed [TextEditingValue.composing] range (an IME
-  ///    composition in progress) is left alone — inserting a closer next to
-  ///    a live composing range would land inside it.
-  ///  * Replacing a selection is never treated as "wrap the selection in
-  ///    the pair" — it's just whatever plain replacement the input system
-  ///    already produced. Deliberately out of scope for now: it needs its
-  ///    own caret-placement decision (select the wrapped text back? leave
-  ///    the caret after it?) that the rest of this method's structural
-  ///    matching doesn't answer for free.
+  ///  * A single opener character replacing a non-collapsed selection
+  ///    (i.e. typed *over* a selection) wraps the selected text in that
+  ///    pair instead of replacing it — see [_afterWrap]. The selection
+  ///    stays on the original text (now inside the pair, offsets shifted by
+  ///    one), matching how most editors treat this, so a second wrap
+  ///    attempt (or just continuing to type) still acts on the same text.
+  ///
+  /// Anything else (paste, IME composition committing multiple characters,
+  /// a programmatic bulk `text =` assignment, a selection replaced by
+  /// something other than a lone opener) falls through unchanged and resets
+  /// [_pendingAutoClose] — safer to stop tracking than to guess against text
+  /// that moved in an unknown way. A non-collapsed [TextEditingValue.composing]
+  /// range (an IME composition in progress) is likewise left alone —
+  /// inserting a closer next to a live composing range would land inside it.
   TextEditingValue _applyAutoClose(TextEditingValue oldValue, TextEditingValue newValue) {
     if (newValue.text == oldValue.text) return newValue;
     if (!newValue.composing.isCollapsed) {
@@ -162,6 +176,26 @@ class TypstEditorController extends TextEditingController {
     }
 
     final lenDelta = newValue.text.length - oldValue.text.length;
+
+    if (oldValue.selection.isValid &&
+        !oldValue.selection.isCollapsed &&
+        newValue.selection.isValid &&
+        newValue.selection.isCollapsed) {
+      final s = oldValue.selection.start;
+      final e = oldValue.selection.end;
+      if (lenDelta == 1 - (e - s) &&
+          newValue.selection.baseOffset == s + 1 &&
+          s >= 0 &&
+          e <= oldValue.text.length &&
+          newValue.text.substring(0, s) == oldValue.text.substring(0, s) &&
+          newValue.text.substring(s + 1) == oldValue.text.substring(e)) {
+        final typed = newValue.text[s];
+        final closer = autoClosePairs[typed];
+        if (closer != null) {
+          return _afterWrap(oldValue, s, e, typed, closer);
+        }
+      }
+    }
 
     if (lenDelta == 1 &&
         oldValue.selection.isValid &&
@@ -174,7 +208,9 @@ class TypstEditorController extends TextEditingController {
           p <= oldValue.text.length &&
           newValue.text.substring(0, p) == oldValue.text.substring(0, p) &&
           newValue.text.substring(p + 1) == oldValue.text.substring(p)) {
-        return _afterInsert(oldValue, newValue, p, newValue.text[p]);
+        final typed = newValue.text[p];
+        if (typed == '\n') return _afterNewline(oldValue, newValue, p);
+        return _afterInsert(oldValue, newValue, p, typed);
       }
     }
 
@@ -233,6 +269,77 @@ class TypstEditorController extends TextEditingController {
     _shiftPending(from: q + 2, delta: -2);
     final text = oldValue.text.substring(0, q) + oldValue.text.substring(q + 2);
     return newValue.copyWith(text: text, selection: TextSelection.collapsed(offset: q));
+  }
+
+  /// Handles [typed] (a recognized opener) replacing the selection
+  /// `[s, e)` of [oldValue].text: wraps that text in [typed]/[closer]
+  /// instead of replacing it, and re-selects it in its new position (both
+  /// ends shifted right by one, for the inserted opener).
+  ///
+  /// Not added to [_pendingAutoClose]: that set is for "the caret sits
+  /// immediately before a closer this controller just inserted", which
+  /// doesn't apply here — the caret isn't adjacent to [closer] afterward,
+  /// the far end of the (re-established) selection is.
+  TextEditingValue _afterWrap(TextEditingValue oldValue, int s, int e, String typed, String closer) {
+    final text = '${oldValue.text.substring(0, s)}$typed${oldValue.text.substring(s, e)}$closer${oldValue.text.substring(e)}';
+    _shiftPending(from: s, delta: 1);
+    _shiftPending(from: e + 1, delta: 1);
+    return TextEditingValue(text: text, selection: TextSelection(baseOffset: s + 1, extentOffset: e + 1));
+  }
+
+  /// Handles a single `\n` inserted at offset [p] (its position in
+  /// [oldValue].text, before insertion): carries the current line's
+  /// leading indentation onto the new line, and — when the caret sat
+  /// directly between a matching pair with nothing between them (`(|)`,
+  /// `{|}`, ...) — additionally opens an indented block, splitting the
+  /// closer onto its own line one level back out:
+  ///
+  /// ```text
+  /// #function(|)          #function(
+  ///                  ->      |
+  ///                        )
+  /// ```
+  ///
+  /// (`|` marks the caret.) Plain "carry the indentation forward" is what
+  /// most editors do for Enter unconditionally, not just next to brackets —
+  /// implemented here as the same mechanism with one fewer inserted line,
+  /// since skipping it would make the bracket case look like a special rule
+  /// rather than the natural extension it is.
+  TextEditingValue _afterNewline(TextEditingValue oldValue, TextEditingValue newValue, int p) {
+    final text = oldValue.text;
+    final searchFrom = p - 1;
+    final lineStart = searchFrom < 0 ? 0 : text.lastIndexOf('\n', searchFrom) + 1;
+    final indent = _leadingIndent(text, lineStart);
+
+    final prevChar = p > 0 ? text[p - 1] : '';
+    final nextChar = p < text.length ? text[p] : '';
+    final opensBlock = autoClosePairs[prevChar] == nextChar;
+
+    final String inserted;
+    final int caretOffset;
+    if (opensBlock) {
+      final innerIndent = indent + indentUnit;
+      inserted = '\n$innerIndent\n$indent';
+      caretOffset = 1 + innerIndent.length;
+    } else if (indent.isNotEmpty) {
+      inserted = '\n$indent';
+      caretOffset = inserted.length;
+    } else {
+      return newValue; // plain, unindented newline — nothing to add
+    }
+
+    final result = '${text.substring(0, p)}$inserted${text.substring(p)}';
+    _shiftPending(from: p, delta: inserted.length);
+    return newValue.copyWith(text: result, selection: TextSelection.collapsed(offset: p + caretOffset));
+  }
+
+  /// The leading run of spaces/tabs starting at [lineStart] in [text].
+  String _leadingIndent(String text, int lineStart) {
+    var i = lineStart;
+    while (i < text.length && (text[i] == ' ' || text[i] == '\t')) {
+      i++;
+    }
+    return text.substring(lineStart, i);
   }
 
   /// Adds [delta] to every tracked offset `>= from` — for keeping

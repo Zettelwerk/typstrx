@@ -769,6 +769,71 @@ void main() {
       controller.dispose();
       await session.dispose();
     });
+
+    testWidgets('typing a fuzzy (non-contiguous) match still finds the completion', (tester) async {
+      const setStyle = rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'set-style', apply: 'set-style(\${})');
+      // 's','e','t','s','t','y' is a subsequence of 'set-style' (skipping
+      // the '-') but not a prefix of it — exercises the fuzzy fallback, not
+      // the ordinary prefix filter.
+      final (_, session, controller) = await triggerCompletions(
+        tester,
+        text: '#setsty',
+        cursor: 7,
+        completions: const [setStyle],
+        applyFromUtf16: 1,
+      );
+
+      expect(find.text('set-style'), findsOneWidget);
+
+      controller.dispose();
+      await session.dispose();
+    });
+
+    testWidgets('a fuzzy match never outranks a real prefix match for the default selection', (tester) async {
+      const prefixHit = rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'style', apply: 'style');
+      // Both 'style' (a real prefix match for 'sty') and 'set-style' (only a
+      // fuzzy match for 'sty' — s,t,y found in order, skipping 'e','-','l',
+      // 'e') are candidates; the prefix match must still be first/selected.
+      const setStyle = rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'set-style', apply: 'set-style(\${})');
+      final focusNode = FocusNode();
+      final (_, session, controller) = await triggerCompletions(
+        tester,
+        text: '#sty',
+        cursor: 4,
+        completions: const [setStyle, prefixHit],
+        applyFromUtf16: 1,
+        focusNode: focusNode,
+      );
+
+      expect(find.text('style'), findsOneWidget);
+      expect(find.text('set-style'), findsOneWidget);
+      // The default (index 0) selection shows its detail underneath — see
+      // defaultTypstCompletionsBuilder — so which one is selected is
+      // observable without reaching into private state.
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(controller.text, '#style', reason: 'the real prefix match, not the fuzzy one, is applied by default');
+      focusNode.dispose();
+
+      controller.dispose();
+      await session.dispose();
+    });
+
+    testWidgets('a label that is not even a fuzzy match is excluded', (tester) async {
+      const unrelated = rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'rect', apply: 'rect(\${})');
+      final (_, session, controller) = await triggerCompletions(
+        tester,
+        text: '#setsty',
+        cursor: 7,
+        completions: const [unrelated],
+        applyFromUtf16: 1,
+      );
+
+      expect(find.text('rect'), findsNothing);
+
+      controller.dispose();
+      await session.dispose();
+    });
   });
 
   group('completion details panel', () {
@@ -968,6 +1033,132 @@ void main() {
 
       expect(find.text('lorem'), findsNothing, reason: 'a stale resolve must not reopen the popup');
       expect(find.textContaining('DETAILS:'), findsNothing);
+
+      focusNode.dispose();
+      controller.dispose();
+      await session.dispose();
+    });
+  });
+
+  group('indent (Tab/Shift+Tab)', () {
+    Future<(TypstSession, TypstEditorController, FocusNode)> mount(
+      WidgetTester tester, {
+      required String text,
+      required TextSelection selection,
+    }) async {
+      final fake = FakeRustSession();
+      final session = TypstSession.forTesting(fake, const TypstSessionOptions());
+      final controller = TypstEditorController(session: session, text: text);
+      final focusNode = FocusNode();
+      await tester.pumpWidget(
+        MaterialApp(home: Scaffold(body: TypstCodeEditor(controller: controller, focusNode: focusNode))),
+      );
+      await tester.pump();
+      focusNode.requestFocus();
+      await tester.pump();
+      controller.selection = selection;
+      await tester.pump();
+      return (session, controller, focusNode);
+    }
+
+    Future<void> sendShiftTab(WidgetTester tester) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    }
+
+    testWidgets('Tab with no selection inserts one indent unit at the caret', (tester) async {
+      final (session, controller, focusNode) = await mount(
+        tester,
+        text: 'abcdef',
+        selection: const TextSelection.collapsed(offset: 3),
+      );
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+
+      expect(controller.text, 'abc  def');
+      expect(controller.selection, const TextSelection.collapsed(offset: 5));
+
+      focusNode.dispose();
+      controller.dispose();
+      await session.dispose();
+    });
+
+    testWidgets('Tab with a multi-line selection indents every touched line and keeps them selected', (
+      tester,
+    ) async {
+      final (session, controller, focusNode) = await mount(
+        tester,
+        text: 'one\ntwo\nthree',
+        // Selects from inside "one" through inside "two" — "three" is
+        // untouched.
+        selection: const TextSelection(baseOffset: 1, extentOffset: 5),
+      );
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+
+      expect(controller.text, '  one\n  two\nthree');
+      expect(
+        controller.selection,
+        const TextSelection(baseOffset: 3, extentOffset: 9),
+        reason: 'both indented lines stay selected, shifted by the inserted indent',
+      );
+
+      focusNode.dispose();
+      controller.dispose();
+      await session.dispose();
+    });
+
+    testWidgets('Shift+Tab dedents the current line even with no selection', (tester) async {
+      final (session, controller, focusNode) = await mount(
+        tester,
+        text: '    foo',
+        selection: const TextSelection.collapsed(offset: 7),
+      );
+
+      await sendShiftTab(tester);
+      await tester.pump();
+
+      expect(controller.text, '  foo', reason: 'one indent unit (2 spaces) removed');
+      expect(controller.selection, const TextSelection.collapsed(offset: 5));
+
+      focusNode.dispose();
+      controller.dispose();
+      await session.dispose();
+    });
+
+    testWidgets('Shift+Tab dedents every touched line for a selection, keeping it selected', (tester) async {
+      final (session, controller, focusNode) = await mount(
+        tester,
+        text: '  one\n  two\nthree',
+        selection: const TextSelection(baseOffset: 3, extentOffset: 9),
+      );
+
+      await sendShiftTab(tester);
+      await tester.pump();
+
+      expect(controller.text, 'one\ntwo\nthree');
+      expect(controller.selection, const TextSelection(baseOffset: 1, extentOffset: 5));
+
+      focusNode.dispose();
+      controller.dispose();
+      await session.dispose();
+    });
+
+    testWidgets('Shift+Tab on an unindented line does nothing', (tester) async {
+      final (session, controller, focusNode) = await mount(
+        tester,
+        text: 'foo',
+        selection: const TextSelection.collapsed(offset: 3),
+      );
+
+      await sendShiftTab(tester);
+      await tester.pump();
+
+      expect(controller.text, 'foo');
+      expect(controller.selection, const TextSelection.collapsed(offset: 3));
 
       focusNode.dispose();
       controller.dispose();

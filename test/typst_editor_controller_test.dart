@@ -405,5 +405,95 @@ void main() {
       custom.controller.dispose();
       await custom.session.dispose();
     });
+
+    test('typing an opener over a selection wraps it instead of replacing it', () async {
+      final env = makeAutoCloseController(text: 'hello');
+      env.controller.selection = const TextSelection(baseOffset: 0, extentOffset: 5);
+      // What the text input system delivers when '(' is typed over the
+      // whole selection, before this controller's correction: a plain
+      // replacement, caret collapsed right after the typed character.
+      env.controller.value = const TextEditingValue(text: '(', selection: TextSelection.collapsed(offset: 1));
+      expect(env.controller.text, '(hello)');
+      expect(
+        env.controller.selection,
+        const TextSelection(baseOffset: 1, extentOffset: 6),
+        reason: 'the original text stays selected, now inside the pair',
+      );
+      await settle();
+      env.controller.dispose();
+      await env.session.dispose();
+    });
+
+    test('typing a non-opener over a selection just replaces it as usual', () async {
+      final env = makeAutoCloseController(text: 'hello');
+      env.controller.selection = const TextSelection(baseOffset: 0, extentOffset: 5);
+      env.controller.value = const TextEditingValue(text: 'x', selection: TextSelection.collapsed(offset: 1));
+      expect(env.controller.text, 'x', reason: 'a non-opener never wraps, even over a selection');
+      await settle();
+      env.controller.dispose();
+      await env.session.dispose();
+    });
+  });
+
+  group('smart newline', () {
+    ({TypstEditorController controller, TypstSession session}) makeController(String text, int caret) {
+      final session = makeSession(FakeRustSession());
+      final controller = TypstEditorController(session: session, text: text);
+      controller.selection = TextSelection.collapsed(offset: caret);
+      return (controller: controller, session: session);
+    }
+
+    Future<void> settle() => Future<void>.delayed(Duration.zero);
+
+    test('enter between a matching, empty bracket pair opens an indented block', () async {
+      final env = makeController('#function()', 10); // caret between '(' and ')'
+      // What the text input system delivers for a plain Enter: a naive
+      // single '\n' inserted at the caret.
+      env.controller.value = const TextEditingValue(
+        text: '#function(\n)',
+        selection: TextSelection.collapsed(offset: 11),
+      );
+      expect(env.controller.text, '#function(\n  \n)');
+      expect(
+        env.controller.selection,
+        const TextSelection.collapsed(offset: 13),
+        reason: 'caret lands on the blank, one-level-deeper line',
+      );
+      await settle();
+      env.controller.dispose();
+      await env.session.dispose();
+    });
+
+    test('enter carries the current line\'s indentation forward elsewhere', () async {
+      final env = makeController('  foo', 5);
+      env.controller.value = const TextEditingValue(text: '  foo\n', selection: TextSelection.collapsed(offset: 6));
+      expect(env.controller.text, '  foo\n  ');
+      expect(env.controller.selection, const TextSelection.collapsed(offset: 8));
+      await settle();
+      env.controller.dispose();
+      await env.session.dispose();
+    });
+
+    test('enter on an unindented line with no adjacent bracket pair does nothing extra', () async {
+      final env = makeController('abc', 3);
+      env.controller.value = const TextEditingValue(text: 'abc\n', selection: TextSelection.collapsed(offset: 4));
+      expect(env.controller.text, 'abc\n');
+      expect(env.controller.selection, const TextSelection.collapsed(offset: 4));
+      await settle();
+      env.controller.dispose();
+      await env.session.dispose();
+    });
+
+    test('enter between brackets that are not empty (something already between them) is a plain newline', () async {
+      // '(' and ')' aren't *immediately* adjacent here — 'x' sits between
+      // them — so this isn't the "opens a block" case, just carrying
+      // whatever indentation (none) the current line has.
+      final env = makeController('#f(x)', 3); // caret right after '('
+      env.controller.value = const TextEditingValue(text: '#f(\nx)', selection: TextSelection.collapsed(offset: 4));
+      expect(env.controller.text, '#f(\nx)');
+      await settle();
+      env.controller.dispose();
+      await env.session.dispose();
+    });
   });
 }

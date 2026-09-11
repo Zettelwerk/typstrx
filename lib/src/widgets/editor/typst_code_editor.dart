@@ -80,6 +80,88 @@ Widget _defaultContextMenuBuilder(BuildContext context, EditableTextState editab
   return (start: prefix, deletedLength: oldEnd - prefix, insertedLength: newEnd - prefix);
 }
 
+/// Filters [completions] to those matching [prefix] (the text already typed
+/// since the completion request's `applyFrom`), preferring an exact prefix
+/// match on [TypstCompletion.label] — what the user actually sees and types
+/// against, not [TypstCompletion.apply], which for a snippet can read
+/// nothing like the label past its first few characters — and falling back
+/// to a fuzzy (in-order, not-necessarily-contiguous) subsequence match, so
+/// e.g. typing `setsty` finds `set-style`.
+///
+/// Prefix matches are kept ahead of fuzzy-only ones (each group keeping
+/// typst-ide's own relevance order) rather than interleaved: typst-ide's
+/// ranking assumes a prefix-searching caller, so the first, most-relevant
+/// candidate — the one Enter/Tab applies by default — has to stay a real
+/// prefix match whenever one exists, not whichever fuzzy hit happened to
+/// sort first.
+List<TypstCompletion> _filterCompletions(List<TypstCompletion> completions, String prefix) {
+  if (prefix.isEmpty) return completions;
+  final prefixLower = prefix.toLowerCase();
+  final prefixMatches = <TypstCompletion>[];
+  final fuzzyMatches = <TypstCompletion>[];
+  for (final c in completions) {
+    final labelLower = c.label.toLowerCase();
+    if (labelLower.startsWith(prefixLower)) {
+      prefixMatches.add(c);
+    } else if (_isFuzzySubsequence(prefixLower, labelLower)) {
+      fuzzyMatches.add(c);
+    }
+  }
+  return [...prefixMatches, ...fuzzyMatches];
+}
+
+/// The start offset of every line that overlaps `[start, end)` — for
+/// indent/dedent, which acts on whole lines. A collapsed selection
+/// (`start == end`) is treated as touching the one line it sits on, so
+/// Shift+Tab dedents the current line even with nothing selected.
+///
+/// A line "overlaps" if any part of it falls in `[start, end)`; in
+/// particular, a selection whose end lands exactly at the start of a line
+/// does *not* touch that line — nothing of it is actually selected.
+List<int> _linesTouchedBy(String text, int start, int end) {
+  final lineStarts = <int>[0];
+  for (var i = 0; i < text.length; i++) {
+    if (text[i] == '\n') lineStarts.add(i + 1);
+  }
+  if (start == end) {
+    // The single line containing this position — including sitting exactly
+    // at the end of the text, past every lineStart, with no trailing
+    // newline to have added one more entry to lineStarts for.
+    var line = 0;
+    for (var i = 1; i < lineStarts.length; i++) {
+      if (lineStarts[i] > start) break;
+      line = i;
+    }
+    return [lineStarts[line]];
+  }
+  return [
+    for (var i = 0; i < lineStarts.length; i++)
+      if (start < (i + 1 < lineStarts.length ? lineStarts[i + 1] : text.length) && end > lineStarts[i])
+        lineStarts[i],
+  ];
+}
+
+/// How many of the (at most [max]) characters starting at [lineStart] are
+/// spaces or tabs — the run a dedent would remove from that line.
+int _leadingWhitespaceLength(String text, int lineStart, int max) {
+  var n = 0;
+  while (n < max && lineStart + n < text.length && (text[lineStart + n] == ' ' || text[lineStart + n] == '\t')) {
+    n++;
+  }
+  return n;
+}
+
+/// Whether every character of [query] appears in [target], in order, though
+/// not necessarily contiguously (e.g. `setsty` in `set-style`). Both must
+/// already be case-normalized by the caller.
+bool _isFuzzySubsequence(String query, String target) {
+  var qi = 0;
+  for (var ti = 0; ti < target.length && qi < query.length; ti++) {
+    if (target.codeUnitAt(ti) == query.codeUnitAt(qi)) qi++;
+  }
+  return qi == query.length;
+}
+
 /// A Typst source editor built directly on [EditableText], so future editor
 /// features (completion popups, hover tooltips) can query caret/selection
 /// geometry via [EditableTextState.renderEditable] — access a plain
@@ -210,12 +292,15 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
   FocusNode? _keyHandlerNode;
   FocusOnKeyEventCallback? _previousOnKeyEvent;
 
-  // Set for the duration of _applyCompletion's own `controller.value =`
-  // assignment, so _onControllerChanged's synchronous notification from
-  // that assignment doesn't dispatch a fresh completions request for the
-  // text we just inserted (or, worse, re-show a popup right after the
-  // caller picked an item).
-  bool _applyingCompletion = false;
+  // Set for the duration of this widget's own programmatic
+  // `controller.value =` assignments (applying a completion, indenting/
+  // dedenting), so _onControllerChanged's synchronous notification from
+  // that assignment doesn't dispatch a fresh completions request for
+  // wherever it happened to land the caret — most visibly, Tab landing on a
+  // blank indented line, where an empty typed prefix would otherwise match
+  // every completion and pop a full, unfiltered list right after the
+  // keystroke that was supposed to just indent.
+  bool _applyingProgrammaticEdit = false;
 
   // Absolute offsets (in the *current* text — see _onControllerChanged's
   // diff-adjustment) of every stop in a just-applied snippet, in order —
@@ -323,6 +408,15 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
         }
       }
       if (_completions.isNotEmpty) {
+        // Shift+Tab shares LogicalKeyboardKey.tab with plain Tab, but
+        // "confirm the highlighted item" is not a sensible meaning for it
+        // in any editor's completion popup — treated like Escape instead,
+        // rather than falling into the `case tab:` below and silently
+        // applying a completion the user pressed Shift for.
+        if (event.logicalKey == LogicalKeyboardKey.tab && HardwareKeyboard.instance.isShiftPressed) {
+          _hideCompletionPopup();
+          return KeyEventResult.handled;
+        }
         switch (event.logicalKey) {
           case LogicalKeyboardKey.arrowDown:
             _moveCompletionSelection(1);
@@ -346,8 +440,104 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
         _requestCompletions(explicit: true);
         return KeyEventResult.handled;
       }
+      // Reached only with no snippet session and no completions popup open
+      // (both handled, and returned, above) — plain editor-indentation Tab/
+      // Shift+Tab. A collapsed selection just gets/loses one indent unit at
+      // the caret; a real selection indents/dedents every line it touches,
+      // keeping the same text selected afterward (shifted by however much
+      // was inserted/removed) so a second Tab press keeps working.
+      if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.tab) {
+        if (HardwareKeyboard.instance.isShiftPressed) {
+          _dedentSelection();
+        } else {
+          _indentSelection();
+        }
+        return KeyEventResult.handled;
+      }
     }
     return _previousOnKeyEvent?.call(node, event) ?? KeyEventResult.ignored;
+  }
+
+  void _indentSelection() {
+    final controller = widget.controller;
+    final selection = controller.selection;
+    if (!selection.isValid) return;
+    final unit = controller.indentUnit;
+    if (selection.isCollapsed) {
+      // No selection: Tab just inserts the indent unit at the caret,
+      // wherever it sits in the line — not line-start-anchored, unlike the
+      // multi-line case below.
+      final offset = selection.baseOffset;
+      final text = controller.text;
+      _applyingProgrammaticEdit = true;
+      controller.value = TextEditingValue(
+        text: text.replaceRange(offset, offset, unit),
+        selection: TextSelection.collapsed(offset: offset + unit.length),
+      );
+      _applyingProgrammaticEdit = false;
+      return;
+    }
+    final text = controller.text;
+    final start = selection.start;
+    final end = selection.end;
+    final lineStarts = _linesTouchedBy(text, start, end);
+    final buffer = StringBuffer();
+    var cursor = 0;
+    for (final lineStart in lineStarts) {
+      buffer
+        ..write(text.substring(cursor, lineStart))
+        ..write(unit);
+      cursor = lineStart;
+    }
+    buffer.write(text.substring(cursor));
+    int mapOffset(int x) => x + unit.length * lineStarts.where((ls) => ls <= x).length;
+    _applyingProgrammaticEdit = true;
+    controller.value = TextEditingValue(
+      text: buffer.toString(),
+      selection: TextSelection(baseOffset: mapOffset(start), extentOffset: mapOffset(end)),
+    );
+    _applyingProgrammaticEdit = false;
+  }
+
+  void _dedentSelection() {
+    final controller = widget.controller;
+    final text = controller.text;
+    final selection = controller.selection;
+    if (!selection.isValid) return;
+    final unit = controller.indentUnit;
+    final start = selection.start;
+    final end = selection.end;
+    final lineStarts = _linesTouchedBy(text, start, end);
+    // How many leading whitespace characters to strip from each touched
+    // line — up to one indent unit's worth, but never more than the line
+    // actually has (so a line indented by only one space, say, still loses
+    // just that one space instead of eating into its content).
+    final removed = <int, int>{
+      for (final lineStart in lineStarts) lineStart: _leadingWhitespaceLength(text, lineStart, unit.length),
+    };
+    if (removed.values.every((n) => n == 0)) return; // nothing to remove
+    final buffer = StringBuffer();
+    var cursor = 0;
+    for (final lineStart in lineStarts) {
+      buffer.write(text.substring(cursor, lineStart));
+      cursor = lineStart + removed[lineStart]!;
+    }
+    buffer.write(text.substring(cursor));
+    int mapOffset(int x) {
+      var delta = 0;
+      for (final lineStart in lineStarts) {
+        if (lineStart >= x) break;
+        delta += (x - lineStart).clamp(0, removed[lineStart]!);
+      }
+      return x - delta;
+    }
+
+    _applyingProgrammaticEdit = true;
+    controller.value = TextEditingValue(
+      text: buffer.toString(),
+      selection: TextSelection(baseOffset: mapOffset(start), extentOffset: mapOffset(end)),
+    );
+    _applyingProgrammaticEdit = false;
   }
 
   // Finds the next stop *after the caret* rather than tracking "which stop
@@ -409,9 +599,9 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     // when the tooltip was requested is no longer what the tooltip
     // describes — independent of the completion-popup logic below.
     if (textChanged || selectionChanged) _cancelHover();
-    if (_applyingCompletion) {
+    if (_applyingProgrammaticEdit) {
       // Tracking above stays accurate either way; just skip reacting to a
-      // change _applyCompletion made itself (see the field's doc comment).
+      // change this widget made itself (see the field's doc comment).
       return;
     }
     if (!textChanged && !selectionChanged) {
@@ -495,11 +685,7 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     final prefix = cursor >= result.applyFromUtf16
         ? controller.text.substring(result.applyFromUtf16, cursor)
         : '';
-    final prefixLower = prefix.toLowerCase();
-    final filtered = [
-      for (final c in result.completions)
-        if (c.apply.toLowerCase().startsWith(prefixLower)) c,
-    ];
+    final filtered = _filterCompletions(result.completions, prefix);
     _completions = filtered;
     _completionApplyFrom = result.applyFromUtf16;
     _selectedCompletionIndex = 0;
@@ -563,12 +749,12 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     final text = controller.text;
     final newText = text.replaceRange(_completionApplyFrom, cursor, stripped.text);
     final firstStop = stripped.stopOffsets.isEmpty ? stripped.text.length : stripped.stopOffsets.first;
-    _applyingCompletion = true;
+    _applyingProgrammaticEdit = true;
     controller.value = TextEditingValue(
       text: newText,
       selection: TextSelection.collapsed(offset: _completionApplyFrom + firstStop),
     );
-    _applyingCompletion = false;
+    _applyingProgrammaticEdit = false;
     _hideCompletionPopup();
     _snippetStops = stripped.stopOffsets.length > 1
         ? [for (final offset in stripped.stopOffsets) _completionApplyFrom + offset]
