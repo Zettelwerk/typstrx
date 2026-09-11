@@ -388,6 +388,48 @@ mod tests {
     }
 
     #[test]
+    fn package_completions_shape() {
+        // Simulates exactly what the Dart side sees when the user types
+        // `#import "` (auto-closes to `#import "|"`, per
+        // TypstEditorController's autoClosePairs) and then `@` — cursor
+        // right after the `@`, closing quote already present in the buffer.
+        use typst::syntax::package::PackageSpec;
+        let text = r#"#import "@""#; // #import "@"
+        let cursor = 10; // right after '@', before the closing '"'
+        assert_eq!(&text[9..10], "@");
+        assert_eq!(&text[10..11], "\"");
+
+        let mut world = world_with_source(text);
+        world.set_packages_for_testing(vec![(
+            PackageSpec { namespace: "preview".into(), name: "mypkg".into(), version: "1.2.3".parse().unwrap() },
+            Some("A test package.".into()),
+        )]);
+        let source = world.source(world.main()).unwrap();
+        let (apply_from_utf16, completions) = complete(&world, None::<&PagedDocument>, &source, cursor, false);
+
+        let package = completions
+            .iter()
+            .find(|c| c.label.contains("mypkg"))
+            .unwrap_or_else(|| panic!("expected a package completion, got labels {:?}", completions.iter().map(|c| &c.label).collect::<Vec<_>>()));
+        assert!(matches!(package.kind, TypstCompletionKind::Package), "expected Package kind, got a different kind");
+        assert_eq!(package.detail.as_deref(), Some("A test package."));
+        assert!(package.label.contains("1.2.3"), "expected the label to include the version, got {:?}", package.label);
+
+        // The Dart-side filter computes `prefix = text[applyFrom..cursor]`
+        // and checks `apply.startsWith(prefix)` — both must agree on
+        // whether the opening quote is included, or every package
+        // completion gets silently filtered out despite resolving fine
+        // here.
+        let prefix = &text[apply_from_utf16 as usize..cursor as usize];
+        assert!(
+            package.apply.starts_with(prefix),
+            "apply {:?} must start with the buffer prefix {:?} (apply_from_utf16={apply_from_utf16})",
+            package.apply,
+            prefix
+        );
+    }
+
+    #[test]
     fn function_info_is_none_for_an_unresolvable_label() {
         let world = world_with_source("#zz");
         let source = world.source(world.main()).unwrap();

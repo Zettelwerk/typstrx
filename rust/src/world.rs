@@ -6,6 +6,7 @@ use ecow::EcoString;
 use parking_lot::Mutex;
 use typst::diag::{FileError, FileResult};
 use typst::foundations::{Bytes, Datetime, Duration};
+use typst::syntax::package::PackageSpec;
 use typst::syntax::{FileId, RootedPath, Source, VirtualPath, VirtualRoot};
 use typst::text::{Font, FontBook};
 use typst::utils::LazyHash;
@@ -15,6 +16,8 @@ use typst_kit::downloader::SystemDownloader;
 use typst_kit::files::{FileLoader, FileStore};
 use typst_kit::fonts::FontStore;
 use typst_kit::packages::{FsPackages, SystemPackages, UniversePackages};
+
+use crate::packages::PackageIndex;
 
 /// The virtual path under which the main source is registered.
 const MAIN_PATH: &str = "/main.typ";
@@ -41,6 +44,10 @@ pub struct TypstrxWorld {
     files: FileStore<InMemoryLoader>,
     main: FileId,
     time: Time,
+    /// Backs [`typst_ide::IdeWorld::packages`], for `@`-completions. See
+    /// [`PackageIndex`] for why it's fetched once in the background rather
+    /// than refreshed.
+    package_index: PackageIndex,
 }
 
 impl TypstrxWorld {
@@ -59,6 +66,11 @@ impl TypstrxWorld {
         };
         let packages = SystemPackages::from_parts(FsPackages::system_data(), cache, universe);
 
+        let package_index = PackageIndex::default();
+        if options.allow_package_download {
+            package_index.spawn_fetch(USER_AGENT);
+        }
+
         let main = RootedPath::new(
             VirtualRoot::Project,
             VirtualPath::new(MAIN_PATH).expect("main path is valid"),
@@ -74,6 +86,7 @@ impl TypstrxWorld {
             }),
             main,
             time: Time::system(),
+            package_index,
         };
         world.set_main_source("");
         world
@@ -125,11 +138,23 @@ impl TypstrxWorld {
         self.files.reset();
         self.time.reset();
     }
+
+    /// Replaces [`Self::package_index`] with a synchronously pre-filled one
+    /// (see [`PackageIndex::for_testing`]) — for deterministic package
+    /// completion tests, bypassing the network entirely.
+    #[cfg(test)]
+    pub fn set_packages_for_testing(&mut self, packages: Vec<(PackageSpec, Option<EcoString>)>) {
+        self.package_index = PackageIndex::for_testing(packages);
+    }
 }
 
 impl typst_ide::IdeWorld for TypstrxWorld {
     fn upcast(&self) -> &dyn World {
         self
+    }
+
+    fn packages(&self) -> &[(PackageSpec, Option<EcoString>)] {
+        self.package_index.packages()
     }
 }
 

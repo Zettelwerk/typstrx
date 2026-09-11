@@ -3181,6 +3181,7 @@ dependencies = [
  "ecow",
  "flutter_rust_bridge",
  "parking_lot",
+ "serde_json",
  "tiny-skia",
  "typst",
  "typst-ide",

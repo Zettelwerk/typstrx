@@ -36,6 +36,9 @@ comemo = "0.5"
 ecow = "0.2"
 parking_lot = "0.12"
 tiny-skia = "0.12"
+# Parses the `@preview` package index (a plain JSON array) for `@`-completions —
+# already in the tree transitively via typst's own serde usage.
+serde_json = "1"
 
 # OpenSSL has no system copy on Android; build it from source there only.
 [target.'cfg(target_os = "android")'.dependencies]
