@@ -375,6 +375,62 @@ void main() {
     }, variant: platforms);
   });
 
+  testWidgets(
+    'the magnifier centers its view exactly on the gesture position',
+    (tester) async {
+      // Drives typstEditorMagnifierConfiguration's builder directly rather
+      // than through a real drag — EditableText only ever shows the
+      // magnifier mid-gesture, which is awkward to hold open in a widget
+      // test, and the geometry bug this guards (RawMagnifier.focalPointOffset
+      // is measured from the magnifier's own *center*, not its top edge)
+      // lives entirely in this builder, independent of how it gets shown.
+      const focal = Offset(300, 500);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            // Positioned (what the builder returns below) needs a Stack
+          // ancestor to interpret left/top — the real Overlay it normally
+          // sits in provides one; this test supplies its own.
+          body: Stack(
+              children: [
+                Builder(
+                  builder: (context) =>
+                      typstEditorMagnifierConfiguration.magnifierBuilder(
+                        context,
+                        MagnifierController(),
+                        ValueNotifier(
+                          const MagnifierInfo(
+                            globalGesturePosition: focal,
+                            caretRect: Rect.fromLTWH(295, 490, 2, 20),
+                            currentLineBoundaries: Rect.fromLTWH(0, 490, 600, 20),
+                            fieldBounds: Rect.fromLTWH(0, 0, 600, 800),
+                          ),
+                        ),
+                      ) ??
+                      const SizedBox.shrink(),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // Whatever's shown at the magnifier widget's own on-screen center
+      // must be the true focal point: `center + focalPointOffset == focal`
+      // — the RawMagnifier API's own contract (see its focalPointOffset
+      // doc). Getting this wrong by even `magnifierSize.height / 2` shows
+      // roughly the bottom half of the intended content instead of all of
+      // it, centered.
+      final magnifier = tester.widget<RawMagnifier>(find.byType(RawMagnifier));
+      final magnifierCenter = tester.getRect(find.byType(RawMagnifier)).center;
+      expect(
+        magnifierCenter + magnifier.focalPointOffset,
+        offsetMoreOrLessEquals(focal, epsilon: 0.5),
+      );
+    },
+  );
+
   testWidgets('shows a line-number gutter by default, hidden via showLineNumbers: false', (tester) async {
     final fake = FakeRustSession();
     final session = TypstSession.forTesting(fake, const TypstSessionOptions());

@@ -52,10 +52,15 @@ class _TypstEditorMagnifier extends StatelessWidget {
             child: RawMagnifier(
               size: _magnifierSize,
               magnificationScale: _magnifierScale,
-              focalPointOffset: Offset(
-                0,
-                _magnifierAboveFocalPoint + _magnifierSize.height / 2,
-              ),
+              // See the matching comment in typst_viewer_selection.dart:
+              // focalPointOffset is measured from the magnifier's own
+              // *center*, so this only needs `_magnifierAboveFocalPoint`
+              // itself — adding half the magnifier's height again (as an
+              // earlier version of this did) double-counts the `top`
+              // offset above, shifting the sampled content down by that
+              // much and leaving only the bottom half of, e.g., the
+              // selection highlight visible.
+              focalPointOffset: const Offset(0, _magnifierAboveFocalPoint),
               decoration: MagnifierDecoration(
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(_magnifierBorderRadius),

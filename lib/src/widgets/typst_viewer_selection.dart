@@ -548,7 +548,19 @@ extension _TypstViewerSelection on _TypstViewerState {
         child: RawMagnifier(
           size: _magnifierSize,
           magnificationScale: _magnifierScale,
-          focalPointOffset: Offset(0, _magnifierAboveFocalPoint + _magnifierSize.height / 2),
+          // RawMagnifier.focalPointOffset is measured from the magnifier's
+          // own *center* (see its doc comment's worked example), not its
+          // top edge: content shown at the magnifier's center is sourced
+          // from (widget center) + focalPointOffset. The widget's center
+          // already sits `_magnifierAboveFocalPoint` above `focalPoint`
+          // (see `top` above, which offsets by that plus half the
+          // magnifier's own height to place its *top* edge), so this only
+          // needs to correct for that same `_magnifierAboveFocalPoint` —
+          // adding `_magnifierSize.height / 2` again here (as an earlier
+          // version of this code did) double-counts it, shifting the
+          // sampled content down by that much and leaving only the bottom
+          // half of, e.g., the selection highlight visible.
+          focalPointOffset: const Offset(0, _magnifierAboveFocalPoint),
           // Rounded-rect + shadow, matching pdfrx's
           // _buildMagnifierDecoration exactly (BorderRadius.circular(30),
           // Colors.black26 shadow, blur 8 / spread 2) rather than the

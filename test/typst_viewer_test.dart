@@ -677,6 +677,21 @@ void main() {
         reason: 'the magnifier should stay pinned to the text row the finger grabbed, not drift by the grab offset',
       );
 
+      // Independent of the above: whatever's shown at the magnifier
+      // widget's own on-screen *center* must be the row's center —
+      // `RawMagnifier.focalPointOffset` is measured from that center (its
+      // own doc comment's worked example), not the widget's top edge.
+      // Getting this wrong by `magnifierSize.height / 2` (an earlier
+      // version of this code did) shows roughly the bottom half of the
+      // selection highlight instead of all of it, centered.
+      final magnifier = tester.widget<RawMagnifier>(find.byType(RawMagnifier));
+      final magnifierCenterY = tester.getRect(find.byType(RawMagnifier)).center.dy;
+      expect(
+        magnifierCenterY + magnifier.focalPointOffset.dy,
+        moreOrLessEquals(rowCenter, epsilon: 0.5),
+        reason: 'the magnifier should show content centered on the row, not shifted down by half its own height',
+      );
+
       await drag.up();
     },
   );
