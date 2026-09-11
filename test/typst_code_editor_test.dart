@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show debugDefaultTargetPlatformOverride;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -175,40 +174,199 @@ void main() {
   });
 
   testWidgets(
-    'defaults to pdfrx-style triangle handles on touch platforms, and to '
-    'the platform default (no visible handles) on desktop',
+    'defaults to pdfrx-style triangle handles, one instance across rebuilds',
     (tester) async {
       final fake = FakeRustSession();
       final session = TypstSession.forTesting(fake, const TypstSessionOptions());
       final controller = TypstEditorController(session: session, text: 'hello');
+      TextSelectionControls? controls() => tester.widget<EditableText>(find.byType(EditableText)).selectionControls;
 
       await tester.pumpWidget(
         MaterialApp(home: Scaffold(body: TypstCodeEditor(controller: controller))),
       );
       await tester.pump();
+      final first = controls();
+      expect(first, isA<TypstEditorSelectionControls>());
 
-      expect(
-        tester.widget<EditableText>(find.byType(EditableText)).selectionControls,
-        isA<TypstEditorSelectionControls>(),
-        reason: 'the test harness defaults to TargetPlatform.android',
-      );
-
-      debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+      // A fresh instance per build makes EditableText tear down and recreate
+      // its whole selection overlay (see its didUpdateWidget) on every
+      // rebuild of this widget — including mid-drag.
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: TypstCodeEditor(controller: controller))),
+        MaterialApp(
+          home: Scaffold(
+            body: TypstCodeEditor(controller: controller, cursorColor: const Color(0xFF123456)),
+          ),
+        ),
       );
       await tester.pump();
-
-      expect(
-        tester.widget<EditableText>(find.byType(EditableText)).selectionControls,
-        equals(desktopTextSelectionHandleControls),
-      );
-      debugDefaultTargetPlatformOverride = null;
+      expect(controls(), same(first));
 
       controller.dispose();
       await session.dispose();
     },
+    variant: TargetPlatformVariant({TargetPlatform.android, TargetPlatform.linux}),
   );
+
+  // EditableText's own `showSelectionHandles` defaults to false — TextField
+  // works it out per gesture and passes it down, and TypstCodeEditor (which
+  // builds EditableText directly) has to do the same, or handles never show
+  // at all on any platform.
+  group('selection handles', () {
+    final platforms = TargetPlatformVariant({TargetPlatform.android, TargetPlatform.linux});
+
+    Future<(TypstSession, TypstEditorController)> mountEditor(WidgetTester tester, String text) async {
+      final fake = FakeRustSession();
+      final session = TypstSession.forTesting(fake, const TypstSessionOptions());
+      final controller = TypstEditorController(session: session, text: text);
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: TypstCodeEditor(controller: controller))));
+      await tester.pump();
+      return (session, controller);
+    }
+
+    bool handlesShown(WidgetTester tester) =>
+        tester.widget<EditableText>(find.byType(EditableText)).showSelectionHandles;
+
+    Offset caretCenter(WidgetTester tester, int offset) {
+      final render = tester.state<EditableTextState>(find.byType(EditableText)).renderEditable;
+      return render.localToGlobal(render.getLocalRectForCaret(TextPosition(offset: offset)).center);
+    }
+
+    final triangleFlags = find.byWidgetPredicate(
+      (w) => w is CustomPaint && w.painter.runtimeType.toString() == '_TriangleHandlePainter',
+    );
+
+    testWidgets('a touch long-press shows both triangle handles', (tester) async {
+      final (session, controller) = await mountEditor(tester, 'hello world');
+
+      await tester.longPressAt(caretCenter(tester, 2));
+      await tester.pumpAndSettle();
+
+      expect(controller.selection, const TextSelection(baseOffset: 0, extentOffset: 5));
+      expect(handlesShown(tester), isTrue);
+      // Rendered, not just requested: hidden handles stay in the overlay,
+      // faded to zero opacity rather than removed.
+      expect(triangleFlags, findsNWidgets(2));
+      for (var i = 0; i < 2; i++) {
+        final fade = tester.widget<FadeTransition>(
+          find.ancestor(of: triangleFlags.at(i), matching: find.byType(FadeTransition)).first,
+        );
+        expect(fade.opacity.value, 1.0);
+      }
+
+      controller.dispose();
+      await session.dispose();
+    }, variant: platforms);
+
+    testWidgets('a visible handle can be dragged by touch', (tester) async {
+      final (session, controller) = await mountEditor(tester, 'hello world');
+      await tester.longPressAt(caretCenter(tester, 2));
+      await tester.pumpAndSettle();
+      // Out of the way of the handle, whatever the platform puts where
+      // (`false`: keep the handles themselves).
+      tester.state<EditableTextState>(find.byType(EditableText)).hideToolbar(false);
+      await tester.pumpAndSettle();
+
+      // The end handle's flag hangs down-right from the selection's bottom
+      // right corner.
+      final gesture = await tester.startGesture(caretCenter(tester, 5) + const Offset(6, 12));
+      for (var i = 0; i < 6; i++) {
+        await gesture.moveBy(const Offset(13, 0));
+        await tester.pump();
+      }
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(controller.selection, const TextSelection(baseOffset: 0, extentOffset: 11));
+
+      controller.dispose();
+      await session.dispose();
+    }, variant: platforms);
+
+    testWidgets('the selection toolbar keeps clear of both handles', (tester) async {
+      final text = List.generate(12, (i) => 'line$i words here').join('\n');
+      final (session, controller) = await mountEditor(tester, text);
+      final toolbarButtons = find.byWidgetPredicate(
+        (w) => w is TextSelectionToolbarTextButton || w is DesktopTextSelectionToolbarButton,
+      );
+      Rect rectOf(Finder finder) => List.generate(
+        finder.evaluate().length,
+        (i) => tester.getRect(finder.at(i)),
+      ).reduce((a, b) => a.expandToInclude(b));
+
+      // Line 0 has no room above it, so a mobile toolbar flips below the
+      // selection there; line 10 does, so it stays above.
+      for (final line in [0, 10]) {
+        await tester.longPressAt(caretCenter(tester, text.indexOf('line$line ') + 8));
+        await tester.pumpAndSettle();
+        expect(controller.selection.textInside(text), 'words');
+
+        final toolbar = rectOf(toolbarButtons);
+        expect(triangleFlags, findsNWidgets(2));
+        for (var i = 0; i < 2; i++) {
+          final flag = tester.getRect(triangleFlags.at(i));
+          expect(toolbar.overlaps(flag), isFalse, reason: 'line $line: toolbar $toolbar covers handle $flag');
+        }
+
+        tester.state<EditableTextState>(find.byType(EditableText)).hideToolbar();
+        await tester.pumpAndSettle();
+      }
+
+      controller.dispose();
+      await session.dispose();
+    }, variant: platforms);
+
+    testWidgets('a mouse drag-select keeps the handles hidden', (tester) async {
+      final (session, controller) = await mountEditor(tester, 'hello world');
+
+      final gesture = await tester.startGesture(caretCenter(tester, 0), kind: PointerDeviceKind.mouse);
+      await tester.pump();
+      await gesture.moveTo(caretCenter(tester, 5));
+      await tester.pump();
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(controller.selection.isCollapsed, isFalse);
+      expect(handlesShown(tester), isFalse);
+
+      controller.dispose();
+      await session.dispose();
+    }, variant: platforms);
+
+    testWidgets('a mouse right-click opens the menu without handles', (tester) async {
+      final (session, controller) = await mountEditor(tester, 'hello world');
+
+      final gesture = await tester.startGesture(
+        caretCenter(tester, 2),
+        kind: PointerDeviceKind.mouse,
+        buttons: kSecondaryButton,
+      );
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(find.text('Toggle Comment'), findsOneWidget);
+      expect(handlesShown(tester), isFalse);
+
+      controller.dispose();
+      await session.dispose();
+    }, variant: platforms);
+
+    testWidgets('a hidden handle does not swallow a mouse click on the text under it', (tester) async {
+      final (session, controller) = await mountEditor(tester, 'aaaa\nbbbb\ncccc');
+
+      // Placing the caret also inserts the (hidden) handles into the overlay.
+      await tester.tapAt(caretCenter(tester, 2), kind: PointerDeviceKind.mouse);
+      await tester.pump(kDoubleTapTimeout);
+      expect(controller.selection, const TextSelection.collapsed(offset: 2));
+
+      // Straight below the caret: where the hidden collapsed handle sits.
+      await tester.tapAt(caretCenter(tester, 7), kind: PointerDeviceKind.mouse);
+      await tester.pump(kDoubleTapTimeout);
+      expect(controller.selection, const TextSelection.collapsed(offset: 7));
+
+      controller.dispose();
+      await session.dispose();
+    }, variant: platforms);
+  });
 
   testWidgets('shows a line-number gutter by default, hidden via showLineNumbers: false', (tester) async {
     final fake = FakeRustSession();

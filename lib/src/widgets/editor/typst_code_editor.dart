@@ -1,12 +1,8 @@
 import 'dart:async';
+import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart'
-    show
-        AdaptiveTextSelectionToolbar,
-        Material,
-        TextMagnifier,
-        desktopTextSelectionHandleControls;
+    show AdaptiveTextSelectionToolbar, Material, TextMagnifier, TextSelectionToolbar, Theme;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -240,16 +236,17 @@ class TypstCodeEditor extends StatefulWidget {
   /// translucent blue.
   final Color? selectionColor;
 
-  /// Selection handles/toolbar. Defaults to [desktopTextSelectionHandleControls]
-  /// on desktop platforms (no visible handles, matching the platform) and
-  /// [TypstEditorSelectionControls] — pdfrx-style triangle handles —
-  /// elsewhere. Override to get platform-native (e.g. Cupertino) handles
-  /// instead, or [materialTextSelectionHandleControls] for the plain
-  /// Material teardrop shape this replaced as the touch default.
+  /// Selection handles/toolbar. Defaults to [TypstEditorSelectionControls] —
+  /// pdfrx-style triangle handles — on every platform, shown only for
+  /// selections made by touch or stylus (never under a mouse), the same
+  /// pointer-kind rule `TextField` applies. Override to get platform-native
+  /// (e.g. Cupertino) handles instead, or
+  /// [materialTextSelectionHandleControls] for the plain Material teardrop
+  /// shape.
   ///
   /// Must be null or a `TextSelectionHandleControls`-mixin instance for
   /// [contextMenuBuilder] (and its "Toggle Comment" entry) to take effect —
-  /// see [_defaultSelectionControls].
+  /// see `TextSelectionOverlay.showToolbar`.
   final TextSelectionControls? selectionControls;
 
   /// The loupe shown while dragging a selection handle or the caret on a
@@ -315,6 +312,29 @@ class TypstCodeEditor extends StatefulWidget {
 class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelectionGestureDetectorBuilderDelegate {
   final GlobalKey<EditableTextState> _editableTextKey = GlobalKey<EditableTextState>();
   late final _gestureDetectorBuilder = TextSelectionGestureDetectorBuilder(delegate: this);
+
+  // What `TextField` works out as its own `_showSelectionHandles` and passes
+  // down: `EditableText.showSelectionHandles` defaults to false, and without
+  // it handles are built but held at zero opacity on every platform. A
+  // notifier rather than a plain bool so the default controls can also
+  // make hidden handles ignore pointers — see
+  // TypstEditorSelectionControls.handlesVisible.
+  final _showSelectionHandles = ValueNotifier<bool>(false);
+
+  // One instance for this state's lifetime: EditableText tears down and
+  // recreates its whole selection overlay whenever `selectionControls`
+  // changes identity (see its didUpdateWidget), which a fresh instance per
+  // build would trigger on every rebuild — mid-drag included.
+  //
+  // Used on desktop platforms too: a touchscreen laptop needs visible
+  // handles as much as a tablet, and the platform's own desktop controls
+  // draw none at all. Mouse selections still get none — see
+  // _shouldShowSelectionHandles. Being a `TextSelectionHandleControls`
+  // also keeps [contextMenuBuilder] (and "Toggle Comment") in effect: see
+  // `TextSelectionOverlay.showToolbar`.
+  late final TextSelectionControls _typstSelectionControls = TypstEditorSelectionControls(
+    handlesVisible: _showSelectionHandles,
+  );
 
   FocusNode? _internalFocusNode;
   FocusNode get _focusNode => widget.focusNode ?? (_internalFocusNode ??= FocusNode());
@@ -438,6 +458,7 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     _hoverOverlay?.remove();
     _internalFocusNode?.dispose();
     _internalScrollController?.dispose();
+    _showSelectionHandles.dispose();
     super.dispose();
   }
 
@@ -1183,35 +1204,73 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
       ...editableTextState.contextMenuButtonItems,
     ];
     return AdaptiveTextSelectionToolbar.buttonItems(
-      anchors: editableTextState.contextMenuAnchors,
+      anchors: _anchorsClearOfHandles(context, editableTextState.contextMenuAnchors),
       buttonItems: buttonItems,
     );
   }
 
-  // On every platform, `EditableText` only routes to `contextMenuBuilder`
-  // (rather than silently falling back to `TextSelectionControls`'s own
-  // deprecated `buildToolbar`) when `selectionControls` is null or a
-  // `TextSelectionHandleControls` mixin instance — see
-  // `TextSelectionOverlay.showToolbar`. `TypstEditorSelectionControls`
-  // (pdfrx-style triangle handles) mixes that in, same as the desktop
-  // fallback below.
-  //
-  // Desktop keeps the platform's own (handle-less) controls rather than
-  // the touch-oriented triangles: `desktopTextSelectionHandleControls`
-  // already draws no handles under a mouse (`getHandleSize` returns
-  // `Size.zero`), which is the existing, correct behavior there — showing
-  // triangle handles under a mouse cursor would be a new, unrequested
-  // change to desktop UX, not a port of it.
-  TextSelectionControls _defaultSelectionControls() {
-    switch (defaultTargetPlatform) {
-      case TargetPlatform.linux:
-      case TargetPlatform.macOS:
-      case TargetPlatform.windows:
-        return desktopTextSelectionHandleControls;
+  // The platform toolbars only keep clear of the platform's own handles,
+  // not these taller triangle flags — one above the selection's start, one
+  // below its end. Left alone, Material's toolbar sits 8px above the
+  // selection, over the start flag (or, flipped below for lack of room,
+  // over the end flag), and a desktop menu — opened by a touch long-press
+  // on a touchscreen laptop — puts its top-left corner on the selection
+  // itself, over the end flag and half the selected text. Moves each anchor
+  // past the flag on its side. Left alone when no handles show (a mouse
+  // selection) or for caller-supplied controls, whose handles are unknown.
+  TextSelectionToolbarAnchors _anchorsClearOfHandles(BuildContext context, TextSelectionToolbarAnchors anchors) {
+    if (!_showSelectionHandles.value || widget.selectionControls != null) return anchors;
+    final collapsed = widget.controller.selection.isCollapsed;
+    final above = collapsed ? 0.0 : TypstEditorSelectionControls.handleSize;
+    final below = collapsed ? TypstEditorSelectionControls.collapsedDiameter : TypstEditorSelectionControls.handleSize;
+    const gap = 8.0;
+    final secondary = anchors.secondaryAnchor ?? anchors.primaryAnchor;
+    switch (Theme.of(context).platform) {
       case TargetPlatform.android:
-      case TargetPlatform.iOS:
       case TargetPlatform.fuchsia:
-        return TypstEditorSelectionControls();
+        // TextSelectionToolbar: 8px above the primary anchor, or
+        // kToolbarContentDistanceBelow under the secondary one.
+        return TextSelectionToolbarAnchors(
+          primaryAnchor: anchors.primaryAnchor - Offset(0, above),
+          secondaryAnchor:
+              secondary + Offset(0, math.max(0, below + gap - TextSelectionToolbar.kToolbarContentDistanceBelow)),
+        );
+      case TargetPlatform.iOS:
+        // CupertinoTextSelectionToolbar: a fixed distance off either anchor.
+        return TextSelectionToolbarAnchors(
+          primaryAnchor: anchors.primaryAnchor - Offset(0, above),
+          secondaryAnchor: secondary + Offset(0, below),
+        );
+      case TargetPlatform.linux:
+      case TargetPlatform.windows:
+      case TargetPlatform.macOS:
+        // A dropdown menu, top-left corner on its one anchor.
+        return TextSelectionToolbarAnchors(primaryAnchor: secondary + Offset(0, below + gap));
+    }
+  }
+
+  // Mirrors TextField's own `_shouldShowSelectionHandles`: handles only for
+  // a selection made by touch or stylus (the gesture detector builder
+  // records the pointer kind of the gesture behind it), never for keyboard
+  // edits, and never for a bare caret in a read-only editor.
+  bool _shouldShowSelectionHandles(SelectionChangedCause? cause) {
+    if (!_gestureDetectorBuilder.shouldShowSelectionToolbar || !_gestureDetectorBuilder.shouldShowSelectionHandles) {
+      return false;
+    }
+    if (cause == SelectionChangedCause.keyboard) return false;
+    if (widget.readOnly && widget.controller.selection.isCollapsed) return false;
+    if (cause == SelectionChangedCause.longPress || cause == SelectionChangedCause.stylusHandwriting) {
+      return true;
+    }
+    return widget.controller.text.isNotEmpty;
+  }
+
+  void _handleSelectionChanged(TextSelection selection, SelectionChangedCause? cause) {
+    final show = _shouldShowSelectionHandles(cause);
+    if (show != _showSelectionHandles.value) {
+      setState(() {
+        _showSelectionHandles.value = show;
+      });
     }
   }
 
@@ -1262,7 +1321,9 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
                   // Only while focused, matching TextField: otherwise the
                   // highlight visually persists after focus moves elsewhere.
                   selectionColor: focusNode.hasFocus ? selectionColor : null,
-                  selectionControls: widget.selectionControls ?? _defaultSelectionControls(),
+                  selectionControls: widget.selectionControls ?? _typstSelectionControls,
+                  showSelectionHandles: _showSelectionHandles.value,
+                  onSelectionChanged: _handleSelectionChanged,
                   magnifierConfiguration:
                       widget.magnifierConfiguration ?? typstEditorMagnifierConfiguration,
                   maxLines: null,

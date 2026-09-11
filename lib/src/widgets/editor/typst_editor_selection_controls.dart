@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
 /// A [TextMagnifierConfiguration] matching pdfrx's magnifier styling — see
@@ -88,13 +89,26 @@ class _TypstEditorMagnifier extends StatelessWidget {
 /// handle when nothing is selected.
 class TypstEditorSelectionControls extends TextSelectionControls
     with TextSelectionHandleControls {
-  TypstEditorSelectionControls({this.color});
+  TypstEditorSelectionControls({this.color, this.handlesVisible});
 
   /// Handle color. Defaults to the ambient [ColorScheme.primary].
   final Color? color;
 
-  static const _handleSize = 30.0;
-  static const _collapsedDiameter = 12.0;
+  /// Whether the handles are currently shown — the same value passed as
+  /// `EditableText.showSelectionHandles`.
+  ///
+  /// `EditableText` never removes hidden handles from the overlay, it only
+  /// fades them to zero opacity, and a faded-out flag still takes hits: a
+  /// click on the line right below the caret would land on the invisible
+  /// collapsed handle instead of the text. Given this, hidden handles
+  /// ignore pointers entirely.
+  final ValueListenable<bool>? handlesVisible;
+
+  /// Side of the square each triangle flag is drawn in.
+  static const handleSize = 30.0;
+
+  /// Diameter of the caret-only (collapsed selection) handle's circle.
+  static const collapsedDiameter = 12.0;
 
   // `EditableText` always feeds the *bottom*-of-line point as the anchor
   // for every handle type (see RenderEditable._paintHandleLayers /
@@ -103,7 +117,7 @@ class TypstEditorSelectionControls extends TextSelectionControls
   // a design choice — `getHandleSize` isn't even told which [type] it's
   // sizing, so it can't return a different size per type either. Every
   // handle's box is therefore made the full line height plus the flag
-  // (`textLineHeight + _handleSize` tall) uniformly, whether or not a given
+  // (`textLineHeight + handleSize` tall) uniformly, whether or not a given
   // type actually needs the extra room:
   //
   //  - left (start): the flag is drawn in the box's *top* 30px, with the
@@ -118,14 +132,14 @@ class TypstEditorSelectionControls extends TextSelectionControls
   //    box was made taller. The extra height below is unused, inert space
   //    (a larger hit target, not a visual change).
   @override
-  Size getHandleSize(double textLineHeight) => Size(_handleSize, textLineHeight + _handleSize);
+  Size getHandleSize(double textLineHeight) => Size(handleSize, textLineHeight + handleSize);
 
   @override
   Offset getHandleAnchor(TextSelectionHandleType type, double textLineHeight) {
     return switch (type) {
-      TextSelectionHandleType.left => Offset(_handleSize, textLineHeight + _handleSize),
+      TextSelectionHandleType.left => Offset(handleSize, textLineHeight + handleSize),
       TextSelectionHandleType.right => Offset.zero,
-      TextSelectionHandleType.collapsed => Offset(_handleSize / 2, 0),
+      TextSelectionHandleType.collapsed => Offset(handleSize / 2, 0),
     };
   }
 
@@ -139,26 +153,33 @@ class TypstEditorSelectionControls extends TextSelectionControls
     final handleColor = color ?? Theme.of(context).colorScheme.primary;
     final flag = switch (type) {
       TextSelectionHandleType.left => CustomPaint(
-        size: const Size(_handleSize, _handleSize),
+        size: const Size(handleSize, handleSize),
         painter: _TriangleHandlePainter(path: _startHandlePath(), color: handleColor),
       ),
       TextSelectionHandleType.right => CustomPaint(
-        size: const Size(_handleSize, _handleSize),
+        size: const Size(handleSize, handleSize),
         painter: _TriangleHandlePainter(path: _endHandlePath(), color: handleColor),
       ),
       TextSelectionHandleType.collapsed => CustomPaint(
-        size: const Size(_handleSize, _handleSize),
+        size: const Size(handleSize, handleSize),
         painter: _CollapsedHandlePainter(color: handleColor),
       ),
     };
-    return GestureDetector(
+    final handle = GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.translucent,
       child: SizedBox(
-        width: _handleSize,
-        height: textLineHeight + _handleSize,
+        width: handleSize,
+        height: textLineHeight + handleSize,
         child: Column(children: [flag, SizedBox(height: textLineHeight)]),
       ),
+    );
+    final visible = handlesVisible;
+    if (visible == null) return handle;
+    return ValueListenableBuilder<bool>(
+      valueListenable: visible,
+      builder: (context, isVisible, child) => IgnorePointer(ignoring: !isVisible, child: child),
+      child: handle,
     );
   }
 }
@@ -207,9 +228,9 @@ class _CollapsedHandlePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = Offset(
       size.width / 2,
-      TypstEditorSelectionControls._collapsedDiameter / 2,
+      TypstEditorSelectionControls.collapsedDiameter / 2,
     );
-    const radius = TypstEditorSelectionControls._collapsedDiameter / 2;
+    const radius = TypstEditorSelectionControls.collapsedDiameter / 2;
     canvas.drawShadow(
       Path()..addOval(Rect.fromCircle(center: center, radius: radius)),
       Colors.black,
