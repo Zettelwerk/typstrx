@@ -495,6 +495,154 @@ void main() {
       await session.dispose();
     });
 
+    testWidgets('tab cycles to the next snippet stop without losing focus, even after typing at the first', (
+      tester,
+    ) async {
+      // Two placeholders — the condition slot, then between the braces —
+      // mirrors the reported case (an if/else snippet): apply it, type a
+      // condition into the first stop, then Tab to the second.
+      const ifSnippet = rust.TypstCompletion(kind: rust.TypstCompletionKind.syntax(), label: 'if', apply: 'if\${} {\${}}');
+      final fake = FakeRustSession()
+        ..completionsToReturn = const [ifSnippet]
+        ..applyFromUtf16ToReturn = 1;
+      final session = TypstSession.forTesting(fake, const TypstSessionOptions());
+      await session.compile('#i');
+      final controller = TypstEditorController(session: session, text: '');
+      final focusNode = FocusNode();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                TypstCodeEditor(controller: controller, focusNode: focusNode),
+                // A second focusable widget: without one, Tab has nowhere
+                // else to go, so focusNode.hasFocus would stay true
+                // regardless of whether the key event was actually
+                // consumed — masking exactly the reported bug, where a
+                // *real* app has other controls (there, a toggle button)
+                // Tab lands on once Flutter's own focus traversal steals it.
+                TextButton(onPressed: () {}, child: const Text('elsewhere')),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      focusNode.requestFocus();
+      await tester.pump();
+
+      controller.value = const TextEditingValue(text: '#i', selection: TextSelection.collapsed(offset: 2));
+      await tester.pump(const Duration(milliseconds: 160));
+      expect(find.text('if'), findsOneWidget);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(controller.text, '#if {}');
+      expect(
+        controller.selection,
+        const TextSelection.collapsed(offset: 3),
+        reason: 'caret on the first stop, right after "if"',
+      );
+
+      // Type at the first stop, as filling in the condition would — this is
+      // exactly what makes a naive "match the remembered offset" design
+      // fail: the second stop must shift by however much was typed.
+      const typed = 'cond';
+      controller.value = TextEditingValue(
+        text: controller.text.replaceRange(3, 3, typed),
+        selection: const TextSelection.collapsed(offset: 3 + typed.length),
+      );
+      await tester.pump();
+      expect(controller.text, '#ifcond {}');
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+
+      expect(focusNode.hasFocus, isTrue, reason: 'Tab must not fall through to focus traversal here');
+      expect(
+        controller.selection,
+        const TextSelection.collapsed(offset: 9),
+        reason: 'second stop, between the curly braces, shifted by the 4 typed characters',
+      );
+
+      focusNode.dispose();
+      controller.dispose();
+      await session.dispose();
+    });
+
+    testWidgets(
+      'an implicit completions popup opening mid-snippet does not steal tab from advancing the snippet',
+      (tester) async {
+        // Typing at a stop is itself a text change with a collapsed
+        // selection — exactly what _onControllerChanged schedules a fresh
+        // *implicit* completions request for, same as any other typing.
+        // That request can resolve before Tab is pressed, opening a real
+        // (if incidental) popup. This reproduces that race: past the
+        // completions debounce below, unlike the previous test (which
+        // never advanced the fake clock far enough to give the debounce a
+        // chance to fire).
+        const ifSnippet = rust.TypstCompletion(kind: rust.TypstCompletionKind.syntax(), label: 'if', apply: 'if\${} {\${}}');
+        const trivialMatch = rust.TypstCompletion(kind: rust.TypstCompletionKind.syntax(), label: 'cond', apply: 'cond');
+        final fake = FakeRustSession()
+          ..completionsToReturn = const [ifSnippet]
+          ..applyFromUtf16ToReturn = 1;
+        final session = TypstSession.forTesting(fake, const TypstSessionOptions());
+        await session.compile('#i');
+        final controller = TypstEditorController(session: session, text: '');
+        final focusNode = FocusNode();
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Column(
+                children: [
+                  TypstCodeEditor(controller: controller, focusNode: focusNode),
+                  TextButton(onPressed: () {}, child: const Text('elsewhere')),
+                ],
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        focusNode.requestFocus();
+        await tester.pump();
+
+        controller.value = const TextEditingValue(text: '#i', selection: TextSelection.collapsed(offset: 2));
+        await tester.pump(const Duration(milliseconds: 160));
+        expect(find.text('if'), findsOneWidget);
+
+        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+        await tester.pump();
+        expect(controller.selection, const TextSelection.collapsed(offset: 3));
+
+        fake.completionsToReturn = const [trivialMatch];
+        fake.applyFromUtf16ToReturn = 3; // right after "if", where "cond" is being typed
+        const typed = 'cond';
+        controller.value = TextEditingValue(
+          text: controller.text.replaceRange(3, 3, typed),
+          selection: const TextSelection.collapsed(offset: 3 + typed.length),
+        );
+        await tester.pump(const Duration(milliseconds: 160));
+        expect(find.text('cond'), findsWidgets, reason: 'the implicit popup is genuinely open at this point');
+
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+
+        expect(focusNode.hasFocus, isTrue);
+        expect(
+          controller.selection,
+          const TextSelection.collapsed(offset: 9),
+          reason: 'tab must advance the snippet, not apply whatever completion incidentally popped up',
+        );
+        expect(controller.text, '#ifcond {}', reason: 'the incidental completion must not have been applied instead');
+
+        focusNode.dispose();
+        controller.dispose();
+        await session.dispose();
+      },
+    );
+
     testWidgets('a completion result that arrives after the buffer moved on is not shown', (tester) async {
       final fake = FakeRustSession()
         ..completionsToReturn = const [lorem]

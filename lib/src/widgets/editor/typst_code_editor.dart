@@ -32,23 +32,24 @@ Widget _defaultContextMenuBuilder(BuildContext context, EditableTextState editab
 /// Strips `${...}` snippet placeholders from a completion's [apply] text
 /// (Typst-ide's own snippet syntax — e.g. `lorem(${})`, `${lhs} + ${rhs}`,
 /// or occasionally a numbered `${2:2}` tab-stop), returning the plain text
-/// with every placeholder removed and the offset of the first one (or the
-/// end of the text, if there were none) for the caret to land on.
+/// with every placeholder removed and the offset each one was at, in the
+/// order they appeared — the caret lands on the first (or the end of the
+/// text, if there were none), and Tab cycles through the rest; see
+/// [_TypstCodeEditorState._snippetStops].
 ///
 /// The content between `${` and `}` (a hint name, or a tab-stop number and
-/// default) is discarded rather than kept, uniformly for both forms — v1
-/// doesn't cycle through multiple tab-stops, so keeping e.g. "lhs" as
-/// literal inserted text would be a visible half-measure, not a real
-/// feature.
-({String text, int caretOffset}) _stripSnippetPlaceholders(String apply) {
+/// default) is discarded rather than kept as selected placeholder text —
+/// out of scope here, since it needs its own caret/selection decision on
+/// top of the tab-stop cycling this enables.
+({String text, List<int> stopOffsets}) _stripSnippetPlaceholders(String apply) {
   final buffer = StringBuffer();
-  int? firstPlaceholderOffset;
+  final stopOffsets = <int>[];
   var i = 0;
   while (i < apply.length) {
     if (apply[i] == r'$' && i + 1 < apply.length && apply[i + 1] == '{') {
       final end = apply.indexOf('}', i + 2);
       if (end != -1) {
-        firstPlaceholderOffset ??= buffer.length;
+        stopOffsets.add(buffer.length);
         i = end + 1;
         continue;
       }
@@ -56,7 +57,25 @@ Widget _defaultContextMenuBuilder(BuildContext context, EditableTextState editab
     buffer.write(apply[i]);
     i++;
   }
-  return (text: buffer.toString(), caretOffset: firstPlaceholderOffset ?? buffer.length);
+  return (text: buffer.toString(), stopOffsets: stopOffsets);
+}
+
+/// The edit (as a common-prefix/common-suffix diff) that turned [oldText]
+/// into [newText] — used to keep [_TypstCodeEditorState._snippetStops] in
+/// sync as the user types inside an earlier stop, shifting later ones.
+({int start, int deletedLength, int insertedLength}) _diffTextEdit(String oldText, String newText) {
+  var prefix = 0;
+  final minLength = oldText.length < newText.length ? oldText.length : newText.length;
+  while (prefix < minLength && oldText.codeUnitAt(prefix) == newText.codeUnitAt(prefix)) {
+    prefix++;
+  }
+  var oldEnd = oldText.length;
+  var newEnd = newText.length;
+  while (oldEnd > prefix && newEnd > prefix && oldText.codeUnitAt(oldEnd - 1) == newText.codeUnitAt(newEnd - 1)) {
+    oldEnd--;
+    newEnd--;
+  }
+  return (start: prefix, deletedLength: oldEnd - prefix, insertedLength: newEnd - prefix);
 }
 
 /// A Typst source editor built directly on [EditableText], so future editor
@@ -187,6 +206,16 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
   // caller picked an item).
   bool _applyingCompletion = false;
 
+  // Absolute offsets (in the *current* text — see _onControllerChanged's
+  // diff-adjustment) of every stop in a just-applied snippet, in order —
+  // including the first, which is where the caret already sits right after
+  // applying. Only set (to more than one entry) when a completion's `apply`
+  // had more than one `${...}` placeholder; empty means no active tab-stop
+  // session, which is the overwhelmingly common case (most completions have
+  // at most one stop) and also what most non-Tab navigation lazily resets
+  // it to — see _tryAdvanceSnippetStop.
+  List<int> _snippetStops = const [];
+
   // --- hover tooltip ---
   OverlayEntry? _hoverOverlay;
   TypstTooltip? _hoverTooltip;
@@ -214,6 +243,7 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
       _completionDebounce?.cancel();
       _hideCompletionPopup();
       _cancelHover();
+      _snippetStops = const []; // offsets refer to the old controller's text
     }
     if (oldWidget.focusNode == null && widget.focusNode != null) {
       _internalFocusNode?.dispose();
@@ -259,6 +289,24 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
 
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
     if (event is KeyDownEvent || event is KeyRepeatEvent) {
+      // Checked ahead of the completions popup below: typing inside a
+      // snippet stop (filling in a condition, a name, ...) routinely
+      // retriggers an *implicit* completions popup of its own — offering,
+      // say, a trivial match for whatever was just typed. Without this
+      // ordering, that popup's own Tab-applies-the-highlighted-item
+      // handling would win by running first, silently no-op-applying it
+      // and (since it isn't itself a multi-stop snippet) wiping the
+      // snippet session — instead of advancing to the next stop, which is
+      // what Tab means while one is active regardless of what else is
+      // incidentally showing. Traversal resolves on key-down, so handling
+      // only that — not the matching key-up — is enough to keep focus from
+      // moving to the next widget.
+      if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.tab && _snippetStops.isNotEmpty) {
+        if (_tryAdvanceSnippetStop()) {
+          _hideCompletionPopup();
+          return KeyEventResult.handled;
+        }
+      }
       if (_completions.isNotEmpty) {
         switch (event.logicalKey) {
           case LogicalKeyboardKey.arrowDown:
@@ -287,12 +335,59 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     return _previousOnKeyEvent?.call(node, event) ?? KeyEventResult.ignored;
   }
 
+  // Finds the next stop *after the caret* rather than tracking "which stop
+  // index are we on": the user can type arbitrarily much at the current
+  // stop (the whole point of it) before pressing Tab again, so matching an
+  // exact remembered offset would already be stale by the time Tab lands —
+  // e.g. applying `if-else`'s `#if ${} { ${} } else { ${} }`, typing a
+  // condition at the first stop, then pressing Tab. A caret outside the
+  // whole span is treated the same as no session: the user navigated away
+  // by some other means (click, arrow keys), so Tab reverting to normal
+  // focus traversal is the least surprising thing to do.
+  bool _tryAdvanceSnippetStop() {
+    final selection = widget.controller.selection;
+    if (!selection.isCollapsed) {
+      _snippetStops = const [];
+      return false;
+    }
+    final cursor = selection.baseOffset;
+    if (cursor < _snippetStops.first || cursor > _snippetStops.last) {
+      _snippetStops = const [];
+      return false;
+    }
+    for (final stop in _snippetStops) {
+      if (stop > cursor) {
+        widget.controller.selection = TextSelection.collapsed(offset: stop);
+        return true;
+      }
+    }
+    // Already at (or past) the last stop — this Tab ends the session and
+    // falls through to normal behavior instead.
+    _snippetStops = const [];
+    return false;
+  }
+
   void _onControllerChanged() {
     final controller = widget.controller;
     final text = controller.text;
     final selection = controller.selection;
     final textChanged = text != _lastControllerText;
     final selectionChanged = selection != _lastControllerSelection;
+    if (textChanged && _snippetStops.isNotEmpty && _lastControllerText != null) {
+      // Keep remaining stops accurate as the user types inside an earlier
+      // one — e.g. typing a 3-character condition at the first `if` stop
+      // must push the body's `{ }` stop 3 characters later, or Tab would
+      // land short/long of it.
+      final edit = _diffTextEdit(_lastControllerText!, text);
+      final delta = edit.insertedLength - edit.deletedLength;
+      final editEnd = edit.start + edit.deletedLength;
+      _snippetStops = [
+        for (final stop in _snippetStops)
+          stop <= edit.start
+              ? stop
+              : (stop <= editEnd ? edit.start + edit.insertedLength : stop + delta),
+      ];
+    }
     _lastControllerText = text;
     _lastControllerSelection = selection;
     // Any real text or caret change means whatever was under the mouse
@@ -419,13 +514,17 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     final stripped = _stripSnippetPlaceholders(item.apply);
     final text = controller.text;
     final newText = text.replaceRange(_completionApplyFrom, cursor, stripped.text);
+    final firstStop = stripped.stopOffsets.isEmpty ? stripped.text.length : stripped.stopOffsets.first;
     _applyingCompletion = true;
     controller.value = TextEditingValue(
       text: newText,
-      selection: TextSelection.collapsed(offset: _completionApplyFrom + stripped.caretOffset),
+      selection: TextSelection.collapsed(offset: _completionApplyFrom + firstStop),
     );
     _applyingCompletion = false;
     _hideCompletionPopup();
+    _snippetStops = stripped.stopOffsets.length > 1
+        ? [for (final offset in stripped.stopOffsets) _completionApplyFrom + offset]
+        : const [];
   }
 
   void _showCompletionPopup() {
