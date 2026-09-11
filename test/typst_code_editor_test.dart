@@ -1277,6 +1277,150 @@ void main() {
     });
   });
 
+  group('toggle comment (Ctrl+/)', () {
+    Future<(TypstSession, TypstEditorController, FocusNode)> mount(
+      WidgetTester tester, {
+      required String text,
+      required TextSelection selection,
+    }) async {
+      final fake = FakeRustSession();
+      final session = TypstSession.forTesting(fake, const TypstSessionOptions());
+      final controller = TypstEditorController(session: session, text: text);
+      final focusNode = FocusNode();
+      await tester.pumpWidget(
+        MaterialApp(home: Scaffold(body: TypstCodeEditor(controller: controller, focusNode: focusNode))),
+      );
+      await tester.pump();
+      focusNode.requestFocus();
+      await tester.pump();
+      controller.selection = selection;
+      await tester.pump();
+      return (session, controller, focusNode);
+    }
+
+    Future<void> sendCtrlSlash(WidgetTester tester) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.slash);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    }
+
+    testWidgets('comments the current line for a collapsed caret', (tester) async {
+      final (session, controller, focusNode) = await mount(
+        tester,
+        text: 'foo',
+        selection: const TextSelection.collapsed(offset: 3),
+      );
+
+      await sendCtrlSlash(tester);
+      await tester.pump();
+
+      expect(controller.text, '// foo');
+      expect(controller.selection, const TextSelection.collapsed(offset: 6));
+
+      focusNode.dispose();
+      controller.dispose();
+      await session.dispose();
+    });
+
+    testWidgets('uncomments the current line, dropping exactly one trailing space', (tester) async {
+      final (session, controller, focusNode) = await mount(
+        tester,
+        text: '// foo',
+        selection: const TextSelection.collapsed(offset: 6),
+      );
+
+      await sendCtrlSlash(tester);
+      await tester.pump();
+
+      expect(controller.text, 'foo');
+      expect(controller.selection, const TextSelection.collapsed(offset: 3));
+
+      focusNode.dispose();
+      controller.dispose();
+      await session.dispose();
+    });
+
+    testWidgets('preserves indentation: the marker lands after leading whitespace', (tester) async {
+      final (session, controller, focusNode) = await mount(
+        tester,
+        text: '  foo',
+        selection: const TextSelection.collapsed(offset: 5),
+      );
+
+      await sendCtrlSlash(tester);
+      await tester.pump();
+
+      expect(controller.text, '  // foo');
+
+      await sendCtrlSlash(tester);
+      await tester.pump();
+
+      expect(controller.text, '  foo', reason: 'toggling twice is a no-op');
+
+      focusNode.dispose();
+      controller.dispose();
+      await session.dispose();
+    });
+
+    testWidgets('comments every line a multi-line selection touches, blank lines left alone', (tester) async {
+      final (session, controller, focusNode) = await mount(
+        tester,
+        text: 'one\n\ntwo',
+        selection: const TextSelection(baseOffset: 0, extentOffset: 8),
+      );
+
+      await sendCtrlSlash(tester);
+      await tester.pump();
+
+      expect(controller.text, '// one\n\n// two');
+      expect(
+        controller.selection,
+        const TextSelection(baseOffset: 0, extentOffset: 14),
+        reason: 'selection expands to cover the now-longer commented text',
+      );
+
+      focusNode.dispose();
+      controller.dispose();
+      await session.dispose();
+    });
+
+    testWidgets('uncomments every line when all non-blank touched lines are already commented', (tester) async {
+      final (session, controller, focusNode) = await mount(
+        tester,
+        text: '// one\n\n// two',
+        selection: const TextSelection(baseOffset: 0, extentOffset: 14),
+      );
+
+      await sendCtrlSlash(tester);
+      await tester.pump();
+
+      expect(controller.text, 'one\n\ntwo');
+
+      focusNode.dispose();
+      controller.dispose();
+      await session.dispose();
+    });
+
+    testWidgets('a mixed selection (only some lines commented) comments the rest instead of uncommenting', (
+      tester,
+    ) async {
+      final (session, controller, focusNode) = await mount(
+        tester,
+        text: '// one\ntwo',
+        selection: const TextSelection(baseOffset: 0, extentOffset: 10),
+      );
+
+      await sendCtrlSlash(tester);
+      await tester.pump();
+
+      expect(controller.text, '// // one\n// two', reason: 'not every line was commented, so this comments, not uncomments');
+
+      focusNode.dispose();
+      controller.dispose();
+      await session.dispose();
+    });
+  });
+
   group('hover tooltip', () {
     // Moves a real (non-touch) pointer to [target] without ever pressing a
     // button, so MouseTracker treats it as a hover rather than a drag —

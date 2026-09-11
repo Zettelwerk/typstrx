@@ -2,7 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart'
-    show AdaptiveTextSelectionToolbar, Material, desktopTextSelectionControls, materialTextSelectionControls;
+    show
+        AdaptiveTextSelectionToolbar,
+        Material,
+        TextMagnifier,
+        desktopTextSelectionControls,
+        materialTextSelectionControls;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -23,13 +28,6 @@ const _hoverDebounceDelay = Duration(milliseconds: 300);
 /// a fast typing burst into one request matters more here than for hover,
 /// which never compiles anything.
 const _completionDebounceDelay = Duration(milliseconds: 150);
-
-Widget _defaultContextMenuBuilder(BuildContext context, EditableTextState editableTextState) {
-  if (SystemContextMenu.isSupportedByField(editableTextState)) {
-    return SystemContextMenu.editableText(editableTextState: editableTextState);
-  }
-  return AdaptiveTextSelectionToolbar.editableText(editableTextState: editableTextState);
-}
 
 /// Strips `${...}` snippet placeholders from a completion's [apply] text
 /// (Typst-ide's own snippet syntax — e.g. `lorem(${})`, `${lhs} + ${rhs}`,
@@ -151,6 +149,24 @@ int _leadingWhitespaceLength(String text, int lineStart, int max) {
   return n;
 }
 
+/// The offset of the end of the line starting at [lineStart] — its `\n`'s
+/// own offset, or `text.length` for the last line.
+int _lineEndOffset(String text, int lineStart) {
+  final idx = text.indexOf('\n', lineStart);
+  return idx == -1 ? text.length : idx;
+}
+
+/// The offset of the first non-space/tab character on the line starting at
+/// [lineStart] — equal to that line's own end offset for a blank line.
+int _contentStartOffset(String text, int lineStart) {
+  final end = _lineEndOffset(text, lineStart);
+  var i = lineStart;
+  while (i < end && (text[i] == ' ' || text[i] == '\t')) {
+    i++;
+  }
+  return i;
+}
+
 /// Whether every character of [query] appears in [target], in order, though
 /// not necessarily contiguously (e.g. `setsty` in `set-style`). Both must
 /// already be case-normalized by the caller.
@@ -188,6 +204,7 @@ class TypstCodeEditor extends StatefulWidget {
     this.cursorColor,
     this.selectionColor,
     this.selectionControls,
+    this.magnifierConfiguration,
     this.autofocus = false,
     this.readOnly = false,
     this.expands = true,
@@ -195,7 +212,7 @@ class TypstCodeEditor extends StatefulWidget {
     this.scrollController,
     this.scrollPhysics,
     this.inputFormatters,
-    this.contextMenuBuilder = _defaultContextMenuBuilder,
+    this.contextMenuBuilder,
     this.completionsBuilder = defaultTypstCompletionsBuilder,
     this.detailsBuilder,
   });
@@ -226,6 +243,13 @@ class TypstCodeEditor extends StatefulWidget {
   /// every platform (Cupertino styling isn't wired up). Override for that.
   final TextSelectionControls? selectionControls;
 
+  /// The loupe shown while dragging a selection handle or the caret on a
+  /// touch device. Defaults to [TextMagnifier.adaptiveMagnifierConfiguration]
+  /// (Cupertino-style on iOS, Material-style on Android, none on desktop) —
+  /// [EditableText] itself defaults to no magnifier at all, so this is set
+  /// explicitly rather than left to inherit that.
+  final TextMagnifierConfiguration? magnifierConfiguration;
+
   final bool autofocus;
   final bool readOnly;
 
@@ -246,6 +270,10 @@ class TypstCodeEditor extends StatefulWidget {
   /// class for why a [TextInputFormatter] can't safely do this instead).
   final List<TextInputFormatter>? inputFormatters;
 
+  /// Builds the selection/context menu. Defaults to this widget's own
+  /// (which extends the platform-adaptive default with a "Toggle Comment"
+  /// entry — see [_TypstCodeEditorState._buildDefaultContextMenu]);
+  /// override to replace it entirely.
   final EditableTextContextMenuBuilder? contextMenuBuilder;
 
   /// Builds the completion popup's contents (everything inside its
@@ -473,6 +501,12 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
         }
         return KeyEventResult.handled;
       }
+      if (event is KeyDownEvent &&
+          event.logicalKey == LogicalKeyboardKey.slash &&
+          HardwareKeyboard.instance.isControlPressed) {
+        _toggleLineComments();
+        return KeyEventResult.handled;
+      }
     }
     return _previousOnKeyEvent?.call(node, event) ?? KeyEventResult.ignored;
   }
@@ -509,11 +543,25 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
       cursor = lineStart;
     }
     buffer.write(text.substring(cursor));
-    int mapOffset(int x) => x + unit.length * lineStarts.where((ls) => ls <= x).length;
+    // An insertion landing exactly at the selection's own start offset
+    // stays *outside* it (the selection still begins where it did,
+    // logically — right before whatever's now there); the same insertion
+    // point relative to the *end* offset is included (the selection grows
+    // to cover newly-inserted content up to and including its own edge).
+    // Only matters when a selection edge sits exactly at a line's start —
+    // this codebase's own indent test never hits that (its selection
+    // starts mid-line) but the exact same code toggling a comment on a
+    // selection starting at column 0 does, and got this wrong before the
+    // asymmetry was added here.
+    int mapOffset(int x, {required bool isEnd}) {
+      final touching = isEnd ? lineStarts.where((ls) => ls <= x) : lineStarts.where((ls) => ls < x);
+      return x + unit.length * touching.length;
+    }
+
     _applyingProgrammaticEdit = true;
     controller.value = TextEditingValue(
       text: buffer.toString(),
-      selection: TextSelection(baseOffset: mapOffset(start), extentOffset: mapOffset(end)),
+      selection: TextSelection(baseOffset: mapOffset(start, isEnd: false), extentOffset: mapOffset(end, isEnd: true)),
     );
     _applyingProgrammaticEdit = false;
   }
@@ -555,6 +603,90 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     controller.value = TextEditingValue(
       text: buffer.toString(),
       selection: TextSelection(baseOffset: mapOffset(start), extentOffset: mapOffset(end)),
+    );
+    _applyingProgrammaticEdit = false;
+  }
+
+  // Toggles Typst's `//` line comment on every line the selection touches
+  // (or just the current line, for a collapsed caret) — Ctrl+/, and the
+  // context menu's "Toggle Comment" entry. Whether this comments or
+  // uncomments is decided for the whole touched range at once: if every
+  // non-blank touched line is already commented, all of them (blank lines
+  // included, if they happen to carry a comment marker too) get
+  // uncommented; otherwise every line missing one gets commented — the
+  // same "all or nothing" rule most editors use, so toggling twice in a
+  // row is a no-op rather than commenting some lines and uncommenting
+  // others depending on their prior state.
+  //
+  // The marker is inserted/removed right after each line's own leading
+  // whitespace (not at column 0), so it lines up with that line's code
+  // instead of the selection's left edge.
+  void _toggleLineComments() {
+    final controller = widget.controller;
+    final text = controller.text;
+    final selection = controller.selection;
+    if (!selection.isValid) return;
+    final start = selection.start;
+    final end = selection.end;
+    final lineStarts = _linesTouchedBy(text, start, end);
+    final contentStarts = {for (final ls in lineStarts) ls: _contentStartOffset(text, ls)};
+    final nonBlank = lineStarts.where((ls) => contentStarts[ls]! < _lineEndOffset(text, ls)).toList();
+    final allCommented = nonBlank.isNotEmpty && nonBlank.every((ls) => text.startsWith('//', contentStarts[ls]!));
+
+    const marker = '// ';
+    final buffer = StringBuffer();
+    var cursor = 0;
+    // How many characters were removed (uncommenting) at each line's
+    // content-start position — 0 for a line the toggle doesn't touch (e.g.
+    // a blank line while commenting, or an already-uncommented line while
+    // uncommenting a mixed selection is not possible since allCommented
+    // requires every non-blank line to already match).
+    final removedAt = <int, int>{};
+    for (final ls in lineStarts) {
+      final cs = contentStarts[ls]!;
+      buffer.write(text.substring(cursor, cs));
+      if (allCommented) {
+        if (text.startsWith('//', cs)) {
+          final removeLen = (cs + 2 < text.length && text[cs + 2] == ' ') ? 3 : 2;
+          removedAt[ls] = removeLen;
+          cursor = cs + removeLen;
+        } else {
+          cursor = cs;
+        }
+      } else if (cs < _lineEndOffset(text, ls)) {
+        buffer.write(marker);
+        cursor = cs;
+      } else {
+        cursor = cs; // blank line: leave it alone rather than adding a bare "// "
+      }
+    }
+    buffer.write(text.substring(cursor));
+
+    // See _indentSelection's mapOffset for why inserting the marker exactly
+    // at a selection edge is biased differently for that edge's start vs.
+    // end (only relevant when commenting, not uncommenting — the clamp in
+    // the removal branch below is already symmetric, since "0 characters
+    // removed before this exact point" is correct whichever edge it is).
+    int mapOffset(int x, {required bool isEnd}) {
+      var delta = 0;
+      for (final ls in lineStarts) {
+        final cs = contentStarts[ls]!;
+        if (allCommented) {
+          if (cs > x) break;
+          final removed = removedAt[ls];
+          if (removed != null) delta -= (x - cs).clamp(0, removed);
+        } else {
+          if (isEnd ? cs > x : cs >= x) break;
+          if (cs < _lineEndOffset(text, ls)) delta += marker.length;
+        }
+      }
+      return x + delta;
+    }
+
+    _applyingProgrammaticEdit = true;
+    controller.value = TextEditingValue(
+      text: buffer.toString(),
+      selection: TextSelection(baseOffset: mapOffset(start, isEnd: false), extentOffset: mapOffset(end, isEnd: true)),
     );
     _applyingProgrammaticEdit = false;
   }
@@ -996,6 +1128,33 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     return available < 0 ? 0 : available;
   }
 
+  /// The selection/context menu shown by default — the platform-adaptive
+  /// [AdaptiveTextSelectionToolbar], with a "Toggle Comment" entry prepended
+  /// (see [_toggleLineComments]).
+  ///
+  /// [SystemContextMenu] (the OS-drawn menu, used on platforms that support
+  /// it) is opaque and can't carry custom entries at all — falls back to
+  /// the plain, unmodified system menu there, same as before this existed.
+  Widget _buildDefaultContextMenu(BuildContext context, EditableTextState editableTextState) {
+    if (SystemContextMenu.isSupportedByField(editableTextState)) {
+      return SystemContextMenu.editableText(editableTextState: editableTextState);
+    }
+    final buttonItems = [
+      ContextMenuButtonItem(
+        onPressed: () {
+          _toggleLineComments();
+          editableTextState.hideToolbar();
+        },
+        label: 'Toggle Comment',
+      ),
+      ...editableTextState.contextMenuButtonItems,
+    ];
+    return AdaptiveTextSelectionToolbar.buttonItems(
+      anchors: editableTextState.contextMenuAnchors,
+      buttonItems: buttonItems,
+    );
+  }
+
   TextSelectionControls _defaultSelectionControls() {
     switch (defaultTargetPlatform) {
       case TargetPlatform.linux:
@@ -1056,6 +1215,8 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
                   // highlight visually persists after focus moves elsewhere.
                   selectionColor: focusNode.hasFocus ? selectionColor : null,
                   selectionControls: widget.selectionControls ?? _defaultSelectionControls(),
+                  magnifierConfiguration:
+                      widget.magnifierConfiguration ?? TextMagnifier.adaptiveMagnifierConfiguration,
                   maxLines: null,
                   expands: widget.expands,
                   readOnly: widget.readOnly,
@@ -1071,7 +1232,7 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
                   scrollController: widget.scrollController,
                   scrollPhysics: widget.scrollPhysics,
                   inputFormatters: widget.inputFormatters,
-                  contextMenuBuilder: widget.contextMenuBuilder,
+                  contextMenuBuilder: widget.contextMenuBuilder ?? _buildDefaultContextMenu,
                   // RenderEditable must not also handle pointers itself:
                   // the gesture detector above already does, via
                   // renderEditable's own selection APIs — double-handling
