@@ -691,6 +691,10 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     );
   }
 
+  // Margin kept clear between the popup and the window edge it's closest
+  // to, in both the flip decision and the height clamp below.
+  static const _popupEdgeMargin = 8.0;
+
   Widget _buildCompletionOverlay(BuildContext context) {
     final renderEditable = _editableTextKey.currentState?.renderEditable;
     final selection = widget.controller.selection;
@@ -698,13 +702,13 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
       return const SizedBox.shrink();
     }
     final caretRect = renderEditable.getLocalRectForCaret(TextPosition(offset: selection.baseOffset));
-    final anchor = renderEditable.localToGlobal(caretRect.bottomLeft);
+    final caretBottom = renderEditable.localToGlobal(caretRect.bottomLeft);
+    final caretTop = renderEditable.localToGlobal(caretRect.topLeft);
     final detailsBuilder = widget.detailsBuilder;
     final details = _details;
-    return Positioned(
-      left: anchor.dx,
-      top: anchor.dy + 4,
-      child: TextFieldTapRegion(
+    final content = TextFieldTapRegion(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: _popupMaxHeight(context, caretTop.dy, caretBottom.dy)),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -718,6 +722,35 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
         ),
       ),
     );
+    // Opens downward (the common case) unless there's genuinely more room
+    // above the caret than below it — favoring below on a tie, since that's
+    // where a user's eyes already are while typing. Without this, a popup
+    // near the bottom of a short window renders past the window's edge and
+    // gets hard-clipped by the Overlay's own Stack, cropping whichever rows
+    // (or the details panel entirely) didn't fit — not scrolled, just gone.
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final spaceBelow = screenHeight - caretBottom.dy - _popupEdgeMargin;
+    final spaceAbove = caretTop.dy - _popupEdgeMargin;
+    final opensBelow = spaceBelow >= spaceAbove;
+    return Positioned(
+      left: caretBottom.dx,
+      top: opensBelow ? caretBottom.dy + 4 : null,
+      bottom: opensBelow ? null : screenHeight - caretTop.dy + 4,
+      child: content,
+    );
+  }
+
+  // The most vertical space either above or below the caret can offer,
+  // clamped so a popup taller than the window still fits: content past this
+  // scrolls internally (both the default completions list and details
+  // builder already do; a custom builder that doesn't will just render
+  // however tall it wants, the same as before this existed).
+  double _popupMaxHeight(BuildContext context, double caretTopY, double caretBottomY) {
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final spaceBelow = screenHeight - caretBottomY - _popupEdgeMargin;
+    final spaceAbove = caretTopY - _popupEdgeMargin;
+    final available = spaceBelow >= spaceAbove ? spaceBelow : spaceAbove;
+    return available < 0 ? 0 : available;
   }
 
   TextSelectionControls _defaultSelectionControls() {

@@ -1023,6 +1023,20 @@ impl SseDecode for Vec<crate::api::types::TypstFoldingRange> {
     }
 }
 
+impl SseDecode for Vec<crate::api::types::TypstSignatureToken> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::types::TypstSignatureToken>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Option<String> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1039,6 +1053,17 @@ impl SseDecode for Option<f64> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<f64>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::api::types::HighlightNode> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::types::HighlightNode>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -1293,14 +1318,43 @@ impl SseDecode for crate::api::types::TypstFunctionInfo {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_name = <String>::sse_decode(deserializer);
-        let mut var_signature = <String>::sse_decode(deserializer);
+        let mut var_signature =
+            <Vec<crate::api::types::TypstSignatureToken>>::sse_decode(deserializer);
         let mut var_description = <Option<String>>::sse_decode(deserializer);
         let mut var_example = <Option<String>>::sse_decode(deserializer);
+        let mut var_exampleHighlight =
+            <Option<crate::api::types::HighlightNode>>::sse_decode(deserializer);
         return crate::api::types::TypstFunctionInfo {
             name: var_name,
             signature: var_signature,
             description: var_description,
             example: var_example,
+            example_highlight: var_exampleHighlight,
+        };
+    }
+}
+
+impl SseDecode for crate::api::types::TypstSignatureToken {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_text = <String>::sse_decode(deserializer);
+        let mut var_kind = <crate::api::types::TypstSignatureTokenKind>::sse_decode(deserializer);
+        return crate::api::types::TypstSignatureToken {
+            text: var_text,
+            kind: var_kind,
+        };
+    }
+}
+
+impl SseDecode for crate::api::types::TypstSignatureTokenKind {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::types::TypstSignatureTokenKind::Name,
+            1 => crate::api::types::TypstSignatureTokenKind::Param,
+            2 => crate::api::types::TypstSignatureTokenKind::Punctuation,
+            _ => unreachable!("Invalid variant for TypstSignatureTokenKind: {}", inner),
         };
     }
 }
@@ -1948,6 +2002,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::types::TypstFunctionInfo {
             self.signature.into_into_dart().into_dart(),
             self.description.into_into_dart().into_dart(),
             self.example.into_into_dart().into_dart(),
+            self.example_highlight.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -1960,6 +2015,49 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::types::TypstFunctionInfo>
     for crate::api::types::TypstFunctionInfo
 {
     fn into_into_dart(self) -> crate::api::types::TypstFunctionInfo {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::types::TypstSignatureToken {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.text.into_into_dart().into_dart(),
+            self.kind.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::types::TypstSignatureToken
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::types::TypstSignatureToken>
+    for crate::api::types::TypstSignatureToken
+{
+    fn into_into_dart(self) -> crate::api::types::TypstSignatureToken {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::types::TypstSignatureTokenKind {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Name => 0.into_dart(),
+            Self::Param => 1.into_dart(),
+            Self::Punctuation => 2.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::types::TypstSignatureTokenKind
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::types::TypstSignatureTokenKind>
+    for crate::api::types::TypstSignatureTokenKind
+{
+    fn into_into_dart(self) -> crate::api::types::TypstSignatureTokenKind {
         self
     }
 }
@@ -2277,6 +2375,16 @@ impl SseEncode for Vec<crate::api::types::TypstFoldingRange> {
     }
 }
 
+impl SseEncode for Vec<crate::api::types::TypstSignatureToken> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::types::TypstSignatureToken>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Option<String> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -2293,6 +2401,16 @@ impl SseEncode for Option<f64> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <f64>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::api::types::HighlightNode> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::types::HighlightNode>::sse_encode(value, serializer);
         }
     }
 }
@@ -2489,9 +2607,35 @@ impl SseEncode for crate::api::types::TypstFunctionInfo {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.name, serializer);
-        <String>::sse_encode(self.signature, serializer);
+        <Vec<crate::api::types::TypstSignatureToken>>::sse_encode(self.signature, serializer);
         <Option<String>>::sse_encode(self.description, serializer);
         <Option<String>>::sse_encode(self.example, serializer);
+        <Option<crate::api::types::HighlightNode>>::sse_encode(self.example_highlight, serializer);
+    }
+}
+
+impl SseEncode for crate::api::types::TypstSignatureToken {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.text, serializer);
+        <crate::api::types::TypstSignatureTokenKind>::sse_encode(self.kind, serializer);
+    }
+}
+
+impl SseEncode for crate::api::types::TypstSignatureTokenKind {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::types::TypstSignatureTokenKind::Name => 0,
+                crate::api::types::TypstSignatureTokenKind::Param => 1,
+                crate::api::types::TypstSignatureTokenKind::Punctuation => 2,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
     }
 }
 

@@ -22,7 +22,10 @@ use typst_layout::PagedDocument;
 use typst_syntax::ast::AstNode;
 use typst_syntax::{LinkedNode, Side, Source, ast};
 
-use crate::api::types::{TypstCompletion, TypstCompletionKind, TypstFunctionInfo, TypstTooltip};
+use crate::api::types::{
+    TypstCompletion, TypstCompletionKind, TypstFunctionInfo, TypstSignatureToken,
+    TypstSignatureTokenKind, TypstTooltip,
+};
 
 /// Computes completions at `cursor_utf16` in `source` (the World's own
 /// registered source — see the module docs for why). Returns the "apply
@@ -157,29 +160,45 @@ fn resolve_global_func(world: &dyn IdeWorld, label: &str) -> Option<Func> {
 
 fn describe_func(func: &Func) -> TypstFunctionInfo {
     let name = func.name().unwrap_or("").to_string();
-    let signature = format!("{name}({})", signature_params(func).join(", "));
+    let signature = signature_tokens(&name, func);
     let docs = func.docs();
     let example = docs.and_then(extract_example);
+    let example_highlight = example.as_deref().map(crate::highlight::highlight_source);
     let description = docs
         .map(|d| d.split("= Example").next().unwrap_or(d).trim().to_string())
         .filter(|d| !d.is_empty());
-    TypstFunctionInfo { name, signature, description, example }
+    TypstFunctionInfo { name, signature, description, example, example_highlight }
 }
 
-fn signature_params(func: &Func) -> Vec<String> {
-    func.params()
-        .filter_map(|param| {
-            let name = param.name()?;
-            Some(if param.variadic() {
-                format!("{name}: ..")
-            } else if param.named() {
-                let optional = if param.required() { "" } else { "?" };
-                format!("{name}{optional}:")
-            } else {
-                name.to_string()
-            })
-        })
-        .collect()
+/// Builds a signature like `rect(width?:, height?:, fill?:, body)`, split
+/// into name/param/punctuation pieces so a caller can color them
+/// differently — see [`TypstSignatureToken`].
+fn signature_tokens(name: &str, func: &Func) -> Vec<TypstSignatureToken> {
+    fn text(text: impl Into<String>, kind: TypstSignatureTokenKind) -> TypstSignatureToken {
+        TypstSignatureToken { text: text.into(), kind }
+    }
+    use TypstSignatureTokenKind::{Name, Param, Punctuation};
+
+    let mut tokens = vec![text(name, Name), text("(", Punctuation)];
+    let mut first = true;
+    for param in func.params() {
+        let Some(param_name) = param.name() else { continue };
+        if !first {
+            tokens.push(text(", ", Punctuation));
+        }
+        first = false;
+        tokens.push(text(param_name, Param));
+        if param.variadic() {
+            tokens.push(text(": ..", Punctuation));
+        } else if param.named() {
+            if !param.required() {
+                tokens.push(text("?", Punctuation));
+            }
+            tokens.push(text(":", Punctuation));
+        }
+    }
+    tokens.push(text(")", Punctuation));
+    tokens
 }
 
 /// Extracts the code inside a docstring's first ` ```example ` fenced block,
@@ -338,8 +357,13 @@ mod tests {
         let source = world.source(world.main()).unwrap();
         let info = function_info(&world, &source, 3, "rect").expect("expected rect to resolve");
         assert_eq!(info.name, "rect");
-        assert!(info.signature.starts_with("rect("), "{}", info.signature);
-        assert!(info.signature.contains("width"), "{}", info.signature);
+        let signature_text: String = info.signature.iter().map(|t| t.text.as_str()).collect();
+        assert!(signature_text.starts_with("rect("), "{signature_text}");
+        assert!(signature_text.contains("width"), "{signature_text}");
+        assert!(
+            info.signature.iter().any(|t| t.text == "width" && matches!(t.kind, TypstSignatureTokenKind::Param)),
+            "expected a Param-kind token for width, got {signature_text}"
+        );
         let description = info.description.expect("expected a description");
         assert!(
             !description.contains("```example"),
@@ -347,6 +371,8 @@ mod tests {
         );
         let example = info.example.expect("expected an extracted example");
         assert!(example.contains("rect("), "{example}");
+        let example_highlight = info.example_highlight.expect("expected an example highlight tree");
+        assert!(!example_highlight.children.is_empty(), "expected the example to actually be parsed");
     }
 
     #[test]

@@ -49,3 +49,19 @@ class TypstSyntaxTheme {
     TypstHighlightTag.interpolated: const TextStyle(color: Color(0xFFE36209)),
   });
 }
+
+/// Builds a [TextSpan] for [node] purely from [theme] — no controller, no
+/// diagnostics, no offset tracking. For read-only, static syntax-colored
+/// code (e.g. an example snippet in a details panel); [TypstEditorController]
+/// has its own richer version of this same recursion for the live editor,
+/// which additionally lines diagnostics' wavy underlines up against it.
+TextSpan typstHighlightedSpan(TypstHighlightNode node, TypstSyntaxTheme theme, {TextStyle? style}) {
+  final tagStyle = node.tag != null ? theme.styleFor(node.tag!) : null;
+  if (node.children.isEmpty) {
+    return TextSpan(text: node.text, style: tagStyle ?? style);
+  }
+  return TextSpan(
+    style: tagStyle ?? style,
+    children: [for (final child in node.children) typstHighlightedSpan(child, theme)],
+  );
+}

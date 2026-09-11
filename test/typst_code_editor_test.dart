@@ -126,6 +126,13 @@ class FakeRustSession implements rust.TypstSession {
   bool get isDisposed => _disposed;
 }
 
+/// Wraps [text] as a single-token signature — tests here only care about
+/// the joined display text, not per-token coloring (that's exercised at the
+/// Rust/`describe_func` level, not here).
+List<rust.TypstSignatureToken> _sig(String text) {
+  return [rust.TypstSignatureToken(text: text, kind: rust.TypstSignatureTokenKind.name)];
+}
+
 void main() {
 
 
@@ -355,6 +362,58 @@ void main() {
 
       expect(find.text('Alpha description'), findsNothing, reason: 'selection moved away from alpha');
       expect(find.text('Beta description'), findsOneWidget, reason: 'selection moved to beta');
+
+      focusNode.dispose();
+      controller.dispose();
+      await session.dispose();
+    });
+
+    testWidgets('the popup and details panel stay within a short window instead of being cropped', (tester) async {
+      // A window this short can't fit the popup's own un-clamped preferred
+      // height (200) below a caret sitting near the top of it — pre-fix,
+      // Positioned(top: anchor.dy + 4) let it render past the window's
+      // bottom edge, and the Overlay's own Stack hard-clipped whatever
+      // didn't fit, cropping rows (and the details panel) rather than
+      // scrolling them into a shorter, still fully visible popup.
+      tester.view.physicalSize = const Size(500, 120);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final items = [
+        for (var i = 0; i < 8; i++)
+          rust.TypstCompletion(
+            kind: rust.TypstCompletionKind.func(),
+            label: 'item$i',
+            apply: 'item$i',
+            detail: 'a reasonably long description for item$i',
+          ),
+      ];
+      final focusNode = FocusNode();
+      final fake = FakeRustSession()..functionInfoToReturn = rust.TypstFunctionInfo(name: 'item0', signature: _sig('item0(x)'));
+      final (_, session, controller) = await triggerCompletions(
+        tester,
+        text: '#',
+        cursor: 1,
+        completions: items,
+        focusNode: focusNode,
+        fake: fake,
+        detailsBuilder: (context, info) => Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
+      );
+      await tester.pump(const Duration(milliseconds: 1)); // let the details fetch land
+
+      final windowBottom = 120.0;
+      final popupRect = tester.getRect(find.byType(Scrollbar));
+      expect(
+        popupRect.bottom,
+        lessThanOrEqualTo(windowBottom + 0.5),
+        reason: 'the completions list must fit (and scroll internally), not render past the window',
+      );
+      final detailsRect = tester.getRect(find.text('DETAILS:item0(x)'));
+      expect(
+        detailsRect.bottom,
+        lessThanOrEqualTo(windowBottom + 0.5),
+        reason: 'the details panel must also fit within the window',
+      );
 
       focusNode.dispose();
       controller.dispose();
@@ -763,7 +822,7 @@ void main() {
 
     testWidgets('a function item is fetched and its details shown via detailsBuilder', (tester) async {
       final fake = FakeRustSession()
-        ..functionInfoToReturn = const rust.TypstFunctionInfo(name: 'lorem', signature: 'lorem(count)');
+        ..functionInfoToReturn = rust.TypstFunctionInfo(name: 'lorem', signature: _sig('lorem(count)'));
       final (_, session, controller) = await triggerCompletions(
         tester,
         text: '#l',
@@ -771,7 +830,7 @@ void main() {
         completions: const [lorem],
         applyFromUtf16: 2,
         fake: fake,
-        detailsBuilder: (context, info) => Text('DETAILS:${info.signature}'),
+        detailsBuilder: (context, info) => Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
       );
 
       expect(fake.functionInfoCalls, ['lorem']);
@@ -783,7 +842,7 @@ void main() {
 
     testWidgets('a non-function completion is never fetched and shows no details panel', (tester) async {
       final fake = FakeRustSession()
-        ..functionInfoToReturn = const rust.TypstFunctionInfo(name: 'lorem', signature: 'lorem(count)');
+        ..functionInfoToReturn = rust.TypstFunctionInfo(name: 'lorem', signature: _sig('lorem(count)'));
       final (_, session, controller) = await triggerCompletions(
         tester,
         text: '#le',
@@ -791,7 +850,7 @@ void main() {
         completions: const [letBinding],
         applyFromUtf16: 3,
         fake: fake,
-        detailsBuilder: (context, info) => Text('DETAILS:${info.signature}'),
+        detailsBuilder: (context, info) => Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
       );
 
       expect(fake.functionInfoCalls, isEmpty);
@@ -803,7 +862,7 @@ void main() {
 
     testWidgets('with no detailsBuilder, nothing is ever fetched', (tester) async {
       final fake = FakeRustSession()
-        ..functionInfoToReturn = const rust.TypstFunctionInfo(name: 'lorem', signature: 'lorem(count)');
+        ..functionInfoToReturn = rust.TypstFunctionInfo(name: 'lorem', signature: _sig('lorem(count)'));
       final (_, session, controller) = await triggerCompletions(
         tester,
         text: '#l',
@@ -828,7 +887,7 @@ void main() {
         completions: const [lorem],
         applyFromUtf16: 2,
         fake: fake,
-        detailsBuilder: (context, info) => Text('DETAILS:${info.signature}'),
+        detailsBuilder: (context, info) => Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
       );
 
       expect(find.text('lorem'), findsOneWidget, reason: 'the completion list itself must not depend on this');
@@ -842,8 +901,8 @@ void main() {
       tester,
     ) async {
       final fake = FakeRustSession()
-        ..functionInfoByLabel['lorem'] = const rust.TypstFunctionInfo(name: 'lorem', signature: 'lorem(count)')
-        ..functionInfoByLabel['rect'] = const rust.TypstFunctionInfo(name: 'rect', signature: 'rect(width)')
+        ..functionInfoByLabel['lorem'] = rust.TypstFunctionInfo(name: 'lorem', signature: _sig('lorem(count)'))
+        ..functionInfoByLabel['rect'] = rust.TypstFunctionInfo(name: 'rect', signature: _sig('rect(width)'))
         ..functionInfoGate = Completer<void>();
       final focusNode = FocusNode();
       final (_, session, controller) = await triggerCompletions(
@@ -853,7 +912,7 @@ void main() {
         completions: const [lorem, rectFunc],
         focusNode: focusNode,
         fake: fake,
-        detailsBuilder: (context, info) => Text('DETAILS:${info.signature}'),
+        detailsBuilder: (context, info) => Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
       );
       // The initial-selection fetch for 'lorem' is in flight, gated.
       expect(fake.functionInfoCalls, ['lorem']);
@@ -883,7 +942,7 @@ void main() {
 
     testWidgets('dismissing the popup mid-fetch does not reinsert it once the fetch resolves', (tester) async {
       final fake = FakeRustSession()
-        ..functionInfoToReturn = const rust.TypstFunctionInfo(name: 'lorem', signature: 'lorem(count)')
+        ..functionInfoToReturn = rust.TypstFunctionInfo(name: 'lorem', signature: _sig('lorem(count)'))
         ..functionInfoGate = Completer<void>();
       final focusNode = FocusNode();
       final (_, session, controller) = await triggerCompletions(
@@ -894,7 +953,7 @@ void main() {
         applyFromUtf16: 2,
         focusNode: focusNode,
         fake: fake,
-        detailsBuilder: (context, info) => Text('DETAILS:${info.signature}'),
+        detailsBuilder: (context, info) => Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
       );
       expect(find.text('lorem'), findsOneWidget);
 

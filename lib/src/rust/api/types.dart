@@ -601,10 +601,11 @@ class TypstFunctionInfo {
   /// The function's name, e.g. `"rect"`.
   final String name;
 
-  /// A synthesized call signature, e.g. `"rect(width:, height:, fill:,
-  /// content)"`. Cheap to compute and always present when a function
-  /// resolves, unlike `description`/`example`.
-  final String signature;
+  /// A synthesized call signature (e.g. `rect(width?:, height?:, fill?:,
+  /// body)`), broken into styleable pieces — see [`TypstSignatureToken`].
+  /// Cheap to compute and always present when a function resolves, unlike
+  /// `description`/`example`.
+  final List<TypstSignatureToken> signature;
 
   /// The function's documentation, as Markdown, with the `example`
   /// section (see `example`) removed. Absent for functions Typst doesn't
@@ -615,11 +616,17 @@ class TypstFunctionInfo {
   /// documentation's ` ```example ` fenced block, when it has one.
   final String? example;
 
+  /// A syntax-highlighting tree for `example` (see [`HighlightNode`]),
+  /// computed the same way [`crate::api::session::TypstSession::highlight`]
+  /// would for it — present exactly when `example` is.
+  final HighlightNode? exampleHighlight;
+
   const TypstFunctionInfo({
     required this.name,
     required this.signature,
     this.description,
     this.example,
+    this.exampleHighlight,
   });
 
   @override
@@ -627,7 +634,8 @@ class TypstFunctionInfo {
       name.hashCode ^
       signature.hashCode ^
       description.hashCode ^
-      example.hashCode;
+      example.hashCode ^
+      exampleHighlight.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -637,7 +645,41 @@ class TypstFunctionInfo {
           name == other.name &&
           signature == other.signature &&
           description == other.description &&
-          example == other.example;
+          example == other.example &&
+          exampleHighlight == other.exampleHighlight;
+}
+
+/// One piece of a [`TypstFunctionInfo::signature`], carrying enough
+/// structure for a caller to color a function's name differently from its
+/// parameter names and punctuation, without having to parse the signature
+/// back out of a flat string.
+class TypstSignatureToken {
+  final String text;
+  final TypstSignatureTokenKind kind;
+
+  const TypstSignatureToken({required this.text, required this.kind});
+
+  @override
+  int get hashCode => text.hashCode ^ kind.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TypstSignatureToken &&
+          runtimeType == other.runtimeType &&
+          text == other.text &&
+          kind == other.kind;
+}
+
+enum TypstSignatureTokenKind {
+  /// The function's own name.
+  name,
+
+  /// A parameter's name.
+  param,
+
+  /// Parens, commas, colons, `?`, `..` — everything that isn't a name.
+  punctuation,
 }
 
 @freezed

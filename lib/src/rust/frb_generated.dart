@@ -734,6 +734,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  HighlightNode dco_decode_box_autoadd_highlight_node(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_highlight_node(raw);
+  }
+
+  @protected
   HighlightTag dco_decode_box_autoadd_highlight_tag(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_highlight_tag(raw);
@@ -934,6 +940,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<TypstSignatureToken> dco_decode_list_typst_signature_token(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_typst_signature_token)
+        .toList();
+  }
+
+  @protected
   String? dco_decode_opt_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_String(raw);
@@ -943,6 +957,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   double? dco_decode_opt_box_autoadd_f_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_f_64(raw);
+  }
+
+  @protected
+  HighlightNode? dco_decode_opt_box_autoadd_highlight_node(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_highlight_node(raw);
   }
 
   @protected
@@ -1132,14 +1152,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TypstFunctionInfo dco_decode_typst_function_info(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return TypstFunctionInfo(
       name: dco_decode_String(arr[0]),
-      signature: dco_decode_String(arr[1]),
+      signature: dco_decode_list_typst_signature_token(arr[1]),
       description: dco_decode_opt_String(arr[2]),
       example: dco_decode_opt_String(arr[3]),
+      exampleHighlight: dco_decode_opt_box_autoadd_highlight_node(arr[4]),
     );
+  }
+
+  @protected
+  TypstSignatureToken dco_decode_typst_signature_token(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return TypstSignatureToken(
+      text: dco_decode_String(arr[0]),
+      kind: dco_decode_typst_signature_token_kind(arr[1]),
+    );
+  }
+
+  @protected
+  TypstSignatureTokenKind dco_decode_typst_signature_token_kind(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return TypstSignatureTokenKind.values[raw as int];
   }
 
   @protected
@@ -1257,6 +1296,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   double sse_decode_box_autoadd_f_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_f_64(deserializer));
+  }
+
+  @protected
+  HighlightNode sse_decode_box_autoadd_highlight_node(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_highlight_node(deserializer));
   }
 
   @protected
@@ -1532,6 +1579,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<TypstSignatureToken> sse_decode_list_typst_signature_token(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <TypstSignatureToken>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_typst_signature_token(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -1548,6 +1609,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_f_64(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  HighlightNode? sse_decode_opt_box_autoadd_highlight_node(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_highlight_node(deserializer));
     } else {
       return null;
     }
@@ -1776,15 +1850,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_name = sse_decode_String(deserializer);
-    var var_signature = sse_decode_String(deserializer);
+    var var_signature = sse_decode_list_typst_signature_token(deserializer);
     var var_description = sse_decode_opt_String(deserializer);
     var var_example = sse_decode_opt_String(deserializer);
+    var var_exampleHighlight = sse_decode_opt_box_autoadd_highlight_node(
+      deserializer,
+    );
     return TypstFunctionInfo(
       name: var_name,
       signature: var_signature,
       description: var_description,
       example: var_example,
+      exampleHighlight: var_exampleHighlight,
     );
+  }
+
+  @protected
+  TypstSignatureToken sse_decode_typst_signature_token(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_text = sse_decode_String(deserializer);
+    var var_kind = sse_decode_typst_signature_token_kind(deserializer);
+    return TypstSignatureToken(text: var_text, kind: var_kind);
+  }
+
+  @protected
+  TypstSignatureTokenKind sse_decode_typst_signature_token_kind(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return TypstSignatureTokenKind.values[inner];
   }
 
   @protected
@@ -1912,6 +2009,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_box_autoadd_f_64(double self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_f_64(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_highlight_node(
+    HighlightNode self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_highlight_node(self, serializer);
   }
 
   @protected
@@ -2164,6 +2270,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_typst_signature_token(
+    List<TypstSignatureToken> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_typst_signature_token(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -2180,6 +2298,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_f_64(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_highlight_node(
+    HighlightNode? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_highlight_node(self, serializer);
     }
   }
 
@@ -2374,9 +2505,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.name, serializer);
-    sse_encode_String(self.signature, serializer);
+    sse_encode_list_typst_signature_token(self.signature, serializer);
     sse_encode_opt_String(self.description, serializer);
     sse_encode_opt_String(self.example, serializer);
+    sse_encode_opt_box_autoadd_highlight_node(
+      self.exampleHighlight,
+      serializer,
+    );
+  }
+
+  @protected
+  void sse_encode_typst_signature_token(
+    TypstSignatureToken self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.text, serializer);
+    sse_encode_typst_signature_token_kind(self.kind, serializer);
+  }
+
+  @protected
+  void sse_encode_typst_signature_token_kind(
+    TypstSignatureTokenKind self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
   }
 
   @protected

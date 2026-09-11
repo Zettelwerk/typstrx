@@ -158,10 +158,11 @@ pub struct FunctionInfoResult {
 pub struct TypstFunctionInfo {
     /// The function's name, e.g. `"rect"`.
     pub name: String,
-    /// A synthesized call signature, e.g. `"rect(width:, height:, fill:,
-    /// content)"`. Cheap to compute and always present when a function
-    /// resolves, unlike `description`/`example`.
-    pub signature: String,
+    /// A synthesized call signature (e.g. `rect(width?:, height?:, fill?:,
+    /// body)`), broken into styleable pieces — see [`TypstSignatureToken`].
+    /// Cheap to compute and always present when a function resolves, unlike
+    /// `description`/`example`.
+    pub signature: Vec<TypstSignatureToken>,
     /// The function's documentation, as Markdown, with the `example`
     /// section (see `example`) removed. Absent for functions Typst doesn't
     /// carry documentation for (e.g. plugin functions).
@@ -169,6 +170,28 @@ pub struct TypstFunctionInfo {
     /// Example Typst source demonstrating the function, extracted from its
     /// documentation's ` ```example ` fenced block, when it has one.
     pub example: Option<String>,
+    /// A syntax-highlighting tree for `example` (see [`HighlightNode`]),
+    /// computed the same way [`crate::api::session::TypstSession::highlight`]
+    /// would for it — present exactly when `example` is.
+    pub example_highlight: Option<HighlightNode>,
+}
+
+/// One piece of a [`TypstFunctionInfo::signature`], carrying enough
+/// structure for a caller to color a function's name differently from its
+/// parameter names and punctuation, without having to parse the signature
+/// back out of a flat string.
+pub struct TypstSignatureToken {
+    pub text: String,
+    pub kind: TypstSignatureTokenKind,
+}
+
+pub enum TypstSignatureTokenKind {
+    /// The function's own name.
+    Name,
+    /// A parameter's name.
+    Param,
+    /// Parens, commas, colons, `?`, `..` — everything that isn't a name.
+    Punctuation,
 }
 
 /// An autocompletion option.
