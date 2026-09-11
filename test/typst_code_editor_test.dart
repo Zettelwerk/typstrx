@@ -650,6 +650,77 @@ void main() {
       await session.dispose();
     });
 
+    // The details panel is often taller than the list beside it. Below the
+    // caret, both hang from their top edges; above it, both must rest on
+    // their bottom edges instead, or the shorter list floats away from the
+    // line it's completing.
+    Future<(Rect list, Rect details, Rect caret)> popupBesideTallDetails(
+      WidgetTester tester, {
+      required int line,
+    }) async {
+      final items = [
+        for (var i = 0; i < 2; i++)
+          rust.TypstCompletion(
+            kind: rust.TypstCompletionKind.func(),
+            label: 'item$i',
+            apply: 'item$i',
+            detail: 'item $i',
+          ),
+      ];
+      final text = '${'\n' * line}#';
+      final fake = FakeRustSession()
+        ..completionsToReturn = items
+        ..applyFromUtf16ToReturn = text.length
+        ..functionInfoToReturn = rust.TypstFunctionInfo(name: 'item0', signature: _sig('item0(x)'));
+      final session = TypstSession.forTesting(fake, const TypstSessionOptions());
+      await session.compile(text);
+      // The lines are laid out before `#` is typed, as when typing for real.
+      // (Swapping all of them in at once, like `triggerCompletions` does,
+      // lands in the frame that first builds the popup, which then opened
+      // as if the caret were still on line 0.)
+      final controller = TypstEditorController(session: session, text: '\n' * line);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TypstCodeEditor(
+              controller: controller,
+              detailsBuilder: (context, info) => const SizedBox(key: ValueKey('details'), width: 100, height: 300),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      controller.value = TextEditingValue(text: text, selection: TextSelection.collapsed(offset: text.length));
+      await tester.pump(const Duration(milliseconds: 160)); // completion debounce
+      await tester.pump(const Duration(milliseconds: 1)); // let the details fetch land
+
+      final render = tester.state<EditableTextState>(find.byType(EditableText)).renderEditable;
+      final caret = render.getLocalRectForCaret(TextPosition(offset: text.length));
+      final rects = (
+        tester.getRect(find.byType(Scrollbar)),
+        tester.getRect(find.byKey(const ValueKey('details'))),
+        Rect.fromPoints(render.localToGlobal(caret.topLeft), render.localToGlobal(caret.bottomRight)),
+      );
+      controller.dispose();
+      await session.dispose();
+      return rects;
+    }
+
+    testWidgets('opening below the caret, the list and a taller details panel align at the top', (tester) async {
+      final (list, details, caret) = await popupBesideTallDetails(tester, line: 0);
+
+      expect(details.top, moreOrLessEquals(caret.bottom + 4, epsilon: 0.5));
+      expect(list.top, moreOrLessEquals(details.top, epsilon: 0.5));
+    });
+
+    testWidgets('opening above the caret, the list and a taller details panel align at the bottom', (tester) async {
+      final (list, details, caret) = await popupBesideTallDetails(tester, line: 38);
+      final where = 'list $list, details $details, caret $caret';
+
+      expect(details.bottom, moreOrLessEquals(caret.top - 4, epsilon: 0.5), reason: where);
+      expect(list.bottom, moreOrLessEquals(details.bottom, epsilon: 0.5), reason: where);
+    });
+
     testWidgets('arrow-up from the first item wraps to the last, scrolling the whole (now-taller) row into view', (
       tester,
     ) async {

@@ -1135,22 +1135,6 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     final list = hasList
         ? widget.completionsBuilder(context, _completions, _selectedCompletionIndex, _applyCompletion)
         : null;
-    final content = TextFieldTapRegion(
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: _popupMaxHeight(context, caretTop.dy, caretBottom.dy)),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ?list,
-            if (detailsBuilder != null && details != null) ...[
-              if (list != null) const SizedBox(width: 8),
-              detailsBuilder(context, details),
-            ],
-          ],
-        ),
-      ),
-    );
     // Opens downward (the common case) unless there's genuinely more room
     // above the caret than below it — favoring below on a tie, since that's
     // where a user's eyes already are while typing. Without this, a popup
@@ -1161,6 +1145,25 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     final spaceBelow = screenHeight - caretBottom.dy - _popupEdgeMargin;
     final spaceAbove = caretTop.dy - _popupEdgeMargin;
     final opensBelow = spaceBelow >= spaceAbove;
+    final content = TextFieldTapRegion(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: _popupMaxHeight(context, caretTop.dy, caretBottom.dy)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          // Both panels line up on the edge facing the caret: a details panel
+          // taller than the list beside it would otherwise leave the list
+          // floating away from the line whenever the popup opens above it.
+          crossAxisAlignment: opensBelow ? CrossAxisAlignment.start : CrossAxisAlignment.end,
+          children: [
+            ?list,
+            if (detailsBuilder != null && details != null) ...[
+              if (list != null) const SizedBox(width: 8),
+              detailsBuilder(context, details),
+            ],
+          ],
+        ),
+      ),
+    );
     return Positioned(
       left: caretBottom.dx,
       top: opensBelow ? caretBottom.dy + 4 : null,
