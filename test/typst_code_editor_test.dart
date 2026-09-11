@@ -264,10 +264,12 @@ void main() {
       await session.dispose();
     });
 
-    testWidgets('a long detail string does not overflow the ListTile', (tester) async {
-      // ListTile.trailing must be a bounded-width widget; a bare Text(detail)
-      // isn't, and a long one-sentence description tripped ListTile's own
-      // layout assertion (reported against the real app via Ctrl+Space).
+    testWidgets('a long detail string does not overflow the popup row', (tester) async {
+      // The detail text in a completion row must be a bounded-width widget;
+      // a bare Text(detail) isn't, and a long one-sentence description used
+      // to trip the old ListTile-based row's own layout assertion (reported
+      // against the real app via Ctrl+Space). Guards the same case for
+      // whatever builder is wired up — currently defaultTypstCompletionsBuilder.
       const longDetail = rust.TypstCompletion(
         kind: rust.TypstCompletionKind.func(),
         label: 'lorem',

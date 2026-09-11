@@ -2,20 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart'
-    show
-        AdaptiveTextSelectionToolbar,
-        Colors,
-        InkWell,
-        ListTile,
-        Material,
-        Theme,
-        desktopTextSelectionControls,
-        materialTextSelectionControls;
+    show AdaptiveTextSelectionToolbar, Material, desktopTextSelectionControls, materialTextSelectionControls;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../document/typst_completion.dart';
 import '../../document/typst_tooltip.dart';
+import 'typst_completions_builder.dart';
 import 'typst_editor_controller.dart';
 
 /// How long the mouse must rest over a token before a hover request fires.
@@ -100,6 +93,7 @@ class TypstCodeEditor extends StatefulWidget {
     this.scrollPhysics,
     this.inputFormatters,
     this.contextMenuBuilder = _defaultContextMenuBuilder,
+    this.completionsBuilder = defaultTypstCompletionsBuilder,
   });
 
   /// Drives text content, syntax highlighting, diagnostics, and
@@ -149,6 +143,12 @@ class TypstCodeEditor extends StatefulWidget {
   final List<TextInputFormatter>? inputFormatters;
 
   final EditableTextContextMenuBuilder? contextMenuBuilder;
+
+  /// Builds the completion popup's contents (everything inside its
+  /// position/dismissal chrome, which this widget keeps ownership of — see
+  /// [TypstCompletionsBuilder]). Defaults to [defaultTypstCompletionsBuilder];
+  /// override to restyle the popup without forking this widget.
+  final TypstCompletionsBuilder completionsBuilder;
 
   @override
   State<TypstCodeEditor> createState() => _TypstCodeEditorState();
@@ -554,47 +554,7 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
       left: anchor.dx,
       top: anchor.dy + 4,
       child: TextFieldTapRegion(
-        child: Material(
-          elevation: 4,
-          borderRadius: BorderRadius.circular(4),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 320, maxHeight: 200),
-            child: ListView.builder(
-              padding: EdgeInsets.zero,
-              shrinkWrap: true,
-              itemCount: _completions.length,
-              itemBuilder: (context, index) {
-                final item = _completions[index];
-                final selected = index == _selectedCompletionIndex;
-                return Material(
-                  color: selected ? Theme.of(context).highlightColor : Colors.transparent,
-                  child: InkWell(
-                    onTap: () => _applyCompletion(item),
-                    child: ListTile(
-                      dense: true,
-                      title: Text(item.label, overflow: TextOverflow.ellipsis, maxLines: 1),
-                      // ListTile requires trailing to be a bounded-width widget — a
-                      // bare Text(detail) has none, and a long detail string (a
-                      // completion's one-sentence description) overflows the tile
-                      // and trips ListTile's own layout assertion.
-                      trailing: item.detail == null
-                          ? null
-                          : ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 96),
-                              child: Text(
-                                item.detail!,
-                                overflow: TextOverflow.ellipsis,
-                                maxLines: 1,
-                                textAlign: TextAlign.end,
-                              ),
-                            ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
+        child: widget.completionsBuilder(context, _completions, _selectedCompletionIndex, _applyCompletion),
       ),
     );
   }

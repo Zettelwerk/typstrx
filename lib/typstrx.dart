@@ -16,6 +16,7 @@ export 'src/document/typst_text.dart';
 export 'src/document/typst_tooltip.dart';
 export 'src/typstrx_init.dart';
 export 'src/widgets/editor/typst_code_editor.dart';
+export 'src/widgets/editor/typst_completions_builder.dart';
 export 'src/widgets/editor/typst_editor_controller.dart';
 export 'src/widgets/editor/typst_syntax_theme.dart';
 export 'src/widgets/typst_page_image_cache.dart' show RasterizationMetrics;
