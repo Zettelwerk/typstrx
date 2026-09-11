@@ -529,6 +529,66 @@ void main() {
     expect(controller.selectedText, isEmpty);
   });
 
+  testWidgets(
+    'long-press selects a word on touch and shows big handles + a magnifier while dragging one',
+    (tester) async {
+      final (session, _) = await makeSession();
+      final controller = TypstViewerController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: TypstViewer(
+            session: session,
+            controller: controller,
+            params: const TypstViewerParams(
+              renderDelay: Duration(milliseconds: 1),
+            ),
+          ),
+        ),
+      );
+      await settle(tester); // loads page text for visible pages
+
+      // Same text row as the mouse-drag test above.
+      const zoom = 800 / 611;
+      Offset docToView(Offset doc) => Offset(doc.dx * zoom, doc.dy * zoom);
+      final wordPoint = docToView(const Offset(8 + 60, 8 + 110));
+
+      final press = await tester.startGesture(wordPoint, kind: PointerDeviceKind.touch);
+      await tester.pump(const Duration(milliseconds: 600)); // past the long-press timeout
+      await press.up();
+      await tester.pump();
+
+      expect(controller.selectedText, isNotEmpty, reason: 'long-press should have selected the word under it');
+
+      // The two selection handles: identified structurally (a pan-draggable
+      // GestureDetector), not by exact pixel position, since that's an
+      // implementation detail of char-rect geometry this test shouldn't
+      // need to reproduce.
+      bool isHandle(Widget w) => w is GestureDetector && w.onPanStart != null && w.onPanUpdate != null;
+      final handles = find.byWidgetPredicate(isHandle);
+      expect(handles, findsNWidgets(2));
+
+      expect(
+        find.byType(RawMagnifier),
+        findsNothing,
+        reason: 'the magnifier only shows once a handle is actually being dragged',
+      );
+
+      final handleCenter = tester.getCenter(handles.first);
+      final drag = await tester.startGesture(handleCenter, kind: PointerDeviceKind.touch);
+      await tester.pump(const Duration(milliseconds: 20));
+      await drag.moveBy(const Offset(20, 0));
+      await tester.pump(const Duration(milliseconds: 20));
+
+      expect(find.byType(RawMagnifier), findsOneWidget, reason: 'shown while a handle is being dragged');
+
+      await drag.up();
+      await tester.pump(const Duration(milliseconds: 20));
+
+      expect(find.byType(RawMagnifier), findsNothing, reason: 'hidden again once the drag ends');
+    },
+  );
+
   testWidgets('tapping links fires callback and navigates internal dests',
       (tester) async {
     final (session, _) = await makeSession();

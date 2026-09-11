@@ -1,5 +1,19 @@
 part of 'typst_viewer.dart';
 
+// Touch selection handle sizing — generous enough to be easy to grab on a
+// touchscreen (matching, e.g., pdfrx's own handles), well past what a
+// mouse-oriented 12px dot would need.
+const _handleCircleSize = 22.0;
+const _handleStemHeight = 18.0;
+const _handleHitSize = 44.0;
+
+// The magnifier's own size and how far above the touch point it floats —
+// values Cupertino's own text magnifier uses, reused here for a familiar
+// feel rather than inventing new ones.
+const _magnifierSize = Size(80, 48);
+const _magnifierAboveFocalPoint = 26.0;
+const _magnifierScale = 1.5;
+
 /// A position in the document's text: a character on a page.
 class _SelPoint implements Comparable<_SelPoint> {
   const _SelPoint(this.pageIndex, this.charIndex);
@@ -318,29 +332,57 @@ extension _TypstViewerSelection on _TypstViewerState {
         final view = _docToView(
           isStart ? rect.bottomLeft : rect.bottomRight,
         );
+        // A generous hit target (44x44, the usual minimum recommended touch
+        // size) around a visibly bigger handle than a mouse-oriented app
+        // would use — small circular handles are hard to grab precisely on
+        // a touchscreen, which is exactly the pdfrx-style handle this
+        // mirrors. The stem lines the circle up with the text edge it's
+        // anchored to, same as Android's own teardrop handles.
         widgets.add(Positioned(
-          left: view.dx - 12,
-          top: view.dy - 4,
+          left: view.dx - _handleHitSize / 2,
+          top: view.dy,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
+            onPanStart: (_) {
+              _draggingHandleIsStart = isStart;
+              _handleDragPoint = view;
+              _repaint();
+            },
             onPanUpdate: (details) => _onHandleDrag(details, isStart),
-            onPanEnd: (_) => _repaint(),
-            child: Container(
-              width: 24,
-              height: 24,
-              alignment: Alignment.topCenter,
-              child: Container(
-                width: 12,
-                height: 12,
-                decoration: BoxDecoration(
-                  color: widget.params.selectionColor.withAlpha(0xff),
-                  shape: BoxShape.circle,
-                ),
+            onPanEnd: (_) {
+              _draggingHandleIsStart = null;
+              _handleDragPoint = null;
+              _repaint();
+            },
+            child: SizedBox(
+              width: _handleHitSize,
+              height: _handleHitSize,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 2,
+                    height: _handleStemHeight,
+                    color: widget.params.selectionColor.withAlpha(0xff),
+                  ),
+                  Container(
+                    width: _handleCircleSize,
+                    height: _handleCircleSize,
+                    decoration: BoxDecoration(
+                      color: widget.params.selectionColor.withAlpha(0xff),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
         ));
       }
+    }
+
+    if (_draggingHandleIsStart != null && _handleDragPoint != null) {
+      widgets.add(_buildMagnifier(_handleDragPoint!));
     }
 
     final toolbarAnchor = _toolbarAnchor;
@@ -372,6 +414,37 @@ extension _TypstViewerSelection on _TypstViewerState {
     return widgets;
   }
 
+  /// A loupe over [focalPoint] (view/screen coordinates) — shown only while
+  /// a selection handle is actively being dragged (see
+  /// [_draggingHandleIsStart]). Floats above the touch point so the
+  /// dragging finger doesn't cover the very text it's positioning over;
+  /// [RawMagnifier] sources its magnified image from whatever is already
+  /// painted below it in this same overlay (a [BackdropFilter] under the
+  /// hood — no separate re-render needed), so it stays in sync with
+  /// whatever resolution the page is currently rendered at.
+  Widget _buildMagnifier(Offset focalPoint) {
+    return Positioned(
+      left: focalPoint.dx - _magnifierSize.width / 2,
+      top: focalPoint.dy - _magnifierAboveFocalPoint - _magnifierSize.height / 2,
+      child: IgnorePointer(
+        child: RawMagnifier(
+          size: _magnifierSize,
+          magnificationScale: _magnifierScale,
+          focalPointOffset: Offset(0, _magnifierAboveFocalPoint + _magnifierSize.height / 2),
+          decoration: MagnifierDecoration(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(_magnifierSize.height / 2),
+              side: BorderSide(color: widget.params.selectionColor.withAlpha(0x80)),
+            ),
+            shadows: const [
+              BoxShadow(color: Color(0x40000000), blurRadius: 8, offset: Offset(0, 2)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Rect? _charRectInDocument(_SelPoint point, {required bool isStart}) {
     final layout = _layout;
     final text = _pageTexts[point.pageIndex + 1];
@@ -387,12 +460,14 @@ extension _TypstViewerSelection on _TypstViewerState {
     final selection = _normalizedSelection;
     if (selection == null) return;
     // The handle lives in view coordinates; convert to document space.
-    final docPoint = MatrixUtils.transformPoint(
-      Matrix4.inverted(_txController.value),
-      details.globalPosition - _viewOrigin(),
-    );
+    final viewPoint = details.globalPosition - _viewOrigin();
+    _handleDragPoint = viewPoint; // follows the finger regardless of hit-test below
+    final docPoint = MatrixUtils.transformPoint(Matrix4.inverted(_txController.value), viewPoint);
     final point = _charPointAt(docPoint, tolerance: 40);
-    if (point == null) return;
+    if (point == null) {
+      _repaint(); // still need to redraw the magnifier at its new position
+      return;
+    }
     if (isStart) {
       _selAnchor = point;
       _selFocus = selection.$2;

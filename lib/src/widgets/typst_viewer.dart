@@ -82,6 +82,12 @@ class _TypstViewerState extends State<TypstViewer> {
   Offset? _toolbarAnchor;
   MouseCursor _hoverCursor = MouseCursor.defer;
   bool _lastInputWasTouch = false;
+  // Which handle is being dragged, and where (view coordinates) — non-null
+  // only for the duration of that drag, so the magnifier shows exactly
+  // while (and where) a handle is actually being moved. See
+  // _buildSelectionOverlay/_onHandleDrag.
+  bool? _draggingHandleIsStart;
+  Offset? _handleDragPoint;
 
   // Touch pan/pinch-zoom gesture state (see _onGestureScale*).
   double? _gestureStartZoom;
