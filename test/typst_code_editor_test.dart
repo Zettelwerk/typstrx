@@ -290,6 +290,82 @@ void main() {
       await session.dispose();
     });
 
+    testWidgets('the selected row shows its full detail; other rows do not', (tester) async {
+      const alpha = rust.TypstCompletion(
+        kind: rust.TypstCompletionKind.func(),
+        label: 'alpha',
+        apply: 'alpha',
+        detail: 'Alpha description',
+      );
+      const beta = rust.TypstCompletion(
+        kind: rust.TypstCompletionKind.func(),
+        label: 'beta',
+        apply: 'beta',
+        detail: 'Beta description',
+      );
+      final focusNode = FocusNode();
+      final (_, session, controller) = await triggerCompletions(
+        tester,
+        text: '#l',
+        cursor: 2,
+        completions: const [alpha, beta],
+        applyFromUtf16: 2,
+        focusNode: focusNode,
+      );
+
+      expect(find.text('Alpha description'), findsOneWidget, reason: 'alpha is selected by default (index 0)');
+      expect(find.text('Beta description'), findsNothing);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+
+      expect(find.text('Alpha description'), findsNothing, reason: 'selection moved away from alpha');
+      expect(find.text('Beta description'), findsOneWidget, reason: 'selection moved to beta');
+
+      focusNode.dispose();
+      controller.dispose();
+      await session.dispose();
+    });
+
+    testWidgets('arrow-up from the first item wraps to the last, scrolling a long list into view', (tester) async {
+      final items = [
+        for (var i = 0; i < 15; i++)
+          rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'item$i', apply: 'item$i'),
+      ];
+      final focusNode = FocusNode();
+      final (_, session, controller) = await triggerCompletions(
+        tester,
+        text: '#',
+        cursor: 1,
+        completions: items,
+        focusNode: focusNode,
+      );
+
+      final scrollbarRect = tester.getRect(find.byType(Scrollbar));
+      expect(
+        find.text('item14'),
+        findsNothing,
+        reason: 'ListView.builder never built the last row — it starts well below the visible popup',
+      );
+
+      // _moveCompletionSelection wraps (0 - 1) around to the last index —
+      // exactly the case a plain Scrollable.ensureVisible can't handle on
+      // its own, since that row was never built to begin with (just shown
+      // above) and so has no context to scroll to.
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.getRect(find.text('item14')).bottom,
+        lessThanOrEqualTo(scrollbarRect.bottom + 1.0),
+        reason: 'wrapping selection to the last item scrolled it into view',
+      );
+
+      focusNode.dispose();
+      controller.dispose();
+      await session.dispose();
+    });
+
     testWidgets('arrow keys move the popup selection, not the text caret', (tester) async {
       const alpha = rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'alpha', apply: 'alpha');
       const beta = rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'beta', apply: 'beta');

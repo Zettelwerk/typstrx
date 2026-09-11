@@ -65,76 +65,167 @@ Color typstCompletionKindColor(TypstCompletionKindTag tag) {
 }
 
 /// [TypstCodeEditor]'s default [TypstCompletionsBuilder]: a Material 3
-/// surface (theme-aware, so it holds up in dark mode) with a kind icon,
-/// monospace label, and muted detail text per row, scrollable when the list
-/// overflows [maxHeight].
+/// surface (theme-aware, so it holds up in dark mode) with a kind icon and
+/// monospace label per row. The selected row (see [selectedIndex]) expands
+/// to show its full detail text underneath instead of the label-only row
+/// other items get — a one-sentence description rarely fits truncated next
+/// to a label, so it's shown in full only for the row that's actually
+/// relevant right now. Scrollable, with the selection kept in view as
+/// [selectedIndex] moves — including wrapping from the last row back to the
+/// first, where a plain [Scrollable.ensureVisible] would no-op against a
+/// lazily-built [ListView] that hasn't built that row yet.
 Widget defaultTypstCompletionsBuilder(
   BuildContext context,
   List<TypstCompletion> completions,
   int selectedIndex,
   ValueChanged<TypstCompletion> onSelected,
 ) {
-  final colorScheme = Theme.of(context).colorScheme;
-  return Material(
-    color: colorScheme.surfaceContainerHigh,
-    elevation: 4,
-    surfaceTintColor: Colors.transparent,
-    clipBehavior: Clip.antiAlias,
-    borderRadius: BorderRadius.circular(8),
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 320, maxHeight: 200),
-      child: Scrollbar(
-        child: ListView.builder(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          shrinkWrap: true,
-          itemCount: completions.length,
-          itemBuilder: (context, index) {
-            final item = completions[index];
-            final selected = index == selectedIndex;
-            return Material(
-              color: selected ? colorScheme.primaryContainer : Colors.transparent,
-              child: InkWell(
-                onTap: () => onSelected(item),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                  child: Row(
-                    children: [
-                      Icon(typstCompletionKindIcon(item.kind.tag), size: 16, color: typstCompletionKindColor(item.kind.tag)),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          item.label,
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                          style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+  return _CompletionsList(completions: completions, selectedIndex: selectedIndex, onSelected: onSelected);
+}
+
+class _CompletionsList extends StatefulWidget {
+  const _CompletionsList({required this.completions, required this.selectedIndex, required this.onSelected});
+
+  final List<TypstCompletion> completions;
+  final int selectedIndex;
+  final ValueChanged<TypstCompletion> onSelected;
+
+  @override
+  State<_CompletionsList> createState() => _CompletionsListState();
+}
+
+class _CompletionsListState extends State<_CompletionsList> {
+  final _scrollController = ScrollController();
+  final _itemKeys = <GlobalKey>[];
+
+  @override
+  void initState() {
+    super.initState();
+    _syncItemKeys();
+  }
+
+  @override
+  void didUpdateWidget(_CompletionsList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncItemKeys();
+    if (widget.selectedIndex != oldWidget.selectedIndex || !identical(widget.completions, oldWidget.completions)) {
+      // Deferred a frame: the selected row is taller than the others (it
+      // grows a detail line — see the class doc comment), so scrolling
+      // against this frame's *old* layout would target the wrong offset.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollSelectedIntoView());
+    }
+  }
+
+  void _syncItemKeys() {
+    if (_itemKeys.length == widget.completions.length) return;
+    _itemKeys
+      ..clear()
+      ..addAll(List.generate(widget.completions.length, (_) => GlobalKey()));
+  }
+
+  void _scrollSelectedIntoView() {
+    if (!mounted || !_scrollController.hasClients || widget.completions.isEmpty) return;
+    final index = widget.selectedIndex;
+    // The two ends of the list have an exact target offset and don't need a
+    // built context — which matters because they're also the two cases
+    // _moveCompletionSelection's wraparound actually reaches from the
+    // opposite end, i.e. exactly when the target row is *not* already built.
+    if (index == 0) {
+      _scrollController.jumpTo(0);
+      return;
+    }
+    if (index == widget.completions.length - 1) {
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      return;
+    }
+    final itemContext = _itemKeys[index].currentContext;
+    if (itemContext == null) return;
+    Scrollable.ensureVisible(itemContext, alignment: 0.5, duration: const Duration(milliseconds: 100));
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Material(
+      color: colorScheme.surfaceContainerHigh,
+      elevation: 4,
+      surfaceTintColor: Colors.transparent,
+      clipBehavior: Clip.antiAlias,
+      borderRadius: BorderRadius.circular(8),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 320, maxHeight: 200),
+        child: Scrollbar(
+          controller: _scrollController,
+          // Default (fade-in-on-scroll-only) visibility means there's
+          // nothing to grab until a scroll gesture happens to reveal it
+          // first — effectively undraggable. ScrollbarPainter itself already
+          // skips painting (and hit-testing) when the list doesn't overflow,
+          // so this doesn't paint a dead thumb over a short completion list.
+          thumbVisibility: true,
+          trackVisibility: true,
+          interactive: true,
+          child: ListView.builder(
+            controller: _scrollController,
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            shrinkWrap: true,
+            itemCount: widget.completions.length,
+            itemBuilder: (context, index) {
+              final item = widget.completions[index];
+              final selected = index == widget.selectedIndex;
+              return Material(
+                key: _itemKeys[index],
+                color: selected ? colorScheme.primaryContainer : Colors.transparent,
+                child: InkWell(
+                  onTap: () => widget.onSelected(item),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              typstCompletionKindIcon(item.kind.tag),
+                              size: 16,
+                              color: typstCompletionKindColor(item.kind.tag),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                item.label,
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                                style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                      // A long one-sentence detail must stay bounded: unlike
-                      // a Row's other children, Text has no intrinsic width
-                      // cap, and this row (unlike ListTile) provides none
-                      // for its trailing slot on its own.
-                      if (item.detail != null)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 8),
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 96),
+                        if (selected && item.detail != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4, left: 24),
                             child: Text(
                               item.detail!,
                               overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
-                              textAlign: TextAlign.end,
+                              maxLines: 3,
                               style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant),
                             ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
