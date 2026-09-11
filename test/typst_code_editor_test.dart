@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart' show CupertinoTextSelectionToolbarButton;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -286,7 +287,10 @@ void main() {
       final text = List.generate(12, (i) => 'line$i words here').join('\n');
       final (session, controller) = await mountEditor(tester, text);
       final toolbarButtons = find.byWidgetPredicate(
-        (w) => w is TextSelectionToolbarTextButton || w is DesktopTextSelectionToolbarButton,
+        (w) =>
+            w is TextSelectionToolbarTextButton ||
+            w is CupertinoTextSelectionToolbarButton ||
+            w is DesktopTextSelectionToolbarButton,
       );
       Rect rectOf(Finder finder) => List.generate(
         finder.evaluate().length,
@@ -308,12 +312,15 @@ void main() {
         }
 
         tester.state<EditableTextState>(find.byType(EditableText)).hideToolbar();
+        // iOS only selects a word on long-press while unfocused (focused, it
+        // moves the caret instead).
+        FocusManager.instance.primaryFocus?.unfocus();
         await tester.pumpAndSettle();
       }
 
       controller.dispose();
       await session.dispose();
-    }, variant: platforms);
+    }, variant: TargetPlatformVariant({TargetPlatform.android, TargetPlatform.linux, TargetPlatform.iOS}));
 
     testWidgets('a mouse drag-select keeps the handles hidden', (tester) async {
       final (session, controller) = await mountEditor(tester, 'hello world');
