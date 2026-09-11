@@ -12,6 +12,7 @@ import 'package:typstrx/src/widgets/editor/typst_code_editor.dart';
 import 'package:typstrx/src/widgets/editor/typst_details_builder.dart';
 import 'package:typstrx/src/widgets/editor/typst_editor_controller.dart';
 import 'package:typstrx/src/widgets/editor/typst_editor_selection_controls.dart';
+import 'package:typstrx/src/widgets/editor/typst_line_number_gutter.dart';
 
 /// A fake bridge session — same shape as the one in
 /// typst_editor_controller_test.dart, needed here too since these tests
@@ -208,6 +209,39 @@ void main() {
       await session.dispose();
     },
   );
+
+  testWidgets('shows a line-number gutter by default, hidden via showLineNumbers: false', (tester) async {
+    final fake = FakeRustSession();
+    final session = TypstSession.forTesting(fake, const TypstSessionOptions());
+    final controller = TypstEditorController(session: session, text: 'one\ntwo\nthree');
+
+    await tester.pumpWidget(
+      MaterialApp(home: Scaffold(body: SizedBox(height: 300, child: TypstCodeEditor(controller: controller)))),
+    );
+    await tester.pump();
+
+    expect(find.text('1'), findsOneWidget);
+    expect(find.text('2'), findsOneWidget);
+    expect(find.text('3'), findsOneWidget);
+    expect(find.byType(TypstLineNumberGutter), findsOneWidget);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 300,
+            child: TypstCodeEditor(controller: controller, showLineNumbers: false),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(TypstLineNumberGutter), findsNothing);
+
+    controller.dispose();
+    await session.dispose();
+  });
 
   testWidgets('tapping the editor requests focus (gesture wiring is live)', (tester) async {
     final fake = FakeRustSession();
@@ -1506,7 +1540,7 @@ void main() {
       // why a point that isn't actually on a line (e.g. the center of an
       // expands:true editor much taller than one line) must not trigger a
       // request in the first place.
-      await hoverTo(tester, tester.getTopLeft(find.byType(TypstCodeEditor)) + const Offset(4, 4));
+      await hoverTo(tester, tester.getTopLeft(find.byType(EditableText)) + const Offset(4, 4));
       await tester.pump(const Duration(milliseconds: 350));
 
       expect(find.text('a heading'), findsOneWidget);
@@ -1526,7 +1560,7 @@ void main() {
       await tester.pumpWidget(MaterialApp(home: Scaffold(body: TypstCodeEditor(controller: controller))));
       await tester.pump();
 
-      await hoverTo(tester, tester.getTopLeft(find.byType(TypstCodeEditor)) + const Offset(4, 4));
+      await hoverTo(tester, tester.getTopLeft(find.byType(EditableText)) + const Offset(4, 4));
       await tester.pump(const Duration(milliseconds: 350));
 
       // The buffer moves on (represented here by the native side's own

@@ -17,6 +17,7 @@ import 'typst_completions_builder.dart';
 import 'typst_details_builder.dart';
 import 'typst_editor_controller.dart';
 import 'typst_editor_selection_controls.dart';
+import 'typst_line_number_gutter.dart';
 
 /// How long the mouse must rest over a token before a hover request fires.
 const _hoverDebounceDelay = Duration(milliseconds: 300);
@@ -215,6 +216,8 @@ class TypstCodeEditor extends StatefulWidget {
     this.contextMenuBuilder,
     this.completionsBuilder = defaultTypstCompletionsBuilder,
     this.detailsBuilder,
+    this.showLineNumbers = true,
+    this.lineNumberColor,
   });
 
   /// Drives text content, syntax highlighting, diagnostics, and
@@ -297,6 +300,14 @@ class TypstCodeEditor extends StatefulWidget {
   /// [TypstDetailsBuilder] to restyle it.
   final TypstDetailsBuilder? detailsBuilder;
 
+  /// Shows a line-number gutter to the left of the source text, scroll-
+  /// synced with the editor. See [TypstLineNumberGutter].
+  final bool showLineNumbers;
+
+  /// Line-number color, when [showLineNumbers] is true. Defaults to
+  /// [style]'s color at 40% opacity.
+  final Color? lineNumberColor;
+
   @override
   State<TypstCodeEditor> createState() => _TypstCodeEditorState();
 }
@@ -307,6 +318,16 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
 
   FocusNode? _internalFocusNode;
   FocusNode get _focusNode => widget.focusNode ?? (_internalFocusNode ??= FocusNode());
+
+  // `EditableText` creates its own internal `ScrollController` when none is
+  // supplied, which the line-number gutter (a separate widget entirely,
+  // syncing purely off a `ScrollController`'s offset) has no way to reach.
+  // An explicit one is always passed to `EditableText` below instead, so
+  // the gutter always has a real controller to listen to, same pattern as
+  // `_focusNode` above.
+  ScrollController? _internalScrollController;
+  ScrollController get _scrollController =>
+      widget.scrollController ?? (_internalScrollController ??= ScrollController());
 
   @override
   GlobalKey<EditableTextState> get editableTextKey => _editableTextKey;
@@ -396,6 +417,10 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
       _internalFocusNode?.dispose();
       _internalFocusNode = null;
     }
+    if (oldWidget.scrollController == null && widget.scrollController != null) {
+      _internalScrollController?.dispose();
+      _internalScrollController = null;
+    }
     final currentNode = _focusNode;
     if (!identical(_keyHandlerNode, currentNode)) {
       if (_keyHandlerNode != null) _uninstallKeyHandler(_keyHandlerNode!);
@@ -412,6 +437,7 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     _hoverDebounce?.cancel();
     _hoverOverlay?.remove();
     _internalFocusNode?.dispose();
+    _internalScrollController?.dispose();
     super.dispose();
   }
 
@@ -1192,6 +1218,7 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
   @override
   Widget build(BuildContext context) {
     final focusNode = _focusNode;
+    final scrollController = _scrollController;
     // A null color here isn't "inherit from context" — EditableText has no
     // ambient text style to fall back to, and this becomes the root of
     // TypstEditorController's whole TextSpan tree (see buildTextSpan): any
@@ -1214,7 +1241,7 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     // test/typst_code_editor_test.dart on why an earlier attempt to work
     // around a hang here turned out to be chasing a test bug, not a real
     // one, and this structure was in fact fine the whole time).
-    return MouseRegion(
+    final editor = MouseRegion(
       cursor: SystemMouseCursors.text,
       onHover: _onHover,
       onExit: _onHoverExit,
@@ -1250,7 +1277,7 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
                   keyboardType: TextInputType.multiline,
                   textInputAction: TextInputAction.newline,
                   onChanged: widget.onChanged,
-                  scrollController: widget.scrollController,
+                  scrollController: scrollController,
                   scrollPhysics: widget.scrollPhysics,
                   inputFormatters: widget.inputFormatters,
                   contextMenuBuilder: widget.contextMenuBuilder ?? _buildDefaultContextMenu,
@@ -1269,6 +1296,39 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
           },
         ),
       ),
+    );
+
+    if (!widget.showLineNumbers) return editor;
+
+    final lineCount = '\n'.allMatches(widget.controller.text).length + 1;
+    final gutterColor = widget.lineNumberColor ?? (style.color ?? const Color(0xFF000000)).withValues(alpha: 0.4);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // `CrossAxisAlignment.stretch` needs a bounded height to stretch
+        // into; without one (e.g. this editor placed directly in a `Column`
+        // with no `Expanded`/sized ancestor — an unusual embedding, but a
+        // legal one, since `expands` defaults to true and normally supplies
+        // its own bounded-height contract) it forces infinite constraints
+        // on the Row's children and crashes. Falling back to no gutter
+        // there is a graceful degradation, not a real loss: there's no
+        // well-defined "full height" to draw a gutter against anyway.
+        if (!constraints.hasBoundedHeight) return editor;
+        final gutterWidth = typstLineNumberGutterWidth(style, lineCount);
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TypstLineNumberGutter(
+              text: widget.controller.text,
+              style: style,
+              scrollController: scrollController,
+              textWidth: (constraints.maxWidth - gutterWidth).clamp(0, double.infinity),
+              width: gutterWidth,
+              color: gutterColor,
+            ),
+            Expanded(child: editor),
+          ],
+        );
+      },
     );
   }
 }
