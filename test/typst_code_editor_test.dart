@@ -1038,6 +1038,117 @@ void main() {
       controller.dispose();
       await session.dispose();
     });
+
+    group('fallback to function details when typst-ide offers nothing', () {
+      // Simulates a function whose only parameter is a variadic sink (e.g.
+      // cetz's `set-style(..style)`) — typst-ide itself has no declared
+      // param names to offer there, so `completions` comes back genuinely
+      // empty (not narrowed-to-empty by prefix/fuzzy filtering).
+
+      testWidgets('shows the enclosing function\'s details instead of a silent empty popup', (tester) async {
+        final fake = FakeRustSession()
+          ..functionInfoToReturn = rust.TypstFunctionInfo(name: 'set-style', signature: _sig('set-style(..style)'));
+        final (_, session, controller) = await triggerCompletions(
+          tester,
+          text: '#set-style(',
+          cursor: 11,
+          completions: const [], // typst-ide offers nothing at all
+          applyFromUtf16: 11,
+          fake: fake,
+          detailsBuilder: (context, info) => Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
+        );
+
+        expect(find.text('DETAILS:set-style(..style)'), findsOneWidget);
+
+        controller.dispose();
+        await session.dispose();
+      });
+
+      testWidgets('shows nothing when nothing resolves at the cursor either', (tester) async {
+        final fake = FakeRustSession(); // functionInfoToReturn defaults to null
+        final (_, session, controller) = await triggerCompletions(
+          tester,
+          text: 'just some prose',
+          cursor: 15,
+          completions: const [],
+          applyFromUtf16: 15,
+          fake: fake,
+          detailsBuilder: (context, info) => Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
+        );
+
+        expect(find.textContaining('DETAILS:'), findsNothing);
+
+        controller.dispose();
+        await session.dispose();
+      });
+
+      testWidgets('never fetched at all without a detailsBuilder', (tester) async {
+        final fake = FakeRustSession()
+          ..functionInfoToReturn = rust.TypstFunctionInfo(name: 'set-style', signature: _sig('set-style(..style)'));
+        final (_, session, controller) = await triggerCompletions(
+          tester,
+          text: '#set-style(',
+          cursor: 11,
+          completions: const [],
+          applyFromUtf16: 11,
+          fake: fake,
+        );
+
+        expect(fake.functionInfoCalls, isEmpty);
+
+        controller.dispose();
+        await session.dispose();
+      });
+
+      testWidgets('does not trigger when a real (non-empty) list is just filtered down to empty', (tester) async {
+        // completions is NOT empty here — typst-ide offered a real
+        // candidate, it just doesn't match what's been typed. This must
+        // not be confused with "typst-ide offered nothing at all".
+        const unrelated = rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'rect', apply: 'rect(\${})');
+        final fake = FakeRustSession()
+          ..functionInfoToReturn = rust.TypstFunctionInfo(name: 'set-style', signature: _sig('set-style(..style)'));
+        final (_, session, controller) = await triggerCompletions(
+          tester,
+          text: '#zzz',
+          cursor: 4,
+          completions: const [unrelated],
+          applyFromUtf16: 1,
+          fake: fake,
+          detailsBuilder: (context, info) => Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
+        );
+
+        expect(fake.functionInfoCalls, isEmpty, reason: 'the fallback must not fire for a merely-filtered-out list');
+        expect(find.textContaining('DETAILS:'), findsNothing);
+
+        controller.dispose();
+        await session.dispose();
+      });
+
+      testWidgets('escape dismisses the fallback-only popup', (tester) async {
+        final fake = FakeRustSession()
+          ..functionInfoToReturn = rust.TypstFunctionInfo(name: 'set-style', signature: _sig('set-style(..style)'));
+        final focusNode = FocusNode();
+        final (_, session, controller) = await triggerCompletions(
+          tester,
+          text: '#set-style(',
+          cursor: 11,
+          completions: const [],
+          applyFromUtf16: 11,
+          fake: fake,
+          focusNode: focusNode,
+          detailsBuilder: (context, info) => Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
+        );
+        expect(find.text('DETAILS:set-style(..style)'), findsOneWidget);
+
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pump();
+        expect(find.textContaining('DETAILS:'), findsNothing);
+
+        focusNode.dispose();
+        controller.dispose();
+        await session.dispose();
+      });
+    });
   });
 
   group('indent (Tab/Shift+Tab)', () {

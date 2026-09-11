@@ -92,9 +92,23 @@ pub fn function_info(
 }
 
 /// Resolves the `Func` that governs `cursor`'s position — the callee of the
-/// nearest enclosing call or set rule, if any. Mirrors (a simplified,
-/// public-API-only version of) how `typst_ide::complete::param_completions`
-/// itself resolves the function whose parameters it's completing.
+/// nearest enclosing call or set rule, if any. Mirrors how
+/// `typst_ide::complete::param_completions` itself resolves the function
+/// whose parameters it's completing: `typst_ide::analyze_expr` (exported)
+/// re-traces that specific span through a real (memoized, so cheap when
+/// nothing changed) compile — this is what actually resolves a value
+/// imported into a *local* scope (a closure pulled in via `import x: *`
+/// partway through the document, say), which the narrow, global-scope-only
+/// [`resolve_expr`] below can't. Verified empirically against exactly that
+/// case: a package function imported into a nested block's local scope,
+/// unreachable through global lookup, traces through fine here.
+///
+/// [`resolve_expr`] stays as the fallback for when tracing finds nothing at
+/// all (e.g. dead code no compile ever reaches) — `analyze_expr` itself
+/// already falls back to a similar globals-based lookup internally for a
+/// bare identifier or one-level field access, but that's a private
+/// implementation detail of `typst_ide` (`analyze_expr_with_fallback`, not
+/// exported) we can't call directly.
 fn resolve_func_at_cursor(world: &dyn IdeWorld, source: &Source, cursor: usize) -> Option<Func> {
     let root = LinkedNode::new(source.root());
     let mut node = root.leaf_at(cursor, Side::Before)?;
@@ -107,7 +121,13 @@ fn resolve_func_at_cursor(world: &dyn IdeWorld, source: &Source, cursor: usize) 
             };
             let func = callee
                 .and_then(|c| node.find(c.span()))
-                .and_then(|callee_node| resolve_expr(world, &callee_node))
+                .and_then(|callee_node| {
+                    typst_ide::analyze_expr(world, &callee_node)
+                        .into_iter()
+                        .next()
+                        .map(|(value, _)| value)
+                        .or_else(|| resolve_expr(world, &callee_node))
+                })
                 .and_then(as_func);
             if let Some(func) = func {
                 return Some(func);
@@ -385,6 +405,33 @@ mod tests {
         // fallback.
         let info = function_info(&world, &source, 6, "not-rect").expect("expected rect to resolve");
         assert_eq!(info.name, "rect");
+    }
+
+    #[test]
+    fn function_info_resolves_a_closure_imported_into_a_local_scope() {
+        // A function pulled into scope by `import "other.typ": *` *inside* a
+        // nested block — invisible to a global-scope-only lookup, but
+        // resolvable via `typst_ide::analyze_expr`'s real tracing. This is
+        // exactly the shape a package like cetz's `import cetz.draw: *`
+        // takes, minus needing the network: same nesting, same "local
+        // import, not global" resolution requirement.
+        let mut world = world_with_source(
+            "#let outer(body) = body\n#outer({\n  import \"other.typ\": *\n  helper()\n})\n",
+        );
+        world
+            .set_file("other.typ", b"#let helper(width: 1, height: 2) = width + height".to_vec())
+            .unwrap();
+        assert!(typst::compile::<typst_layout::PagedDocument>(&world).output.is_ok());
+        let text = world.source(world.main()).unwrap().text().to_string();
+        let cursor = text.find("helper(").unwrap() as u32 + "helper(".len() as u32;
+        let source = world.source(world.main()).unwrap();
+        // Bogus label, same as above: proves cursor-context resolution, not
+        // the global-scope fallback (which would never find a local import
+        // regardless of label).
+        let info = function_info(&world, &source, cursor, "not-helper").expect("expected helper to resolve");
+        assert_eq!(info.name, "helper");
+        let signature: String = info.signature.iter().map(|t| t.text.as_str()).collect();
+        assert!(signature.contains("width") && signature.contains("height"), "{signature}");
     }
 
     #[test]

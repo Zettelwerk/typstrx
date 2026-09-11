@@ -316,6 +316,18 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
   TypstFunctionInfo? _details;
   int _detailsRequestId = 0;
 
+  // True when the popup is showing *only* `_details` — no completion list —
+  // because typst-ide itself offered nothing to complete at this position
+  // (as opposed to our own prefix/fuzzy filter narrowing a real list down
+  // to nothing). The clearest case: the cursor sits inside a call to a
+  // function whose only parameter is a variadic sink (`f(..options)`,
+  // common for "flexible options dictionary" APIs like cetz's
+  // `set-style`) — Typst has no declared parameter names to offer there at
+  // all, so completions comes back genuinely empty, and a bare silent
+  // popup-that-never-appears is worse than at least showing what the
+  // function itself is — see _requestFallbackDetails.
+  bool _fallbackDetailsOnly = false;
+
   // --- hover tooltip ---
   OverlayEntry? _hoverOverlay;
   TypstTooltip? _hoverTooltip;
@@ -433,6 +445,13 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
             _hideCompletionPopup();
             return KeyEventResult.handled;
         }
+      }
+      // A fallback-details-only popup (see _fallbackDetailsOnly) has no
+      // items to navigate/apply, so it doesn't hit the switch above at
+      // all (`_completions` stays empty for it) — only Escape applies.
+      if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.escape && _fallbackDetailsOnly) {
+        _hideCompletionPopup();
+        return KeyEventResult.handled;
       }
       if (event is KeyDownEvent &&
           event.logicalKey == LogicalKeyboardKey.space &&
@@ -691,10 +710,43 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     _selectedCompletionIndex = 0;
     if (filtered.isEmpty) {
       _hideCompletionPopup();
+      // Only when typst-ide itself offered nothing (not when our own
+      // prefix/fuzzy filter is what narrowed a real list down to empty) —
+      // otherwise this would show function details while the user is
+      // simply mid-typing a param name that doesn't match anything yet.
+      if (result.completions.isEmpty) _requestFallbackDetails(cursor);
     } else {
       _showCompletionPopup();
       _requestDetails();
     }
+  }
+
+  // Falls back to showing the enclosing function's own signature/docs (via
+  // `detailsBuilder`, when the caller opted in) when typst-ide's own
+  // completions came back completely empty — see `_fallbackDetailsOnly`'s
+  // doc comment for why. A no-op if nothing resolves at `cursor` (e.g. it's
+  // not actually inside any call) or the caller never opted into a
+  // `detailsBuilder` at all.
+  void _requestFallbackDetails(int cursor) {
+    final builder = widget.detailsBuilder;
+    if (builder == null) return;
+    final controller = widget.controller;
+    final requestId = ++_detailsRequestId;
+    // The label only matters for the "browsing an unfinished identifier"
+    // fallback inside functionInfo — irrelevant here, since there's no
+    // completion item to name; cursor-context resolution is the only path
+    // that can possibly apply.
+    controller.session.functionInfo(cursor, '').then((result) {
+      if (!mounted || requestId != _detailsRequestId) return;
+      final stillFresh =
+          controller.session.lastCompiledSource == controller.text &&
+          controller.selection.isCollapsed &&
+          controller.selection.baseOffset == cursor;
+      if (!stillFresh || result.info == null) return;
+      _details = result.info;
+      _fallbackDetailsOnly = true;
+      _showCompletionPopup();
+    });
   }
 
   void _moveCompletionSelection(int delta) {
@@ -775,6 +827,7 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     _completionOverlay = null;
     _completions = const [];
     _details = null;
+    _fallbackDetailsOnly = false;
     ++_detailsRequestId; // invalidate any in-flight functionInfo fetch
   }
 
@@ -884,7 +937,8 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
   Widget _buildCompletionOverlay(BuildContext context) {
     final renderEditable = _editableTextKey.currentState?.renderEditable;
     final selection = widget.controller.selection;
-    if (renderEditable == null || !selection.isValid || _completions.isEmpty) {
+    final hasList = _completions.isNotEmpty;
+    if (renderEditable == null || !selection.isValid || (!hasList && !_fallbackDetailsOnly)) {
       return const SizedBox.shrink();
     }
     final caretRect = renderEditable.getLocalRectForCaret(TextPosition(offset: selection.baseOffset));
@@ -892,6 +946,9 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     final caretTop = renderEditable.localToGlobal(caretRect.topLeft);
     final detailsBuilder = widget.detailsBuilder;
     final details = _details;
+    final list = hasList
+        ? widget.completionsBuilder(context, _completions, _selectedCompletionIndex, _applyCompletion)
+        : null;
     final content = TextFieldTapRegion(
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: _popupMaxHeight(context, caretTop.dy, caretBottom.dy)),
@@ -899,9 +956,9 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            widget.completionsBuilder(context, _completions, _selectedCompletionIndex, _applyCompletion),
+            ?list,
             if (detailsBuilder != null && details != null) ...[
-              const SizedBox(width: 8),
+              if (list != null) const SizedBox(width: 8),
               detailsBuilder(context, details),
             ],
           ],
