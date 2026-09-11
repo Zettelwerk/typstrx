@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show debugDefaultTargetPlatformOverride;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,6 +11,7 @@ import 'package:typstrx/src/rust/api/types.dart' as rust;
 import 'package:typstrx/src/widgets/editor/typst_code_editor.dart';
 import 'package:typstrx/src/widgets/editor/typst_details_builder.dart';
 import 'package:typstrx/src/widgets/editor/typst_editor_controller.dart';
+import 'package:typstrx/src/widgets/editor/typst_editor_selection_controls.dart';
 
 /// A fake bridge session — same shape as the one in
 /// typst_editor_controller_test.dart, needed here too since these tests
@@ -170,6 +172,42 @@ void main() {
     controller.dispose();
     await session.dispose();
   });
+
+  testWidgets(
+    'defaults to pdfrx-style triangle handles on touch platforms, and to '
+    'the platform default (no visible handles) on desktop',
+    (tester) async {
+      final fake = FakeRustSession();
+      final session = TypstSession.forTesting(fake, const TypstSessionOptions());
+      final controller = TypstEditorController(session: session, text: 'hello');
+
+      await tester.pumpWidget(
+        MaterialApp(home: Scaffold(body: TypstCodeEditor(controller: controller))),
+      );
+      await tester.pump();
+
+      expect(
+        tester.widget<EditableText>(find.byType(EditableText)).selectionControls,
+        isA<TypstEditorSelectionControls>(),
+        reason: 'the test harness defaults to TargetPlatform.android',
+      );
+
+      debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+      await tester.pumpWidget(
+        MaterialApp(home: Scaffold(body: TypstCodeEditor(controller: controller))),
+      );
+      await tester.pump();
+
+      expect(
+        tester.widget<EditableText>(find.byType(EditableText)).selectionControls,
+        equals(desktopTextSelectionHandleControls),
+      );
+      debugDefaultTargetPlatformOverride = null;
+
+      controller.dispose();
+      await session.dispose();
+    },
+  );
 
   testWidgets('tapping the editor requests focus (gesture wiring is live)', (tester) async {
     final fake = FakeRustSession();

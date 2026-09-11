@@ -6,8 +6,7 @@ import 'package:flutter/material.dart'
         AdaptiveTextSelectionToolbar,
         Material,
         TextMagnifier,
-        desktopTextSelectionHandleControls,
-        materialTextSelectionHandleControls;
+        desktopTextSelectionHandleControls;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -17,6 +16,7 @@ import '../../document/typst_tooltip.dart';
 import 'typst_completions_builder.dart';
 import 'typst_details_builder.dart';
 import 'typst_editor_controller.dart';
+import 'typst_editor_selection_controls.dart';
 
 /// How long the mouse must rest over a token before a hover request fires.
 const _hoverDebounceDelay = Duration(milliseconds: 300);
@@ -238,9 +238,11 @@ class TypstCodeEditor extends StatefulWidget {
   final Color? selectionColor;
 
   /// Selection handles/toolbar. Defaults to [desktopTextSelectionHandleControls]
-  /// on desktop platforms and [materialTextSelectionHandleControls] elsewhere —
-  /// a reasonable cross-platform default, not a platform-native match on
-  /// every platform (Cupertino styling isn't wired up). Override for that.
+  /// on desktop platforms (no visible handles, matching the platform) and
+  /// [TypstEditorSelectionControls] — pdfrx-style triangle handles —
+  /// elsewhere. Override to get platform-native (e.g. Cupertino) handles
+  /// instead, or [materialTextSelectionHandleControls] for the plain
+  /// Material teardrop shape this replaced as the touch default.
   ///
   /// Must be null or a `TextSelectionHandleControls`-mixin instance for
   /// [contextMenuBuilder] (and its "Toggle Comment" entry) to take effect —
@@ -248,10 +250,11 @@ class TypstCodeEditor extends StatefulWidget {
   final TextSelectionControls? selectionControls;
 
   /// The loupe shown while dragging a selection handle or the caret on a
-  /// touch device. Defaults to [TextMagnifier.adaptiveMagnifierConfiguration]
-  /// (Cupertino-style on iOS, Material-style on Android, none on desktop) —
-  /// [EditableText] itself defaults to no magnifier at all, so this is set
-  /// explicitly rather than left to inherit that.
+  /// touch device. Defaults to [typstEditorMagnifierConfiguration] — pdfrx's
+  /// rounded-rect magnifier styling — rather than
+  /// [TextMagnifier.adaptiveMagnifierConfiguration]. [EditableText] itself
+  /// defaults to no magnifier at all, so this is set explicitly rather than
+  /// left to inherit that.
   final TextMagnifierConfiguration? magnifierConfiguration;
 
   final bool autofocus;
@@ -1159,14 +1162,20 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     );
   }
 
-  // The plain `desktopTextSelectionControls`/`materialTextSelectionControls`
-  // instances make `EditableText` fall back to `TextSelectionControls`'s own
-  // deprecated `buildToolbar` (the plain copy/cut/paste menu) instead of
-  // `contextMenuBuilder` — see `TextSelectionOverlay.showToolbar`, which
-  // only honors `contextMenuBuilder` when `selectionControls` is null or a
-  // `TextSelectionHandleControls` mixin instance. Without the `*Handle*`
-  // variants here, `_buildDefaultContextMenu`'s "Toggle Comment" entry (and
-  // any caller-supplied `contextMenuBuilder`) is silently never shown.
+  // On every platform, `EditableText` only routes to `contextMenuBuilder`
+  // (rather than silently falling back to `TextSelectionControls`'s own
+  // deprecated `buildToolbar`) when `selectionControls` is null or a
+  // `TextSelectionHandleControls` mixin instance — see
+  // `TextSelectionOverlay.showToolbar`. `TypstEditorSelectionControls`
+  // (pdfrx-style triangle handles) mixes that in, same as the desktop
+  // fallback below.
+  //
+  // Desktop keeps the platform's own (handle-less) controls rather than
+  // the touch-oriented triangles: `desktopTextSelectionHandleControls`
+  // already draws no handles under a mouse (`getHandleSize` returns
+  // `Size.zero`), which is the existing, correct behavior there — showing
+  // triangle handles under a mouse cursor would be a new, unrequested
+  // change to desktop UX, not a port of it.
   TextSelectionControls _defaultSelectionControls() {
     switch (defaultTargetPlatform) {
       case TargetPlatform.linux:
@@ -1176,7 +1185,7 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
       case TargetPlatform.android:
       case TargetPlatform.iOS:
       case TargetPlatform.fuchsia:
-        return materialTextSelectionHandleControls;
+        return TypstEditorSelectionControls();
     }
   }
 
@@ -1228,7 +1237,7 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
                   selectionColor: focusNode.hasFocus ? selectionColor : null,
                   selectionControls: widget.selectionControls ?? _defaultSelectionControls(),
                   magnifierConfiguration:
-                      widget.magnifierConfiguration ?? TextMagnifier.adaptiveMagnifierConfiguration,
+                      widget.magnifierConfiguration ?? typstEditorMagnifierConfiguration,
                   maxLines: null,
                   expands: widget.expands,
                   readOnly: widget.readOnly,
