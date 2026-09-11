@@ -327,10 +327,17 @@ void main() {
       await session.dispose();
     });
 
-    testWidgets('arrow-up from the first item wraps to the last, scrolling a long list into view', (tester) async {
+    testWidgets('arrow-up from the first item wraps to the last, scrolling the whole (now-taller) row into view', (
+      tester,
+    ) async {
+      // Each item carries a detail string so the wrapped-to row grows a
+      // second (description) line once selected — a plain jumpTo(the
+      // pre-selection maxScrollExtent estimate) lands short of that growth,
+      // cropping the description even though the label is visible. See
+      // _scrollSelectedIntoView's doc comment.
       final items = [
         for (var i = 0; i < 15; i++)
-          rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'item$i', apply: 'item$i'),
+          rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'item$i', apply: 'item$i', detail: 'This is a considerably long description string that should force multiple wrapped lines item$i'),
       ];
       final focusNode = FocusNode();
       final (_, session, controller) = await triggerCompletions(
@@ -358,7 +365,50 @@ void main() {
       expect(
         tester.getRect(find.text('item14')).bottom,
         lessThanOrEqualTo(scrollbarRect.bottom + 1.0),
-        reason: 'wrapping selection to the last item scrolled it into view',
+        reason: 'wrapping selection to the last item scrolled its label into view',
+      );
+      expect(
+        tester.getRect(find.text('This is a considerably long description string that should force multiple wrapped lines item14')).bottom,
+        lessThanOrEqualTo(scrollbarRect.bottom + 1.0),
+        reason: 'the wrapped-to row grew a detail line once selected — that must be in view too, not just the label',
+      );
+
+      focusNode.dispose();
+      controller.dispose();
+      await session.dispose();
+    });
+
+    testWidgets('arrow-down from the last item wraps to the first, scrolling the whole (now-taller) row into view', (
+      tester,
+    ) async {
+      final items = [
+        for (var i = 0; i < 15; i++)
+          rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'item$i', apply: 'item$i', detail: 'This is a considerably long description string that should force multiple wrapped lines item$i'),
+      ];
+      final focusNode = FocusNode();
+      final (_, session, controller) = await triggerCompletions(
+        tester,
+        text: '#',
+        cursor: 1,
+        completions: items,
+        focusNode: focusNode,
+      );
+
+      // Get to the last item first (same mechanism as the up-wrap case),
+      // then wrap forward off the end back to the first.
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.pumpAndSettle();
+      final scrollbarRect = tester.getRect(find.byType(Scrollbar));
+      expect(find.text('item0'), findsNothing, reason: 'scrolled to the bottom, item0 is no longer built');
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
+
+      expect(tester.getRect(find.text('item0')).top, greaterThanOrEqualTo(scrollbarRect.top - 1.0));
+      expect(
+        tester.getRect(find.text('This is a considerably long description string that should force multiple wrapped lines item0')).bottom,
+        lessThanOrEqualTo(scrollbarRect.bottom + 1.0),
+        reason: 'the wrapped-to row grew a detail line once selected — that must be in view too, not just the label',
       );
 
       focusNode.dispose();

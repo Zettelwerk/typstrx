@@ -123,24 +123,38 @@ class _CompletionsListState extends State<_CompletionsList> {
       ..addAll(List.generate(widget.completions.length, (_) => GlobalKey()));
   }
 
-  void _scrollSelectedIntoView() {
+  // [attempt] bounds a possible retry (see below) at 1 — never grows
+  // without a terminating jump between calls, so this can't loop forever.
+  void _scrollSelectedIntoView([int attempt = 0]) {
     if (!mounted || !_scrollController.hasClients || widget.completions.isEmpty) return;
     final index = widget.selectedIndex;
-    // The two ends of the list have an exact target offset and don't need a
-    // built context — which matters because they're also the two cases
-    // _moveCompletionSelection's wraparound actually reaches from the
-    // opposite end, i.e. exactly when the target row is *not* already built.
+    final itemContext = _itemKeys[index].currentContext;
+    if (itemContext != null) {
+      // The precise case: the target row is already built, so its real
+      // height — taller than the others once it's the selected one, see
+      // the class doc comment — is already known and reflected in layout.
+      Scrollable.ensureVisible(itemContext, alignment: 0.5, duration: const Duration(milliseconds: 100));
+      return;
+    }
+    if (attempt > 0) return; // already retried once; the row still won't build — give up rather than loop
+    // No context: this row was never built (lazily-built ListView), which
+    // is exactly what _moveCompletionSelection's wraparound reaches — the
+    // opposite end from wherever the selection just was. The two ends have
+    // an exact target offset that doesn't need a context, so jump there —
+    // but jumpTo uses an *estimate* for a not-yet-built row's extent, which
+    // assumes single-line height and so lands short of a row that's about
+    // to grow a detail line once selected. That coarse jump only serves to
+    // force the row to actually get built at the new scroll position;
+    // requesting one more frame lets the ensureVisible branch above correct
+    // for its real (now-known) height.
     if (index == 0) {
       _scrollController.jumpTo(0);
-      return;
-    }
-    if (index == widget.completions.length - 1) {
+    } else if (index == widget.completions.length - 1) {
       _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+    } else {
       return;
     }
-    final itemContext = _itemKeys[index].currentContext;
-    if (itemContext == null) return;
-    Scrollable.ensureVisible(itemContext, alignment: 0.5, duration: const Duration(milliseconds: 100));
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollSelectedIntoView(attempt + 1));
   }
 
   @override
