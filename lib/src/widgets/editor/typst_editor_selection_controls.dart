@@ -19,7 +19,9 @@ final typstEditorMagnifierConfiguration = TextMagnifierConfiguration(
 // — kept in sync by eye rather than shared, since the two live in separate
 // library parts with no natural shared-constants file yet.
 const _magnifierSize = Size(160, 48);
-const _magnifierAboveFocalPoint = 26.0;
+// ~1cm above the finger — see the matching constant's comment in
+// typst_viewer_selection.dart for the (approximate) px/cm reasoning.
+const _magnifierAboveFocalPoint = 63.0;
 const _magnifierScale = 1.5;
 const _magnifierBorderRadius = 30.0;
 

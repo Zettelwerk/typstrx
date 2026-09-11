@@ -21,7 +21,14 @@ const _handleSize = 30.0;
 // feature that's already showing rasterized tiles (re-rendering wouldn't
 // gain resolution beyond the current tile, only cost more).
 const _magnifierSize = Size(160, 48);
-const _magnifierAboveFocalPoint = 26.0;
+// ~1cm above the finger: touch devices report logical pixels at roughly
+// 160/inch (Android's dp baseline; iOS points land close to the same),
+// so 1cm ≈ 160 / 2.54 ≈ 63 logical px. Flutter has no exact physical-size
+// query, so this is an approximation, not a precise measurement — but
+// good enough to keep the magnifier clear of the fingertip instead of
+// nearly touching it (the previous 26px left its bottom edge ~2px above
+// the touch point).
+const _magnifierAboveFocalPoint = 63.0;
 const _magnifierScale = 1.5;
 const _magnifierBorderRadius = 30.0;
 

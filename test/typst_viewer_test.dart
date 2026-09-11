@@ -585,6 +585,16 @@ void main() {
 
       expect(find.byType(RawMagnifier), findsOneWidget, reason: 'shown while a handle is being dragged');
 
+      // The magnifier floats clear above the finger (~1cm, not merely
+      // resting on top of it) rather than nearly touching it.
+      final fingerY = handleCenter.dy;
+      final magnifierBottom = tester.getRect(find.byType(RawMagnifier)).bottom;
+      expect(
+        fingerY - magnifierBottom,
+        greaterThan(30),
+        reason: 'the magnifier should sit well clear of the fingertip, not almost touch it',
+      );
+
       await drag.up();
       await tester.pump(const Duration(milliseconds: 20));
 
