@@ -59,6 +59,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SessionOptions dco_decode_box_autoadd_session_options(dynamic raw);
 
   @protected
+  TypstFunctionInfo dco_decode_box_autoadd_typst_function_info(dynamic raw);
+
+  @protected
   TypstTooltip dco_decode_box_autoadd_typst_tooltip(dynamic raw);
 
   @protected
@@ -75,6 +78,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   double dco_decode_f_64(dynamic raw);
+
+  @protected
+  FunctionInfoResult dco_decode_function_info_result(dynamic raw);
 
   @protected
   HighlightNode dco_decode_highlight_node(dynamic raw);
@@ -134,6 +140,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   HighlightTag? dco_decode_opt_box_autoadd_highlight_tag(dynamic raw);
 
   @protected
+  TypstFunctionInfo? dco_decode_opt_box_autoadd_typst_function_info(
+    dynamic raw,
+  );
+
+  @protected
   TypstTooltip? dco_decode_opt_box_autoadd_typst_tooltip(dynamic raw);
 
   @protected
@@ -171,6 +182,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TypstFoldingRange dco_decode_typst_folding_range(dynamic raw);
+
+  @protected
+  TypstFunctionInfo dco_decode_typst_function_info(dynamic raw);
 
   @protected
   TypstTooltip dco_decode_typst_tooltip(dynamic raw);
@@ -231,6 +245,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  TypstFunctionInfo sse_decode_box_autoadd_typst_function_info(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   TypstTooltip sse_decode_box_autoadd_typst_tooltip(
     SseDeserializer deserializer,
   );
@@ -251,6 +270,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   double sse_decode_f_64(SseDeserializer deserializer);
+
+  @protected
+  FunctionInfoResult sse_decode_function_info_result(
+    SseDeserializer deserializer,
+  );
 
   @protected
   HighlightNode sse_decode_highlight_node(SseDeserializer deserializer);
@@ -322,6 +346,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  TypstFunctionInfo? sse_decode_opt_box_autoadd_typst_function_info(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   TypstTooltip? sse_decode_opt_box_autoadd_typst_tooltip(
     SseDeserializer deserializer,
   );
@@ -363,6 +392,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TypstFoldingRange sse_decode_typst_folding_range(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  TypstFunctionInfo sse_decode_typst_function_info(
     SseDeserializer deserializer,
   );
 
@@ -430,6 +464,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_typst_function_info(
+    TypstFunctionInfo self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_typst_tooltip(
     TypstTooltip self,
     SseSerializer serializer,
@@ -455,6 +495,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_f_64(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_function_info_result(
+    FunctionInfoResult self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_highlight_node(HighlightNode self, SseSerializer serializer);
@@ -535,6 +581,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_typst_function_info(
+    TypstFunctionInfo? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_typst_tooltip(
     TypstTooltip? self,
     SseSerializer serializer,
@@ -597,6 +649,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_typst_folding_range(
     TypstFoldingRange self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_typst_function_info(
+    TypstFunctionInfo self,
     SseSerializer serializer,
   );
 

@@ -16,11 +16,13 @@
 //! The cost of that choice is staleness relative to mid-edit keystrokes,
 //! which the caller must guard against — see [`crate::api::types::CompletionResult`].
 
+use typst::foundations::{Func, Value};
 use typst_ide::IdeWorld;
 use typst_layout::PagedDocument;
-use typst_syntax::{Side, Source};
+use typst_syntax::ast::AstNode;
+use typst_syntax::{LinkedNode, Side, Source, ast};
 
-use crate::api::types::{TypstCompletion, TypstCompletionKind, TypstTooltip};
+use crate::api::types::{TypstCompletion, TypstCompletionKind, TypstFunctionInfo, TypstTooltip};
 
 /// Computes completions at `cursor_utf16` in `source` (the World's own
 /// registered source — see the module docs for why). Returns the "apply
@@ -66,6 +68,131 @@ pub fn hover(
     // what was just typed *before* the cursor. Verified against upstream's
     // own tooltip test fixtures, which consistently probe with `After`.
     typst_ide::tooltip(world, doc, source, cursor, Side::After).map(TypstTooltip::from)
+}
+
+/// Looks up documentation for the function named `label`. See
+/// [`crate::api::session::TypstSession::function_info`] for the resolution
+/// order (cursor context, then a global-scope lookup by `label`) and its
+/// scope limitations.
+pub fn function_info(
+    world: &dyn IdeWorld,
+    source: &Source,
+    cursor_utf16: u32,
+    label: &str,
+) -> Option<TypstFunctionInfo> {
+    let func = source
+        .lines()
+        .utf16_to_byte(cursor_utf16 as usize)
+        .and_then(|cursor| resolve_func_at_cursor(world, source, cursor))
+        .or_else(|| resolve_global_func(world, label))?;
+    Some(describe_func(&func))
+}
+
+/// Resolves the `Func` that governs `cursor`'s position — the callee of the
+/// nearest enclosing call or set rule, if any. Mirrors (a simplified,
+/// public-API-only version of) how `typst_ide::complete::param_completions`
+/// itself resolves the function whose parameters it's completing.
+fn resolve_func_at_cursor(world: &dyn IdeWorld, source: &Source, cursor: usize) -> Option<Func> {
+    let root = LinkedNode::new(source.root());
+    let mut node = root.leaf_at(cursor, Side::Before)?;
+    loop {
+        if let Some(expr) = node.cast::<ast::Expr>() {
+            let callee = match expr {
+                ast::Expr::FuncCall(call) => Some(call.callee()),
+                ast::Expr::SetRule(set) => Some(set.target()),
+                _ => None,
+            };
+            let func = callee
+                .and_then(|c| node.find(c.span()))
+                .and_then(|callee_node| resolve_expr(world, &callee_node))
+                .and_then(as_func);
+            if let Some(func) = func {
+                return Some(func);
+            }
+        }
+        node = node.parent()?.clone();
+    }
+}
+
+fn as_func(value: Value) -> Option<Func> {
+    match value {
+        Value::Func(func) => Some(func),
+        _ => None,
+    }
+}
+
+/// Resolves a plain identifier or one level of field access to a value,
+/// against the global scope — a deliberately narrow, public-API-only stand-in
+/// for `typst_ide::analyze::analyze_expr_with_fallback` (not exported by
+/// `typst_ide`). Doesn't trace actual execution, so it won't resolve local
+/// variables or closures — only built-ins reachable from the global scope.
+fn resolve_expr(world: &dyn IdeWorld, node: &LinkedNode) -> Option<Value> {
+    match node.cast::<ast::Expr>()? {
+        ast::Expr::Ident(ident) => {
+            Some(world.library().global.scope().get(&ident)?.read().clone())
+        }
+        ast::Expr::FieldAccess(access) => {
+            let target = match access.target() {
+                ast::Expr::Ident(target) => target,
+                _ => return None,
+            };
+            let target_value = world.library().global.scope().get(&target)?.read();
+            Some(target_value.scope()?.get(&access.field())?.read().clone())
+        }
+        _ => None,
+    }
+}
+
+/// A last-resort lookup for when there's no resolvable expression at the
+/// cursor yet (e.g. browsing completions for a partially typed identifier
+/// like `#re|`) — just the bare name in the global scope. Won't find
+/// anything behind field access (`calc.abs`) or user-defined functions.
+fn resolve_global_func(world: &dyn IdeWorld, label: &str) -> Option<Func> {
+    let value = world.library().global.scope().get(label)?.read();
+    match value {
+        Value::Func(func) => Some(func.clone()),
+        _ => None,
+    }
+}
+
+fn describe_func(func: &Func) -> TypstFunctionInfo {
+    let name = func.name().unwrap_or("").to_string();
+    let signature = format!("{name}({})", signature_params(func).join(", "));
+    let docs = func.docs();
+    let example = docs.and_then(extract_example);
+    let description = docs
+        .map(|d| d.split("= Example").next().unwrap_or(d).trim().to_string())
+        .filter(|d| !d.is_empty());
+    TypstFunctionInfo { name, signature, description, example }
+}
+
+fn signature_params(func: &Func) -> Vec<String> {
+    func.params()
+        .filter_map(|param| {
+            let name = param.name()?;
+            Some(if param.variadic() {
+                format!("{name}: ..")
+            } else if param.named() {
+                let optional = if param.required() { "" } else { "?" };
+                format!("{name}{optional}:")
+            } else {
+                name.to_string()
+            })
+        })
+        .collect()
+}
+
+/// Extracts the code inside a docstring's first ` ```example ` fenced block,
+/// if it has one. Native function doc comments in `typst-library` (e.g.
+/// `rect`'s) embed a runnable example this way, under an `= Example`
+/// heading — the heading itself is left in `description`'s cut point, not
+/// duplicated here.
+fn extract_example(docs: &str) -> Option<String> {
+    let start = docs.find("```example")?;
+    let after = &docs[start + "```example".len()..];
+    let after = after.strip_prefix('\n').unwrap_or(after);
+    let end = after.find("```")?;
+    Some(after[..end].trim_end().to_string())
 }
 
 impl From<typst_ide::Completion> for TypstCompletion {
@@ -201,5 +328,43 @@ mod tests {
             Some(TypstTooltip::Code { content }) => assert_eq!(content, "3"),
             other => panic!("expected a Code tooltip showing the computed value, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn function_info_resolves_by_label_while_browsing_completions() {
+        // Cursor at the end of "#re" — there's no call yet, so this exercises
+        // the global-scope-by-label fallback, not the cursor-context path.
+        let world = world_with_source("#re");
+        let source = world.source(world.main()).unwrap();
+        let info = function_info(&world, &source, 3, "rect").expect("expected rect to resolve");
+        assert_eq!(info.name, "rect");
+        assert!(info.signature.starts_with("rect("), "{}", info.signature);
+        assert!(info.signature.contains("width"), "{}", info.signature);
+        let description = info.description.expect("expected a description");
+        assert!(
+            !description.contains("```example"),
+            "example fence should not leak into description: {description}"
+        );
+        let example = info.example.expect("expected an extracted example");
+        assert!(example.contains("rect("), "{example}");
+    }
+
+    #[test]
+    fn function_info_resolves_via_cursor_context_inside_a_call() {
+        // Cursor inside "#rect(|" — exercises the callee-at-cursor path
+        // directly, independent of `label`.
+        let world = world_with_source("#rect()");
+        let source = world.source(world.main()).unwrap();
+        // Bogus label: proves this resolved via cursor context, not the
+        // fallback.
+        let info = function_info(&world, &source, 6, "not-rect").expect("expected rect to resolve");
+        assert_eq!(info.name, "rect");
+    }
+
+    #[test]
+    fn function_info_is_none_for_an_unresolvable_label() {
+        let world = world_with_source("#zz");
+        let source = world.source(world.main()).unwrap();
+        assert!(function_info(&world, &source, 3, "not-a-real-function").is_none());
     }
 }

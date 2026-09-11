@@ -7,8 +7,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../document/typst_completion.dart';
+import '../../document/typst_function_info.dart';
 import '../../document/typst_tooltip.dart';
 import 'typst_completions_builder.dart';
+import 'typst_details_builder.dart';
 import 'typst_editor_controller.dart';
 
 /// How long the mouse must rest over a token before a hover request fires.
@@ -113,6 +115,7 @@ class TypstCodeEditor extends StatefulWidget {
     this.inputFormatters,
     this.contextMenuBuilder = _defaultContextMenuBuilder,
     this.completionsBuilder = defaultTypstCompletionsBuilder,
+    this.detailsBuilder,
   });
 
   /// Drives text content, syntax highlighting, diagnostics, and
@@ -169,6 +172,14 @@ class TypstCodeEditor extends StatefulWidget {
   /// override to restyle the popup without forking this widget.
   final TypstCompletionsBuilder completionsBuilder;
 
+  /// Builds an IntelliSense-style details panel — full signature,
+  /// description, and example code — shown next to the completion popup for
+  /// whichever item is currently selected, when it resolves to a function.
+  /// Null (the default) shows no panel at all; pass
+  /// [defaultTypstDetailsBuilder] for a ready-made look, or a custom
+  /// [TypstDetailsBuilder] to restyle it.
+  final TypstDetailsBuilder? detailsBuilder;
+
   @override
   State<TypstCodeEditor> createState() => _TypstCodeEditorState();
 }
@@ -215,6 +226,10 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
   // at most one stop) and also what most non-Tab navigation lazily resets
   // it to — see _tryAdvanceSnippetStop.
   List<int> _snippetStops = const [];
+
+  // --- completion details panel ---
+  TypstFunctionInfo? _details;
+  int _detailsRequestId = 0;
 
   // --- hover tooltip ---
   OverlayEntry? _hoverOverlay;
@@ -492,6 +507,7 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
       _hideCompletionPopup();
     } else {
       _showCompletionPopup();
+      _requestDetails();
     }
   }
 
@@ -501,6 +517,38 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     _selectedCompletionIndex = (_selectedCompletionIndex + delta) % count;
     if (_selectedCompletionIndex < 0) _selectedCompletionIndex += count;
     _completionOverlay?.markNeedsBuild();
+    _requestDetails();
+  }
+
+  // Fetches details for whatever's now selected, for the details panel — a
+  // no-op unless a caller opted in via `detailsBuilder`. `_detailsRequestId`
+  // guards against the classic race also handled for completions/hover: the
+  // user can arrow through several items faster than each fetch resolves,
+  // and only the *last* selection's result should ever land.
+  void _requestDetails() {
+    _details = null;
+    final builder = widget.detailsBuilder;
+    if (builder == null || _completions.isEmpty) {
+      ++_detailsRequestId; // invalidate any fetch already in flight
+      return;
+    }
+    final item = _completions[_selectedCompletionIndex];
+    if (item.kind.tag != TypstCompletionKindTag.func) {
+      ++_detailsRequestId;
+      _completionOverlay?.markNeedsBuild();
+      return;
+    }
+    final controller = widget.controller;
+    final cursor = controller.selection.baseOffset;
+    final requestId = ++_detailsRequestId;
+    controller.session.functionInfo(cursor, item.label).then((result) {
+      // Also covers the popup having been dismissed while this was in
+      // flight — `_hideCompletionPopup` bumps `_detailsRequestId` too, so a
+      // stale response can't reopen/repaint an overlay that's gone.
+      if (!mounted || requestId != _detailsRequestId) return;
+      _details = result.info;
+      _completionOverlay?.markNeedsBuild();
+    });
   }
 
   void _applyCompletion(TypstCompletion item) {
@@ -540,6 +588,8 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     _completionOverlay?.remove();
     _completionOverlay = null;
     _completions = const [];
+    _details = null;
+    ++_detailsRequestId; // invalidate any in-flight functionInfo fetch
   }
 
   void _onHover(PointerHoverEvent event) {
@@ -649,11 +699,23 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     }
     final caretRect = renderEditable.getLocalRectForCaret(TextPosition(offset: selection.baseOffset));
     final anchor = renderEditable.localToGlobal(caretRect.bottomLeft);
+    final detailsBuilder = widget.detailsBuilder;
+    final details = _details;
     return Positioned(
       left: anchor.dx,
       top: anchor.dy + 4,
       child: TextFieldTapRegion(
-        child: widget.completionsBuilder(context, _completions, _selectedCompletionIndex, _applyCompletion),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            widget.completionsBuilder(context, _completions, _selectedCompletionIndex, _applyCompletion),
+            if (detailsBuilder != null && details != null) ...[
+              const SizedBox(width: 8),
+              detailsBuilder(context, details),
+            ],
+          ],
+        ),
       ),
     );
   }

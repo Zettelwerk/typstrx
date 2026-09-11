@@ -9,6 +9,7 @@ import 'typst_completion.dart';
 import 'typst_diagnostic.dart';
 import 'typst_document.dart';
 import 'typst_folding_range.dart';
+import 'typst_function_info.dart';
 import 'typst_highlight.dart';
 import 'typst_tooltip.dart';
 
@@ -191,6 +192,23 @@ class TypstSession {
   Future<TypstHoverResult> hover(int cursorUtf16) async {
     _checkDisposed();
     return TypstHoverResult.fromRust(await _native.hover(cursorUtf16: cursorUtf16));
+  }
+
+  /// Looks up documentation for the function named [label], for an
+  /// IntelliSense-style details panel shown alongside the completion list.
+  ///
+  /// [cursorUtf16] is used first to resolve whatever's actually at that
+  /// position in [lastCompiledSource] (handles field access like
+  /// `calc.abs`, local functions, etc.); if that doesn't resolve to a
+  /// function, falls back to a plain lookup of [label] in the global scope
+  /// (handles browsing completions before a full expression exists, e.g.
+  /// `#re|`). See [lastCompiledSource] for what a caller must check before
+  /// using the result.
+  Future<TypstFunctionInfoResult> functionInfo(int cursorUtf16, String label) async {
+    _checkDisposed();
+    return TypstFunctionInfoResult.fromRust(
+      await _native.functionInfo(cursorUtf16: cursorUtf16, label: label),
+    );
   }
 
   /// Registers all font faces in [data] (TTF/OTF, also collections) for

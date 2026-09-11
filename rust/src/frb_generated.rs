@@ -40,7 +40,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 143438147;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1775829977;
 
 // Section: executor
 
@@ -238,6 +238,61 @@ fn wire__crate__api__session__TypstSession_folding_ranges_impl(
                             &*api_that_guard,
                             api_source,
                         ))?;
+                    std::result::Result::Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
+fn wire__crate__api__session__TypstSession_function_info_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "TypstSession_function_info",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_that = <RustOpaqueMoi<
+                flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TypstSession>,
+            >>::sse_decode(&mut deserializer);
+            let api_cursor_utf16 = <u32>::sse_decode(&mut deserializer);
+            let api_label = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let mut api_that_guard = None;
+                    let decode_indices_ =
+                        flutter_rust_bridge::for_generated::lockable_compute_decode_order(vec![
+                            flutter_rust_bridge::for_generated::LockableOrderInfo::new(
+                                &api_that, 0, false,
+                            ),
+                        ]);
+                    for i in decode_indices_ {
+                        match i {
+                            0 => api_that_guard = Some(api_that.lockable_decode_sync_ref()),
+                            _ => unreachable!(),
+                        }
+                    }
+                    let api_that_guard = api_that_guard.unwrap();
+                    let output_ok = Ok::<_, ()>(crate::api::session::TypstSession::function_info(
+                        &*api_that_guard,
+                        api_cursor_utf16,
+                        api_label,
+                    ))?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -745,6 +800,18 @@ impl SseDecode for f64 {
     }
 }
 
+impl SseDecode for crate::api::types::FunctionInfoResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_generation = <u64>::sse_decode(deserializer);
+        let mut var_info = <Option<crate::api::types::TypstFunctionInfo>>::sse_decode(deserializer);
+        return crate::api::types::FunctionInfoResult {
+            generation: var_generation,
+            info: var_info,
+        };
+    }
+}
+
 impl SseDecode for crate::api::types::HighlightNode {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -989,6 +1056,19 @@ impl SseDecode for Option<crate::api::types::HighlightTag> {
     }
 }
 
+impl SseDecode for Option<crate::api::types::TypstFunctionInfo> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::types::TypstFunctionInfo>::sse_decode(
+                deserializer,
+            ));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<crate::api::types::TypstTooltip> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1209,6 +1289,22 @@ impl SseDecode for crate::api::types::TypstFoldingRange {
     }
 }
 
+impl SseDecode for crate::api::types::TypstFunctionInfo {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_name = <String>::sse_decode(deserializer);
+        let mut var_signature = <String>::sse_decode(deserializer);
+        let mut var_description = <Option<String>>::sse_decode(deserializer);
+        let mut var_example = <Option<String>>::sse_decode(deserializer);
+        return crate::api::types::TypstFunctionInfo {
+            name: var_name,
+            signature: var_signature,
+            description: var_description,
+            example: var_example,
+        };
+    }
+}
+
 impl SseDecode for crate::api::types::TypstTooltip {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1327,36 +1423,42 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        5 => wire__crate__api__session__TypstSession_highlight_impl(
+        5 => wire__crate__api__session__TypstSession_function_info_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        6 => wire__crate__api__session__TypstSession_hover_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__session__TypstSession_page_text_impl(
+        6 => wire__crate__api__session__TypstSession_highlight_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        8 => wire__crate__api__session__TypstSession_register_font_impl(
+        7 => wire__crate__api__session__TypstSession_hover_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__session__TypstSession_page_text_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        9 => wire__crate__api__session__TypstSession_render_page_region_impl(
+        9 => wire__crate__api__session__TypstSession_register_font_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        10 => {
+        10 => wire__crate__api__session__TypstSession_render_page_region_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        11 => {
             wire__crate__api__session__TypstSession_set_file_impl(port, ptr, rust_vec_len, data_len)
         }
-        11 => wire__crate__api__init_app_impl(port, ptr, rust_vec_len, data_len),
-        12 => {
+        12 => wire__crate__api__init_app_impl(port, ptr, rust_vec_len, data_len),
+        13 => {
             wire__crate__api__types__session_options_default_impl(port, ptr, rust_vec_len, data_len)
         }
         _ => unreachable!(),
@@ -1456,6 +1558,27 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::types::DiagnosticSeverity>
     for crate::api::types::DiagnosticSeverity
 {
     fn into_into_dart(self) -> crate::api::types::DiagnosticSeverity {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::types::FunctionInfoResult {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.generation.into_into_dart().into_dart(),
+            self.info.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::types::FunctionInfoResult
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::types::FunctionInfoResult>
+    for crate::api::types::FunctionInfoResult
+{
+    fn into_into_dart(self) -> crate::api::types::FunctionInfoResult {
         self
     }
 }
@@ -1818,6 +1941,29 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::types::TypstFoldingRange>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::types::TypstFunctionInfo {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.name.into_into_dart().into_dart(),
+            self.signature.into_into_dart().into_dart(),
+            self.description.into_into_dart().into_dart(),
+            self.example.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::types::TypstFunctionInfo
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::types::TypstFunctionInfo>
+    for crate::api::types::TypstFunctionInfo
+{
+    fn into_into_dart(self) -> crate::api::types::TypstFunctionInfo {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::types::TypstTooltip {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
@@ -1949,6 +2095,14 @@ impl SseEncode for f64 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         serializer.cursor.write_f64::<NativeEndian>(self).unwrap();
+    }
+}
+
+impl SseEncode for crate::api::types::FunctionInfoResult {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u64>::sse_encode(self.generation, serializer);
+        <Option<crate::api::types::TypstFunctionInfo>>::sse_encode(self.info, serializer);
     }
 }
 
@@ -2153,6 +2307,16 @@ impl SseEncode for Option<crate::api::types::HighlightTag> {
     }
 }
 
+impl SseEncode for Option<crate::api::types::TypstFunctionInfo> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::types::TypstFunctionInfo>::sse_encode(value, serializer);
+        }
+    }
+}
+
 impl SseEncode for Option<crate::api::types::TypstTooltip> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -2318,6 +2482,16 @@ impl SseEncode for crate::api::types::TypstFoldingRange {
         <u32>::sse_encode(self.start_utf16, serializer);
         <u32>::sse_encode(self.end_utf16, serializer);
         <crate::api::types::TypstFoldingKind>::sse_encode(self.kind, serializer);
+    }
+}
+
+impl SseEncode for crate::api::types::TypstFunctionInfo {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.name, serializer);
+        <String>::sse_encode(self.signature, serializer);
+        <Option<String>>::sse_encode(self.description, serializer);
+        <Option<String>>::sse_encode(self.example, serializer);
     }
 }
 

@@ -45,6 +45,21 @@ abstract class TypstSession implements RustOpaqueInterface {
   /// caller passes.
   Future<List<TypstFoldingRange>> foldingRanges({required String source});
 
+  /// Looks up documentation for the function named `label`, for an
+  /// IntelliSense-style details panel shown alongside the completion list.
+  ///
+  /// `cursor_utf16` is used first, to resolve whatever's actually at that
+  /// position in the source as of the last `compile()` call (handles field
+  /// access like `calc.abs`, local functions, etc.); if that doesn't
+  /// resolve to a function, falls back to a plain lookup of `label` in the
+  /// global scope (handles browsing completions before a full expression
+  /// exists, e.g. `#re|`). See [`CompletionResult`] for what `generation`
+  /// means.
+  Future<FunctionInfoResult> functionInfo({
+    required int cursorUtf16,
+    required String label,
+  });
+
   /// Computes a syntax-highlighting tree for `source`.
   ///
   /// Independent of compilation: this only parses, so it touches neither

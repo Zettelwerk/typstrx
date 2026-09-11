@@ -213,6 +213,7 @@ class _EditorPageState extends State<EditorPage> {
                       child: TypstCodeEditor(
                         controller: _controller,
                         onChanged: widget.session.updateSource,
+                        detailsBuilder: defaultTypstDetailsBuilder,
                       ),
                     ),
                   ),

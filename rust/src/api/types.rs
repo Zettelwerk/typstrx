@@ -141,6 +141,36 @@ pub struct HoverResult {
     pub tooltip: Option<TypstTooltip>,
 }
 
+/// The result of looking up a function's documentation. See
+/// [`CompletionResult`] for what `generation` means and why it's needed.
+pub struct FunctionInfoResult {
+    pub generation: u64,
+    pub info: Option<TypstFunctionInfo>,
+}
+
+/// Documentation for a function, for an IntelliSense-style details panel
+/// shown alongside the completion list.
+///
+/// Only covers Typst's built-in (native/element) functions — resolving a
+/// user-defined closure or a name reached through more than one level of
+/// field access (e.g. `a.b.c`) is out of scope, and callers should treat a
+/// `None` result as "no details available", not an error.
+pub struct TypstFunctionInfo {
+    /// The function's name, e.g. `"rect"`.
+    pub name: String,
+    /// A synthesized call signature, e.g. `"rect(width:, height:, fill:,
+    /// content)"`. Cheap to compute and always present when a function
+    /// resolves, unlike `description`/`example`.
+    pub signature: String,
+    /// The function's documentation, as Markdown, with the `example`
+    /// section (see `example`) removed. Absent for functions Typst doesn't
+    /// carry documentation for (e.g. plugin functions).
+    pub description: Option<String>,
+    /// Example Typst source demonstrating the function, extracted from its
+    /// documentation's ` ```example ` fenced block, when it has one.
+    pub example: Option<String>,
+}
+
 /// An autocompletion option.
 pub struct TypstCompletion {
     pub kind: TypstCompletionKind,

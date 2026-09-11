@@ -10,8 +10,9 @@ use typst::{World, WorldExt};
 use typst_layout::PagedDocument;
 
 use crate::api::types::{
-    CompileResult, CompletionResult, DiagnosticSeverity, HighlightNode, HoverResult, PageInfo,
-    PageTextData, RenderedRegion, SessionOptions, TypstDiagnostic, TypstFoldingRange, TypstrxError,
+    CompileResult, CompletionResult, DiagnosticSeverity, FunctionInfoResult, HighlightNode,
+    HoverResult, PageInfo, PageTextData, RenderedRegion, SessionOptions, TypstDiagnostic,
+    TypstFoldingRange, TypstrxError,
 };
 use crate::render::render_region;
 use crate::world::{TypstrxWorld, WorldOptions};
@@ -175,6 +176,27 @@ impl TypstSession {
             generation,
             tooltip,
         }
+    }
+
+    /// Looks up documentation for the function named `label`, for an
+    /// IntelliSense-style details panel shown alongside the completion list.
+    ///
+    /// `cursor_utf16` is used first, to resolve whatever's actually at that
+    /// position in the source as of the last `compile()` call (handles field
+    /// access like `calc.abs`, local functions, etc.); if that doesn't
+    /// resolve to a function, falls back to a plain lookup of `label` in the
+    /// global scope (handles browsing completions before a full expression
+    /// exists, e.g. `#re|`). See [`CompletionResult`] for what `generation`
+    /// means.
+    pub fn function_info(&self, cursor_utf16: u32, label: String) -> FunctionInfoResult {
+        let inner = self.inner.read();
+        let generation = inner.generation;
+        let Ok(source) = inner.world.source(inner.world.main()) else {
+            return FunctionInfoResult { generation, info: None };
+        };
+        let info =
+            crate::completion::function_info(&inner.world, &source, cursor_utf16, &label);
+        FunctionInfoResult { generation, info }
     }
 
     /// Renders the window `(x, y, width, height)` in pixels out of page

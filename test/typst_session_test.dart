@@ -71,6 +71,11 @@ class FakeRustSession implements rust.TypstSession {
   }
 
   @override
+  Future<rust.FunctionInfoResult> functionInfo({required int cursorUtf16, required String label}) async {
+    return rust.FunctionInfoResult(generation: BigInt.from(analysisGeneration), info: null);
+  }
+
+  @override
   Future<rust.RenderedRegion> renderPageRegion({
     required BigInt generation,
     required int pageIndex,

@@ -103,6 +103,26 @@ class CompletionResult {
 /// Severity of a [`TypstDiagnostic`].
 enum DiagnosticSeverity { error, warning }
 
+/// The result of looking up a function's documentation. See
+/// [`CompletionResult`] for what `generation` means and why it's needed.
+class FunctionInfoResult {
+  final BigInt generation;
+  final TypstFunctionInfo? info;
+
+  const FunctionInfoResult({required this.generation, this.info});
+
+  @override
+  int get hashCode => generation.hashCode ^ info.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FunctionInfoResult &&
+          runtimeType == other.runtimeType &&
+          generation == other.generation &&
+          info == other.info;
+}
+
 /// One node of a syntax-highlighting tree for Typst source.
 ///
 /// Mirrors the shape of the parse tree: a node with `children` is a grouping
@@ -568,6 +588,56 @@ class TypstFoldingRange {
           startUtf16 == other.startUtf16 &&
           endUtf16 == other.endUtf16 &&
           kind == other.kind;
+}
+
+/// Documentation for a function, for an IntelliSense-style details panel
+/// shown alongside the completion list.
+///
+/// Only covers Typst's built-in (native/element) functions — resolving a
+/// user-defined closure or a name reached through more than one level of
+/// field access (e.g. `a.b.c`) is out of scope, and callers should treat a
+/// `None` result as "no details available", not an error.
+class TypstFunctionInfo {
+  /// The function's name, e.g. `"rect"`.
+  final String name;
+
+  /// A synthesized call signature, e.g. `"rect(width:, height:, fill:,
+  /// content)"`. Cheap to compute and always present when a function
+  /// resolves, unlike `description`/`example`.
+  final String signature;
+
+  /// The function's documentation, as Markdown, with the `example`
+  /// section (see `example`) removed. Absent for functions Typst doesn't
+  /// carry documentation for (e.g. plugin functions).
+  final String? description;
+
+  /// Example Typst source demonstrating the function, extracted from its
+  /// documentation's ` ```example ` fenced block, when it has one.
+  final String? example;
+
+  const TypstFunctionInfo({
+    required this.name,
+    required this.signature,
+    this.description,
+    this.example,
+  });
+
+  @override
+  int get hashCode =>
+      name.hashCode ^
+      signature.hashCode ^
+      description.hashCode ^
+      example.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TypstFunctionInfo &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          signature == other.signature &&
+          description == other.description &&
+          example == other.example;
 }
 
 @freezed

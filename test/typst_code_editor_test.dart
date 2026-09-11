@@ -8,6 +8,7 @@ import 'package:typstrx/src/document/typst_session.dart';
 import 'package:typstrx/src/rust/api/session.dart' as rust;
 import 'package:typstrx/src/rust/api/types.dart' as rust;
 import 'package:typstrx/src/widgets/editor/typst_code_editor.dart';
+import 'package:typstrx/src/widgets/editor/typst_details_builder.dart';
 import 'package:typstrx/src/widgets/editor/typst_editor_controller.dart';
 
 /// A fake bridge session — same shape as the one in
@@ -28,6 +29,32 @@ class FakeRustSession implements rust.TypstSession {
   /// When set, `hover()` blocks until this completes — same purpose as
   /// [completionsGate], for hover's own staleness test.
   Completer<void>? hoverGate;
+
+  /// What `functionInfo()` returns for a given `label`, when present in this
+  /// map; falls back to [functionInfoToReturn] otherwise — lets a test give
+  /// two different function completions two different, distinguishable
+  /// results.
+  final functionInfoByLabel = <String, rust.TypstFunctionInfo?>{};
+
+  /// What `functionInfo()` returns when [functionInfoByLabel] has no entry
+  /// for the requested label.
+  rust.TypstFunctionInfo? functionInfoToReturn;
+
+  /// When set, `functionInfo()` blocks until this completes — same purpose
+  /// as [completionsGate]/[hoverGate], for its own staleness/dismiss tests.
+  Completer<void>? functionInfoGate;
+
+  /// Every `functionInfo()` call's `label` argument, in order — lets tests
+  /// assert which item(s) were actually fetched.
+  final functionInfoCalls = <String>[];
+
+  @override
+  Future<rust.FunctionInfoResult> functionInfo({required int cursorUtf16, required String label}) async {
+    functionInfoCalls.add(label);
+    if (functionInfoGate != null) await functionInfoGate!.future;
+    final info = functionInfoByLabel.containsKey(label) ? functionInfoByLabel[label] : functionInfoToReturn;
+    return rust.FunctionInfoResult(generation: BigInt.zero, info: info);
+  }
 
   @override
   Future<List<rust.TypstFoldingRange>> foldingRanges({required String source}) async => const [];
@@ -184,16 +211,23 @@ void main() {
       List<rust.TypstCompletion> completions = const [],
       int applyFromUtf16 = 1,
       FocusNode? focusNode,
+      TypstDetailsBuilder? detailsBuilder,
+      FakeRustSession? fake,
     }) async {
-      final fake = FakeRustSession()
+      final theFake = fake ?? FakeRustSession();
+      theFake
         ..completionsToReturn = completions
         ..applyFromUtf16ToReturn = applyFromUtf16;
-      final session = TypstSession.forTesting(fake, const TypstSessionOptions());
+      final session = TypstSession.forTesting(theFake, const TypstSessionOptions());
       await session.compile(text);
       final controller = TypstEditorController(session: session, text: '');
 
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: TypstCodeEditor(controller: controller, focusNode: focusNode))),
+        MaterialApp(
+          home: Scaffold(
+            body: TypstCodeEditor(controller: controller, focusNode: focusNode, detailsBuilder: detailsBuilder),
+          ),
+        ),
       );
       await tester.pump();
 
@@ -209,7 +243,7 @@ void main() {
       // what's assigned here, so the request's own "compile if stale"
       // step is a no-op — this is purely waiting out the debounce timer.
       await tester.pump(const Duration(milliseconds: 160));
-      return (fake, session, controller);
+      return (theFake, session, controller);
     }
 
     const lorem = rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'lorem', apply: 'lorem(\${})');
@@ -673,6 +707,210 @@ void main() {
 
       expect(find.text('lorem'), findsNothing, reason: 'stale result must not be shown');
 
+      controller.dispose();
+      await session.dispose();
+    });
+  });
+
+  group('completion details panel', () {
+    const lorem = rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'lorem', apply: 'lorem(\${})');
+    const rectFunc = rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'rect', apply: 'rect(\${})');
+    const letBinding = rust.TypstCompletion(
+      kind: rust.TypstCompletionKind.syntax(),
+      label: 'let binding',
+      apply: 'let',
+    );
+
+    // Reuses the same `triggerCompletions` helper from the 'completion
+    // popup' group above (defined in this same `main()`), which pre-compiles
+    // and drives the implicit trigger through its debounce.
+    Future<(FakeRustSession, TypstSession, TypstEditorController)> triggerCompletions(
+      WidgetTester tester, {
+      required String text,
+      required int cursor,
+      List<rust.TypstCompletion> completions = const [],
+      int applyFromUtf16 = 1,
+      FocusNode? focusNode,
+      TypstDetailsBuilder? detailsBuilder,
+      FakeRustSession? fake,
+    }) async {
+      final theFake = fake ?? FakeRustSession();
+      theFake
+        ..completionsToReturn = completions
+        ..applyFromUtf16ToReturn = applyFromUtf16;
+      final session = TypstSession.forTesting(theFake, const TypstSessionOptions());
+      await session.compile(text);
+      final controller = TypstEditorController(session: session, text: '');
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TypstCodeEditor(controller: controller, focusNode: focusNode, detailsBuilder: detailsBuilder),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      if (focusNode != null) {
+        focusNode.requestFocus();
+        await tester.pump();
+      }
+
+      controller.value = TextEditingValue(text: text, selection: TextSelection.collapsed(offset: cursor));
+      await tester.pump(const Duration(milliseconds: 160));
+      return (theFake, session, controller);
+    }
+
+    testWidgets('a function item is fetched and its details shown via detailsBuilder', (tester) async {
+      final fake = FakeRustSession()
+        ..functionInfoToReturn = const rust.TypstFunctionInfo(name: 'lorem', signature: 'lorem(count)');
+      final (_, session, controller) = await triggerCompletions(
+        tester,
+        text: '#l',
+        cursor: 2,
+        completions: const [lorem],
+        applyFromUtf16: 2,
+        fake: fake,
+        detailsBuilder: (context, info) => Text('DETAILS:${info.signature}'),
+      );
+
+      expect(fake.functionInfoCalls, ['lorem']);
+      expect(find.text('DETAILS:lorem(count)'), findsOneWidget);
+
+      controller.dispose();
+      await session.dispose();
+    });
+
+    testWidgets('a non-function completion is never fetched and shows no details panel', (tester) async {
+      final fake = FakeRustSession()
+        ..functionInfoToReturn = const rust.TypstFunctionInfo(name: 'lorem', signature: 'lorem(count)');
+      final (_, session, controller) = await triggerCompletions(
+        tester,
+        text: '#le',
+        cursor: 3,
+        completions: const [letBinding],
+        applyFromUtf16: 3,
+        fake: fake,
+        detailsBuilder: (context, info) => Text('DETAILS:${info.signature}'),
+      );
+
+      expect(fake.functionInfoCalls, isEmpty);
+      expect(find.textContaining('DETAILS:'), findsNothing);
+
+      controller.dispose();
+      await session.dispose();
+    });
+
+    testWidgets('with no detailsBuilder, nothing is ever fetched', (tester) async {
+      final fake = FakeRustSession()
+        ..functionInfoToReturn = const rust.TypstFunctionInfo(name: 'lorem', signature: 'lorem(count)');
+      final (_, session, controller) = await triggerCompletions(
+        tester,
+        text: '#l',
+        cursor: 2,
+        completions: const [lorem],
+        applyFromUtf16: 2,
+        fake: fake,
+      );
+
+      expect(fake.functionInfoCalls, isEmpty, reason: 'a caller who never opted in should pay no fetch cost');
+
+      controller.dispose();
+      await session.dispose();
+    });
+
+    testWidgets('functionInfo resolving to null leaves the completions popup showing normally', (tester) async {
+      final fake = FakeRustSession(); // functionInfoToReturn defaults to null
+      final (_, session, controller) = await triggerCompletions(
+        tester,
+        text: '#l',
+        cursor: 2,
+        completions: const [lorem],
+        applyFromUtf16: 2,
+        fake: fake,
+        detailsBuilder: (context, info) => Text('DETAILS:${info.signature}'),
+      );
+
+      expect(find.text('lorem'), findsOneWidget, reason: 'the completion list itself must not depend on this');
+      expect(find.textContaining('DETAILS:'), findsNothing);
+
+      controller.dispose();
+      await session.dispose();
+    });
+
+    testWidgets('arrowing through items faster than fetches return shows only the last selection\'s details', (
+      tester,
+    ) async {
+      final fake = FakeRustSession()
+        ..functionInfoByLabel['lorem'] = const rust.TypstFunctionInfo(name: 'lorem', signature: 'lorem(count)')
+        ..functionInfoByLabel['rect'] = const rust.TypstFunctionInfo(name: 'rect', signature: 'rect(width)')
+        ..functionInfoGate = Completer<void>();
+      final focusNode = FocusNode();
+      final (_, session, controller) = await triggerCompletions(
+        tester,
+        text: '#',
+        cursor: 1,
+        completions: const [lorem, rectFunc],
+        focusNode: focusNode,
+        fake: fake,
+        detailsBuilder: (context, info) => Text('DETAILS:${info.signature}'),
+      );
+      // The initial-selection fetch for 'lorem' is in flight, gated.
+      expect(fake.functionInfoCalls, ['lorem']);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      // Moving selection dispatches a second fetch, for 'rect' — also gated,
+      // and now the *current* one (_detailsRequestId has advanced).
+      expect(fake.functionInfoCalls, ['lorem', 'rect']);
+
+      // Both requests resolve now, in the order they were made (lorem's
+      // first) — only rect's result, the current selection's, should render.
+      fake.functionInfoGate!.complete();
+      await tester.pump(const Duration(milliseconds: 1));
+
+      expect(find.text('DETAILS:rect(width)'), findsOneWidget);
+      expect(
+        find.text('DETAILS:lorem(count)'),
+        findsNothing,
+        reason: 'the stale first fetch must not overwrite the later selection',
+      );
+
+      focusNode.dispose();
+      controller.dispose();
+      await session.dispose();
+    });
+
+    testWidgets('dismissing the popup mid-fetch does not reinsert it once the fetch resolves', (tester) async {
+      final fake = FakeRustSession()
+        ..functionInfoToReturn = const rust.TypstFunctionInfo(name: 'lorem', signature: 'lorem(count)')
+        ..functionInfoGate = Completer<void>();
+      final focusNode = FocusNode();
+      final (_, session, controller) = await triggerCompletions(
+        tester,
+        text: '#l',
+        cursor: 2,
+        completions: const [lorem],
+        applyFromUtf16: 2,
+        focusNode: focusNode,
+        fake: fake,
+        detailsBuilder: (context, info) => Text('DETAILS:${info.signature}'),
+      );
+      expect(find.text('lorem'), findsOneWidget);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      expect(find.text('lorem'), findsNothing, reason: 'escape must have dismissed the popup');
+
+      // The in-flight functionInfo() call from before the dismissal resolves
+      // only now.
+      fake.functionInfoGate!.complete();
+      await tester.pump(const Duration(milliseconds: 1));
+
+      expect(find.text('lorem'), findsNothing, reason: 'a stale resolve must not reopen the popup');
+      expect(find.textContaining('DETAILS:'), findsNothing);
+
+      focusNode.dispose();
       controller.dispose();
       await session.dispose();
     });

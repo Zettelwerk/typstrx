@@ -67,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 143438147;
+  int get rustContentHash => 1775829977;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -97,6 +97,12 @@ abstract class RustLibApi extends BaseApi {
   Future<List<TypstFoldingRange>> crateApiSessionTypstSessionFoldingRanges({
     required TypstSession that,
     required String source,
+  });
+
+  Future<FunctionInfoResult> crateApiSessionTypstSessionFunctionInfo({
+    required TypstSession that,
+    required int cursorUtf16,
+    required String label,
   });
 
   Future<HighlightNode> crateApiSessionTypstSessionHighlight({
@@ -311,6 +317,46 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<FunctionInfoResult> crateApiSessionTypstSessionFunctionInfo({
+    required TypstSession that,
+    required int cursorUtf16,
+    required String label,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTypstSession(
+            that,
+            serializer,
+          );
+          sse_encode_u_32(cursorUtf16, serializer);
+          sse_encode_String(label, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 5,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_function_info_result,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSessionTypstSessionFunctionInfoConstMeta,
+        argValues: [that, cursorUtf16, label],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSessionTypstSessionFunctionInfoConstMeta =>
+      const TaskConstMeta(
+        debugName: "TypstSession_function_info",
+        argNames: ["that", "cursorUtf16", "label"],
+      );
+
+  @override
   Future<HighlightNode> crateApiSessionTypstSessionHighlight({
     required TypstSession that,
     required String source,
@@ -327,7 +373,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 5,
+            funcId: 6,
             port: port_,
           );
         },
@@ -365,7 +411,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 6,
+            funcId: 7,
             port: port_,
           );
         },
@@ -405,7 +451,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 7,
+            funcId: 8,
             port: port_,
           );
         },
@@ -443,7 +489,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 8,
+            funcId: 9,
             port: port_,
           );
         },
@@ -497,7 +543,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 9,
+            funcId: 10,
             port: port_,
           );
         },
@@ -559,7 +605,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 10,
+            funcId: 11,
             port: port_,
           );
         },
@@ -589,7 +635,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 12,
             port: port_,
           );
         },
@@ -616,7 +662,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 12,
+            funcId: 13,
             port: port_,
           );
         },
@@ -700,6 +746,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  TypstFunctionInfo dco_decode_box_autoadd_typst_function_info(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_typst_function_info(raw);
+  }
+
+  @protected
   TypstTooltip dco_decode_box_autoadd_typst_tooltip(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_typst_tooltip(raw);
@@ -749,6 +801,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   double dco_decode_f_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as double;
+  }
+
+  @protected
+  FunctionInfoResult dco_decode_function_info_result(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return FunctionInfoResult(
+      generation: dco_decode_u_64(arr[0]),
+      info: dco_decode_opt_box_autoadd_typst_function_info(arr[1]),
+    );
   }
 
   @protected
@@ -885,6 +949,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   HighlightTag? dco_decode_opt_box_autoadd_highlight_tag(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_highlight_tag(raw);
+  }
+
+  @protected
+  TypstFunctionInfo? dco_decode_opt_box_autoadd_typst_function_info(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_typst_function_info(raw);
   }
 
   @protected
@@ -1057,6 +1129,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  TypstFunctionInfo dco_decode_typst_function_info(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return TypstFunctionInfo(
+      name: dco_decode_String(arr[0]),
+      signature: dco_decode_String(arr[1]),
+      description: dco_decode_opt_String(arr[2]),
+      example: dco_decode_opt_String(arr[3]),
+    );
+  }
+
+  @protected
   TypstTooltip dco_decode_typst_tooltip(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     switch (raw[0]) {
@@ -1190,6 +1276,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  TypstFunctionInfo sse_decode_box_autoadd_typst_function_info(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_typst_function_info(deserializer));
+  }
+
+  @protected
   TypstTooltip sse_decode_box_autoadd_typst_tooltip(
     SseDeserializer deserializer,
   ) {
@@ -1246,6 +1340,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   double sse_decode_f_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getFloat64();
+  }
+
+  @protected
+  FunctionInfoResult sse_decode_function_info_result(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_generation = sse_decode_u_64(deserializer);
+    var var_info = sse_decode_opt_box_autoadd_typst_function_info(deserializer);
+    return FunctionInfoResult(generation: var_generation, info: var_info);
   }
 
   @protected
@@ -1463,6 +1567,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  TypstFunctionInfo? sse_decode_opt_box_autoadd_typst_function_info(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_typst_function_info(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   TypstTooltip? sse_decode_opt_box_autoadd_typst_tooltip(
     SseDeserializer deserializer,
   ) {
@@ -1654,6 +1771,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  TypstFunctionInfo sse_decode_typst_function_info(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_name = sse_decode_String(deserializer);
+    var var_signature = sse_decode_String(deserializer);
+    var var_description = sse_decode_opt_String(deserializer);
+    var var_example = sse_decode_opt_String(deserializer);
+    return TypstFunctionInfo(
+      name: var_name,
+      signature: var_signature,
+      description: var_description,
+      example: var_example,
+    );
+  }
+
+  @protected
   TypstTooltip sse_decode_typst_tooltip(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -1799,6 +1933,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_typst_function_info(
+    TypstFunctionInfo self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_typst_function_info(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_typst_tooltip(
     TypstTooltip self,
     SseSerializer serializer,
@@ -1847,6 +1990,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_f_64(double self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putFloat64(self);
+  }
+
+  @protected
+  void sse_encode_function_info_result(
+    FunctionInfoResult self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.generation, serializer);
+    sse_encode_opt_box_autoadd_typst_function_info(self.info, serializer);
   }
 
   @protected
@@ -2044,6 +2197,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_box_autoadd_typst_function_info(
+    TypstFunctionInfo? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_typst_function_info(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_opt_box_autoadd_typst_tooltip(
     TypstTooltip? self,
     SseSerializer serializer,
@@ -2202,6 +2368,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_typst_function_info(
+    TypstFunctionInfo self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.signature, serializer);
+    sse_encode_opt_String(self.description, serializer);
+    sse_encode_opt_String(self.example, serializer);
+  }
+
+  @protected
   void sse_encode_typst_tooltip(TypstTooltip self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     switch (self) {
@@ -2321,6 +2499,25 @@ class TypstSessionImpl extends RustOpaque implements TypstSession {
         that: this,
         source: source,
       );
+
+  /// Looks up documentation for the function named `label`, for an
+  /// IntelliSense-style details panel shown alongside the completion list.
+  ///
+  /// `cursor_utf16` is used first, to resolve whatever's actually at that
+  /// position in the source as of the last `compile()` call (handles field
+  /// access like `calc.abs`, local functions, etc.); if that doesn't
+  /// resolve to a function, falls back to a plain lookup of `label` in the
+  /// global scope (handles browsing completions before a full expression
+  /// exists, e.g. `#re|`). See [`CompletionResult`] for what `generation`
+  /// means.
+  Future<FunctionInfoResult> functionInfo({
+    required int cursorUtf16,
+    required String label,
+  }) => RustLib.instance.api.crateApiSessionTypstSessionFunctionInfo(
+    that: this,
+    cursorUtf16: cursorUtf16,
+    label: label,
+  );
 
   /// Computes a syntax-highlighting tree for `source`.
   ///
