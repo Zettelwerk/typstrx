@@ -6,17 +6,21 @@ part of 'typst_viewer.dart';
 // _TriangleHandlePainter and _HandleState below.
 const _handleSize = 30.0;
 
-// The magnifier's own size and how far above the touch point it floats —
-// values Cupertino's own text magnifier uses, reused here for a familiar
-// feel rather than inventing new ones. The decoration (rounded rect,
-// radius, shadow) mirrors pdfrx's _buildMagnifierDecoration exactly; only
-// the sourcing technique differs — pdfrx re-renders the page at high
-// resolution into a dedicated cache, this uses RawMagnifier's
-// backdrop-filter sampling of whatever's already painted below it, which
-// avoids adding a second render/cache path for a feature that's already
-// showing rasterized tiles (re-rendering wouldn't gain resolution beyond
-// the current tile, only cost more).
-const _magnifierSize = Size(80, 48);
+// The magnifier's own size and how far above the touch point it floats.
+// pdfrx's own magnifier is a wide horizontal strip, not a small square
+// loupe — its content rect spans +-2x the character's height horizontally
+// but only +-0.2x vertically (see _getMagnifierRect), then scales so the
+// *shorter* side lands on 80px, leaving the wider side considerably larger
+// — a single fixed-aspect size here rather than that per-character
+// computation, but picked to land in the same "wide strip" territory. The
+// decoration (rounded rect, radius, shadow) mirrors pdfrx's
+// _buildMagnifierDecoration exactly; only the sourcing technique differs —
+// pdfrx re-renders the page at high resolution into a dedicated cache,
+// this uses RawMagnifier's backdrop-filter sampling of whatever's already
+// painted below it, which avoids adding a second render/cache path for a
+// feature that's already showing rasterized tiles (re-rendering wouldn't
+// gain resolution beyond the current tile, only cost more).
+const _magnifierSize = Size(160, 48);
 const _magnifierAboveFocalPoint = 26.0;
 const _magnifierScale = 1.5;
 const _magnifierBorderRadius = 30.0;
@@ -375,61 +379,26 @@ extension _TypstViewerSelection on _TypstViewerState {
     final layout = _layout;
     if (layout == null) return widgets;
 
-    if (selection != null && _lastInputWasTouch) {
-      for (final (point, isStart) in [
-        (selection.$1, true),
-        (selection.$2, false),
-      ]) {
-        final rect = _charRectInDocument(point, isStart: isStart);
-        if (rect == null) continue;
-        // The start handle's own bottom-right corner (30,30) anchors to the
-        // selection's bottom-left text edge; the end handle's top-left
-        // corner (0,0) anchors to its bottom-right edge — same attachment
-        // pdfrx uses (its aRight/aBottom vs. bLeft/bTop insets), expressed
-        // here as a direct top-left offset since this Positioned's parent
-        // Stack fills the viewport.
-        final anchor = _docToView(isStart ? rect.bottomLeft : rect.bottomRight);
-        final view = isStart
-            ? anchor - const Offset(_handleSize, _handleSize)
-            : anchor;
-        final isDragging = _draggingHandleIsStart == isStart;
-        widgets.add(Positioned(
-          left: view.dx,
-          top: view.dy,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onPanStart: (_) {
-              _draggingHandleIsStart = isStart;
-              _handleDragPoint = anchor;
-              _repaint();
-            },
-            onPanUpdate: (details) => _onHandleDrag(details, isStart),
-            onPanEnd: (_) {
-              _draggingHandleIsStart = null;
-              _handleDragPoint = null;
-              _repaint();
-            },
-            child: CustomPaint(
-              size: const Size(_handleSize, _handleSize),
-              painter: _TriangleHandlePainter(
-                path: isStart ? _startHandlePath() : _endHandlePath(),
-                color: widget.params.selectionColor.withAlpha(0xff),
-                state: isDragging ? _HandleState.dragging : _HandleState.normal,
-              ),
-            ),
-          ),
-        ));
-      }
-    }
-
-    if (_draggingHandleIsStart != null && _handleDragPoint != null) {
-      widgets.add(_buildMagnifier(_handleDragPoint!));
-    }
-
+    // Toolbar first, handles last: the start handle's flag (see below) can
+    // land close to — or overlapping — a freshly shown copy toolbar for a
+    // short selection, and the handle needs to win that overlap to stay
+    // draggable. Order in this list is z-order (later = front, and hit-
+    // tested first), so the handles loop has to run after this block.
+    //
+    // Every widget added below carries an explicit Key. Without one, this
+    // being a plain unkeyed list means Flutter's Stack reconciles children
+    // by *list position*, not identity — and the toolbar (this one) comes
+    // and goes independently of the handles (e.g. _onHandleDrag clears
+    // _toolbarAnchor mid-drag), which would shift every later widget's
+    // list index by one and make Flutter tear down and recreate their
+    // Elements, silently losing whichever handle's GestureDetector had an
+    // in-flight drag — the pointer's route would be dropped and
+    // onPanUpdate would simply stop firing partway through a drag.
     final toolbarAnchor = _toolbarAnchor;
     if (selection != null && toolbarAnchor != null) {
       final view = _docToView(toolbarAnchor);
       widgets.add(Positioned(
+        key: const ValueKey('selection-toolbar'),
         left: math.max(view.dx - 40, 8),
         top: math.max(view.dy - 56, 8),
         child: Material(
@@ -452,6 +421,65 @@ extension _TypstViewerSelection on _TypstViewerState {
         ),
       ));
     }
+
+    if (selection != null && _lastInputWasTouch) {
+      for (final (point, isStart) in [
+        (selection.$1, true),
+        (selection.$2, false),
+      ]) {
+        final rect = _charRectInDocument(point, isStart: isStart);
+        if (rect == null) continue;
+        // The start handle's own bottom-right corner (30,30) anchors to the
+        // selection's *top*-left text edge, so the whole flag sits above
+        // and clear of the selected text (tip touching the top corner,
+        // body hanging further up) — the end handle's top-left corner
+        // (0,0) anchors to the bottom-right edge, hanging below instead.
+        // Same attachment pdfrx uses (its aRight/aBottom vs. bLeft/bTop
+        // insets), expressed here as a direct top-left offset since this
+        // Positioned's parent Stack fills the viewport.
+        final anchor = _docToView(isStart ? rect.topLeft : rect.bottomRight);
+        final view = isStart
+            ? anchor - const Offset(_handleSize, _handleSize)
+            : anchor;
+        final isDragging = _handleDragMovingPoint == point;
+        widgets.add(Positioned(
+          key: ValueKey(isStart ? 'start-handle' : 'end-handle'),
+          left: view.dx,
+          top: view.dy,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onPanStart: (_) {
+              _draggingHandleIsStart = isStart;
+              _handleDragFixedEnd = isStart ? selection.$2 : selection.$1;
+              _handleDragMovingPoint = point;
+              _handleDragPoint = anchor;
+              _repaint();
+            },
+            onPanUpdate: (details) => _onHandleDrag(details, isStart),
+            onPanEnd: (_) {
+              _draggingHandleIsStart = null;
+              _handleDragPoint = null;
+              _handleDragFixedEnd = null;
+              _handleDragMovingPoint = null;
+              _repaint();
+            },
+            child: CustomPaint(
+              size: const Size(_handleSize, _handleSize),
+              painter: _TriangleHandlePainter(
+                path: isStart ? _startHandlePath() : _endHandlePath(),
+                color: widget.params.selectionColor.withAlpha(0xff),
+                state: isDragging ? _HandleState.dragging : _HandleState.normal,
+              ),
+            ),
+          ),
+        ));
+      }
+    }
+
+    if (_draggingHandleIsStart != null && _handleDragPoint != null) {
+      widgets.add(_buildMagnifier(_handleDragPoint!));
+    }
+
     return widgets;
   }
 
@@ -465,6 +493,7 @@ extension _TypstViewerSelection on _TypstViewerState {
   /// whatever resolution the page is currently rendered at.
   Widget _buildMagnifier(Offset focalPoint) {
     return Positioned(
+      key: const ValueKey('selection-magnifier'),
       left: focalPoint.dx - _magnifierSize.width / 2,
       top: focalPoint.dy - _magnifierAboveFocalPoint - _magnifierSize.height / 2,
       child: IgnorePointer(
@@ -500,9 +529,18 @@ extension _TypstViewerSelection on _TypstViewerState {
         .toRectInDocument(layout.pageRects[point.pageIndex]);
   }
 
+  // Keeps the *other* handle's position stable across the whole drag by
+  // referencing the value captured once in onPanStart (_handleDragFixedEnd)
+  // rather than re-deriving "the other endpoint" from _normalizedSelection
+  // each frame. That re-derivation was the previous bug: _normalizedSelection
+  // swaps its two points as soon as the dragged one crosses the other, so
+  // whichever of _selAnchor/_selFocus this function treated as "the fixed
+  // side" would suddenly become last frame's *moving* value instead of the
+  // true fixed one — collapsing the selection to a near-zero span one frame
+  // after crossing, instead of properly flipping which handle is which.
   void _onHandleDrag(DragUpdateDetails details, bool isStart) {
-    final selection = _normalizedSelection;
-    if (selection == null) return;
+    final fixed = _handleDragFixedEnd;
+    if (fixed == null) return;
     // The handle lives in view coordinates; convert to document space.
     final viewPoint = details.globalPosition - _viewOrigin();
     _handleDragPoint = viewPoint; // follows the finger regardless of hit-test below
@@ -512,12 +550,22 @@ extension _TypstViewerSelection on _TypstViewerState {
       _repaint(); // still need to redraw the magnifier at its new position
       return;
     }
-    if (isStart) {
-      _selAnchor = point;
-      _selFocus = selection.$2;
+    // Selecting past a character means including it: the "end"-style
+    // (exclusive, one-past-last) convention this handle started with stays
+    // fixed for the whole gesture, regardless of which side of `fixed` the
+    // finger ends up on.
+    final moving = isStart ? point : _SelPoint(point.pageIndex, point.charIndex + 1);
+    // Matches selection.$1/$2's own convention (the render loop's `point`,
+    // used for the isDragging comparison there) rather than the raw
+    // hit-tested character — those two differ by exactly the +1 above for
+    // an "end"-style drag.
+    _handleDragMovingPoint = moving;
+    if (moving.compareTo(fixed) <= 0) {
+      _selAnchor = moving;
+      _selFocus = fixed;
     } else {
-      _selAnchor = selection.$1;
-      _selFocus = _SelPoint(point.pageIndex, point.charIndex + 1);
+      _selAnchor = fixed;
+      _selFocus = moving;
     }
     _toolbarAnchor = null;
     _repaint();

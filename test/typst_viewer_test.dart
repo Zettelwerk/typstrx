@@ -93,10 +93,13 @@ class FakeRustSession implements rust.TypstSession {
     if (generation.toInt() != this.generation) {
       throw const rust.TypstrxError.stale();
     }
-    // One line of text: "HELLOWORLD", 10 chars, 20pt wide each, at
-    // y 100..120pt, starting at x 50pt. Plus one link over the text and an
-    // internal link to page 3 at the bottom.
-    const text = 'HELLOWORLD';
+    // One line of text: "HELLO WORLD", 11 chars (including the space) 20pt
+    // wide each, at y 100..120pt, starting at x 50pt. Plus one link over the
+    // text and an internal link to page 3 at the bottom. Two separate words
+    // (rather than one run) so a long-press selects a sub-range with real
+    // room on both sides — needed to drag a handle all the way past the
+    // other one, for the handle-crossing regression test below.
+    const text = 'HELLO WORLD';
     return rust.PageTextData(
       fullText: text,
       charRects: [
@@ -522,7 +525,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 30));
 
     expect(controller.selectedText, isNotEmpty);
-    expect('HELLOWORLD', contains(controller.selectedText));
+    expect('HELLO WORLD', contains(controller.selectedText));
     expect(controller.selectedText.length, greaterThanOrEqualTo(4));
 
     controller.clearSelection();
@@ -586,6 +589,73 @@ void main() {
       await tester.pump(const Duration(milliseconds: 20));
 
       expect(find.byType(RawMagnifier), findsNothing, reason: 'hidden again once the drag ends');
+    },
+  );
+
+  testWidgets(
+    'dragging the end handle past the start handle keeps a valid (swapped) selection',
+    (tester) async {
+      final (session, _) = await makeSession();
+      final controller = TypstViewerController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: TypstViewer(
+            session: session,
+            controller: controller,
+            params: const TypstViewerParams(renderDelay: Duration(milliseconds: 1)),
+          ),
+        ),
+      );
+      await settle(tester);
+
+      const zoom = 800 / 611;
+      Offset docToView(Offset doc) => Offset(doc.dx * zoom, doc.dy * zoom);
+
+      // Long-press "R" in "WORLD" (chars 6..11) to select that whole word,
+      // leaving "HELLO" (chars 0..5) untouched to its left — room to drag
+      // the end handle all the way past the (fixed) start handle.
+      final wordPoint = docToView(const Offset(8 + 220, 8 + 110));
+      final press = await tester.startGesture(wordPoint, kind: PointerDeviceKind.touch);
+      await tester.pump(const Duration(milliseconds: 600));
+      await press.up();
+      await tester.pump();
+      expect(controller.selectedText, 'WORLD');
+
+      bool isHandle(Widget w) => w is GestureDetector && w.onPanStart != null && w.onPanUpdate != null;
+      final handles = find.byWidgetPredicate(isHandle);
+      expect(handles, findsNWidgets(2));
+      final endHandleCenter = tester.getCenter(handles.last);
+
+      // Drag the end handle, in several incremental steps (reproducing the
+      // multi-frame drift the original bug needed to manifest), all the
+      // way past the fixed start handle and into "HELLO".
+      final drag = await tester.startGesture(endHandleCenter, kind: PointerDeviceKind.touch);
+      await tester.pump(const Duration(milliseconds: 20));
+      for (final doc in [
+        const Offset(8 + 180, 8 + 110),
+        const Offset(8 + 130, 8 + 110),
+        const Offset(8 + 100, 8 + 110),
+      ]) {
+        await drag.moveTo(docToView(doc));
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+
+      // The selection must still be alive and span the whole crossed
+      // range — not collapsed to a near-nothing sliver, which is exactly
+      // what the bug this guards against did: re-deriving "the other,
+      // fixed endpoint" from the swap-aware normalized selection every
+      // frame lost track of the true fixed point after crossing.
+      expect(controller.selectedText, isNotEmpty);
+      expect(
+        controller.selectedText.length,
+        greaterThanOrEqualTo(3),
+        reason: 'a 1-2 char selection here is the collapse-to-nothing bug',
+      );
+      expect(find.byWidgetPredicate(isHandle), findsNWidgets(2), reason: 'both handles still render post-crossing');
+
+      await drag.up();
+      await tester.pump(const Duration(milliseconds: 20));
     },
   );
 

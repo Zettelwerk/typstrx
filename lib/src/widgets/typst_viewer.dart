@@ -88,6 +88,13 @@ class _TypstViewerState extends State<TypstViewer> {
   // _buildSelectionOverlay/_onHandleDrag.
   bool? _draggingHandleIsStart;
   Offset? _handleDragPoint;
+  // The endpoint NOT being dragged, captured once when the drag starts, and
+  // the endpoint currently under the finger, updated every frame — see
+  // _onHandleDrag for why these (rather than re-deriving from
+  // _normalizedSelection each frame) are what keep dragging one handle past
+  // the other from corrupting the selection.
+  _SelPoint? _handleDragFixedEnd;
+  _SelPoint? _handleDragMovingPoint;
 
   // Touch pan/pinch-zoom gesture state (see _onGestureScale*).
   double? _gestureStartZoom;

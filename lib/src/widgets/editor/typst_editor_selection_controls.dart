@@ -17,7 +17,7 @@ final typstEditorMagnifierConfiguration = TextMagnifierConfiguration(
 // Same values the reader's magnifier uses (see typst_viewer_selection.dart)
 // — kept in sync by eye rather than shared, since the two live in separate
 // library parts with no natural shared-constants file yet.
-const _magnifierSize = Size(80, 48);
+const _magnifierSize = Size(160, 48);
 const _magnifierAboveFocalPoint = 26.0;
 const _magnifierScale = 1.5;
 const _magnifierBorderRadius = 30.0;
@@ -96,22 +96,36 @@ class TypstEditorSelectionControls extends TextSelectionControls
   static const _handleSize = 30.0;
   static const _collapsedDiameter = 12.0;
 
+  // `EditableText` always feeds the *bottom*-of-line point as the anchor
+  // for every handle type (see RenderEditable._paintHandleLayers /
+  // getEndpointsForSelection) — there's no per-type top/bottom choice the
+  // way the reader's own overlay gets to make, and — a real API limit, not
+  // a design choice — `getHandleSize` isn't even told which [type] it's
+  // sizing, so it can't return a different size per type either. Every
+  // handle's box is therefore made the full line height plus the flag
+  // (`textLineHeight + _handleSize` tall) uniformly, whether or not a given
+  // type actually needs the extra room:
+  //
+  //  - left (start): the flag is drawn in the box's *top* 30px, with the
+  //    anchor pinned to the box's bottom-right — since that bottom-right
+  //    corner is what lines up with the fixed bottom-of-line feed point,
+  //    the flag itself (a whole line height above that corner) ends up
+  //    sitting right at the *top* of the line, tip touching it, matching
+  //    pdfrx's look (and the reader's own — see typst_viewer_selection.dart).
+  //  - right (end) and collapsed: the flag/circle is also drawn in the
+  //    box's top 30px, anchor pinned to the box's top-left (0,0) — so it
+  //    sits exactly at the bottom-of-line feed point, same as before this
+  //    box was made taller. The extra height below is unused, inert space
+  //    (a larger hit target, not a visual change).
   @override
-  Size getHandleSize(double textLineHeight) => const Size(_handleSize, _handleSize);
+  Size getHandleSize(double textLineHeight) => Size(_handleSize, textLineHeight + _handleSize);
 
   @override
   Offset getHandleAnchor(TextSelectionHandleType type, double textLineHeight) {
     return switch (type) {
-      // Pinned at the box's bottom-right corner, aligning with the
-      // selection start's bottom-left text edge — mirrors pdfrx's
-      // aRight/aBottom-inset positioning of its own start handle.
-      TextSelectionHandleType.left => const Offset(_handleSize, _handleSize),
-      // Pinned at the box's top-left corner, aligning with the selection
-      // end's bottom-right text edge — mirrors pdfrx's bLeft/bTop insets.
+      TextSelectionHandleType.left => Offset(_handleSize, textLineHeight + _handleSize),
       TextSelectionHandleType.right => Offset.zero,
-      // Top-center of the box coincides with the caret's own bottom point;
-      // the box hangs downward from there, the circle sitting just below.
-      TextSelectionHandleType.collapsed => const Offset(_handleSize / 2, 0),
+      TextSelectionHandleType.collapsed => Offset(_handleSize / 2, 0),
     };
   }
 
@@ -123,22 +137,28 @@ class TypstEditorSelectionControls extends TextSelectionControls
     VoidCallback? onTap,
   ]) {
     final handleColor = color ?? Theme.of(context).colorScheme.primary;
+    final flag = switch (type) {
+      TextSelectionHandleType.left => CustomPaint(
+        size: const Size(_handleSize, _handleSize),
+        painter: _TriangleHandlePainter(path: _startHandlePath(), color: handleColor),
+      ),
+      TextSelectionHandleType.right => CustomPaint(
+        size: const Size(_handleSize, _handleSize),
+        painter: _TriangleHandlePainter(path: _endHandlePath(), color: handleColor),
+      ),
+      TextSelectionHandleType.collapsed => CustomPaint(
+        size: const Size(_handleSize, _handleSize),
+        painter: _CollapsedHandlePainter(color: handleColor),
+      ),
+    };
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.translucent,
-      child: switch (type) {
-        TextSelectionHandleType.collapsed => CustomPaint(
-          size: const Size(_handleSize, _handleSize),
-          painter: _CollapsedHandlePainter(color: handleColor),
-        ),
-        TextSelectionHandleType.left || TextSelectionHandleType.right => CustomPaint(
-          size: const Size(_handleSize, _handleSize),
-          painter: _TriangleHandlePainter(
-            path: type == TextSelectionHandleType.left ? _startHandlePath() : _endHandlePath(),
-            color: handleColor,
-          ),
-        ),
-      },
+      child: SizedBox(
+        width: _handleSize,
+        height: textLineHeight + _handleSize,
+        child: Column(children: [flag, SizedBox(height: textLineHeight)]),
+      ),
     );
   }
 }
