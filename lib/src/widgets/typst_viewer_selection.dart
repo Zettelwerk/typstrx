@@ -1,18 +1,71 @@
 part of 'typst_viewer.dart';
 
-// Touch selection handle sizing — generous enough to be easy to grab on a
-// touchscreen (matching, e.g., pdfrx's own handles), well past what a
-// mouse-oriented 12px dot would need.
-const _handleCircleSize = 22.0;
-const _handleStemHeight = 18.0;
-const _handleHitSize = 44.0;
+// Touch selection handles: a pdfrx-faithful port — a solid 30x30 right
+// triangle ("flag") rather than a circle+stem, same size, same two LTR
+// orientations, same alpha/shadow-by-state table. See
+// _TriangleHandlePainter and _HandleState below.
+const _handleSize = 30.0;
 
 // The magnifier's own size and how far above the touch point it floats —
 // values Cupertino's own text magnifier uses, reused here for a familiar
-// feel rather than inventing new ones.
+// feel rather than inventing new ones. The decoration (rounded rect,
+// radius, shadow) mirrors pdfrx's _buildMagnifierDecoration exactly; only
+// the sourcing technique differs — pdfrx re-renders the page at high
+// resolution into a dedicated cache, this uses RawMagnifier's
+// backdrop-filter sampling of whatever's already painted below it, which
+// avoids adding a second render/cache path for a feature that's already
+// showing rasterized tiles (re-rendering wouldn't gain resolution beyond
+// the current tile, only cost more).
 const _magnifierSize = Size(80, 48);
 const _magnifierAboveFocalPoint = 26.0;
 const _magnifierScale = 1.5;
+const _magnifierBorderRadius = 30.0;
+
+/// A selection handle's visual state — mirrors pdfrx's
+/// `PdfViewerTextSelectionAnchorHandleState`. Only `normal`/`dragging` are
+/// reachable here (no mouse-hover concept for a touch-only overlay).
+enum _HandleState { normal, dragging }
+
+/// The two pdfrx LTR handle shapes: a solid 30x30 right triangle, its right
+/// angle at the corner that anchors to the selection's text edge — bottom-
+/// right for the start handle, top-left for the end handle. Both share the
+/// same hypotenuse orientation, top-right to bottom-left.
+Path _startHandlePath() => Path()
+  ..moveTo(30, 0)
+  ..lineTo(30, 30)
+  ..lineTo(0, 30)
+  ..close();
+
+Path _endHandlePath() => Path()
+  ..moveTo(0, 0)
+  ..lineTo(30, 0)
+  ..lineTo(0, 30)
+  ..close();
+
+/// Paints one triangle handle — a direct port of pdfrx's `_buildHandle`:
+/// a drop shadow (state-gated) under a flat fill, alpha/shadow chosen by
+/// [state].
+class _TriangleHandlePainter extends CustomPainter {
+  _TriangleHandlePainter({required this.path, required this.color, required this.state});
+
+  final Path path;
+  final Color color;
+  final _HandleState state;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final (alpha, shadow) = switch (state) {
+      _HandleState.normal => (0.7, true),
+      _HandleState.dragging => (1.0, false),
+    };
+    if (shadow) canvas.drawShadow(path, Colors.black, 4, true);
+    canvas.drawPath(path, Paint()..color = color.withValues(alpha: alpha));
+  }
+
+  @override
+  bool shouldRepaint(covariant _TriangleHandlePainter oldDelegate) =>
+      oldDelegate.path != path || oldDelegate.color != color || oldDelegate.state != state;
+}
 
 /// A position in the document's text: a character on a page.
 class _SelPoint implements Comparable<_SelPoint> {
@@ -329,23 +382,25 @@ extension _TypstViewerSelection on _TypstViewerState {
       ]) {
         final rect = _charRectInDocument(point, isStart: isStart);
         if (rect == null) continue;
-        final view = _docToView(
-          isStart ? rect.bottomLeft : rect.bottomRight,
-        );
-        // A generous hit target (44x44, the usual minimum recommended touch
-        // size) around a visibly bigger handle than a mouse-oriented app
-        // would use — small circular handles are hard to grab precisely on
-        // a touchscreen, which is exactly the pdfrx-style handle this
-        // mirrors. The stem lines the circle up with the text edge it's
-        // anchored to, same as Android's own teardrop handles.
+        // The start handle's own bottom-right corner (30,30) anchors to the
+        // selection's bottom-left text edge; the end handle's top-left
+        // corner (0,0) anchors to its bottom-right edge — same attachment
+        // pdfrx uses (its aRight/aBottom vs. bLeft/bTop insets), expressed
+        // here as a direct top-left offset since this Positioned's parent
+        // Stack fills the viewport.
+        final anchor = _docToView(isStart ? rect.bottomLeft : rect.bottomRight);
+        final view = isStart
+            ? anchor - const Offset(_handleSize, _handleSize)
+            : anchor;
+        final isDragging = _draggingHandleIsStart == isStart;
         widgets.add(Positioned(
-          left: view.dx - _handleHitSize / 2,
+          left: view.dx,
           top: view.dy,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onPanStart: (_) {
               _draggingHandleIsStart = isStart;
-              _handleDragPoint = view;
+              _handleDragPoint = anchor;
               _repaint();
             },
             onPanUpdate: (details) => _onHandleDrag(details, isStart),
@@ -354,26 +409,12 @@ extension _TypstViewerSelection on _TypstViewerState {
               _handleDragPoint = null;
               _repaint();
             },
-            child: SizedBox(
-              width: _handleHitSize,
-              height: _handleHitSize,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 2,
-                    height: _handleStemHeight,
-                    color: widget.params.selectionColor.withAlpha(0xff),
-                  ),
-                  Container(
-                    width: _handleCircleSize,
-                    height: _handleCircleSize,
-                    decoration: BoxDecoration(
-                      color: widget.params.selectionColor.withAlpha(0xff),
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ],
+            child: CustomPaint(
+              size: const Size(_handleSize, _handleSize),
+              painter: _TriangleHandlePainter(
+                path: isStart ? _startHandlePath() : _endHandlePath(),
+                color: widget.params.selectionColor.withAlpha(0xff),
+                state: isDragging ? _HandleState.dragging : _HandleState.normal,
               ),
             ),
           ),
@@ -431,13 +472,16 @@ extension _TypstViewerSelection on _TypstViewerState {
           size: _magnifierSize,
           magnificationScale: _magnifierScale,
           focalPointOffset: Offset(0, _magnifierAboveFocalPoint + _magnifierSize.height / 2),
+          // Rounded-rect + shadow, matching pdfrx's
+          // _buildMagnifierDecoration exactly (BorderRadius.circular(30),
+          // Colors.black26 shadow, blur 8 / spread 2) rather than the
+          // circular pill this used before.
           decoration: MagnifierDecoration(
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(_magnifierSize.height / 2),
-              side: BorderSide(color: widget.params.selectionColor.withAlpha(0x80)),
+              borderRadius: BorderRadius.circular(_magnifierBorderRadius),
             ),
             shadows: const [
-              BoxShadow(color: Color(0x40000000), blurRadius: 8, offset: Offset(0, 2)),
+              BoxShadow(color: Color(0x42000000), blurRadius: 8, spreadRadius: 2),
             ],
           ),
         ),
