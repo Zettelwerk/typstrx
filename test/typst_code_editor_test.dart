@@ -375,37 +375,30 @@ void main() {
     }, variant: platforms);
   });
 
-  testWidgets(
-    'the magnifier centers its view exactly on the gesture position',
-    (tester) async {
-      // Drives typstEditorMagnifierConfiguration's builder directly rather
-      // than through a real drag — EditableText only ever shows the
-      // magnifier mid-gesture, which is awkward to hold open in a widget
-      // test, and the geometry bug this guards (RawMagnifier.focalPointOffset
-      // is measured from the magnifier's own *center*, not its top edge)
-      // lives entirely in this builder, independent of how it gets shown.
-      const focal = Offset(300, 500);
+  group('magnifier', () {
+    // Drives typstEditorMagnifierConfiguration's builder directly rather
+    // than through a real drag — EditableText only ever shows the
+    // magnifier mid-gesture, which is awkward to hold open in a widget
+    // test, and both geometry bugs these guard live entirely in this
+    // builder, independent of how it gets shown. (Real handle-drag
+    // MagnifierInfo values were confirmed separately, on a live Linux
+    // build driving an actual handle drag — this builder can't be trusted
+    // to invent them correctly on its own.)
+    Future<void> pumpMagnifier(WidgetTester tester, MagnifierInfo info) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            // Positioned (what the builder returns below) needs a Stack
-          // ancestor to interpret left/top — the real Overlay it normally
-          // sits in provides one; this test supplies its own.
-          body: Stack(
+            // Positioned (what the builder returns) needs a Stack ancestor
+            // to interpret left/top — the real Overlay it normally sits in
+            // provides one; this test supplies its own.
+            body: Stack(
               children: [
                 Builder(
                   builder: (context) =>
                       typstEditorMagnifierConfiguration.magnifierBuilder(
                         context,
                         MagnifierController(),
-                        ValueNotifier(
-                          const MagnifierInfo(
-                            globalGesturePosition: focal,
-                            caretRect: Rect.fromLTWH(295, 490, 2, 20),
-                            currentLineBoundaries: Rect.fromLTWH(0, 490, 600, 20),
-                            fieldBounds: Rect.fromLTWH(0, 0, 600, 800),
-                          ),
-                        ),
+                        ValueNotifier(info),
                       ) ??
                       const SizedBox.shrink(),
                 ),
@@ -415,6 +408,19 @@ void main() {
         ),
       );
       await tester.pump();
+    }
+
+    testWidgets('centers its view exactly on the gesture position', (tester) async {
+      const focal = Offset(300, 500);
+      await pumpMagnifier(
+        tester,
+        const MagnifierInfo(
+          globalGesturePosition: focal,
+          caretRect: Rect.fromLTWH(295, 490, 2, 20),
+          currentLineBoundaries: Rect.fromLTWH(0, 490, 600, 20),
+          fieldBounds: Rect.fromLTWH(0, 0, 600, 800),
+        ),
+      );
 
       // Whatever's shown at the magnifier widget's own on-screen center
       // must be the true focal point: `center + focalPointOffset == focal`
@@ -428,8 +434,42 @@ void main() {
         magnifierCenter + magnifier.focalPointOffset,
         offsetMoreOrLessEquals(focal, epsilon: 0.5),
       );
-    },
-  );
+    });
+
+    testWidgets(
+      'during a handle drag, locks vertically to the line rather than the '
+      'gesture position',
+      (tester) async {
+        // A real finger dragging the end handle sits on its flag, which
+        // hangs well below the line it points to (see
+        // TypstEditorSelectionControls) — EditableText reports that as a
+        // `globalGesturePosition` far from `currentLineBoundaries`, which
+        // it derives independently from the drag's *resolved* text
+        // position instead.
+        const gesturePosition = Offset(300, 560);
+        const line = Rect.fromLTWH(0, 490, 600, 20);
+        await pumpMagnifier(
+          tester,
+          const MagnifierInfo(
+            globalGesturePosition: gesturePosition,
+            caretRect: Rect.fromLTWH(295, 490, 2, 20),
+            currentLineBoundaries: line,
+            fieldBounds: Rect.fromLTWH(0, 0, 600, 800),
+          ),
+        );
+
+        final magnifier = tester.widget<RawMagnifier>(find.byType(RawMagnifier));
+        final magnifierCenter = tester.getRect(find.byType(RawMagnifier)).center;
+        final shown = magnifierCenter + magnifier.focalPointOffset;
+        expect(
+          shown.dy,
+          moreOrLessEquals(line.center.dy, epsilon: 0.5),
+          reason: 'should show the line the handle points to, not wherever on the handle the finger is',
+        );
+        expect(shown.dx, moreOrLessEquals(gesturePosition.dx, epsilon: 0.5));
+      },
+    );
+  });
 
   testWidgets('shows a line-number gutter by default, hidden via showLineNumbers: false', (tester) async {
     final fake = FakeRustSession();

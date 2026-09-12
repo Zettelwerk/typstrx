@@ -38,12 +38,26 @@ class _TypstEditorMagnifier extends StatelessWidget {
     return ValueListenableBuilder<MagnifierInfo>(
       valueListenable: magnifierInfo,
       builder: (context, info, child) {
+        // Horizontal still follows the raw gesture position (clamped to
+        // the line, as before) — but *vertical* locks to the line's own
+        // center, not the gesture's y. During a handle drag, the gesture
+        // position is wherever on the handle's flag the finger actually
+        // is, which can be a full flag-height above or below the real
+        // text row (see TypstEditorSelectionControls's handle geometry) —
+        // `currentLineBoundaries`, in contrast, is always derived by
+        // EditableText from the drag's *resolved* text position (it
+        // explicitly compensates for exactly this handle-hangs-off-the-line
+        // offset internally), so it's already correct regardless of where
+        // on the handle the finger landed. Long-press-dragging plain text
+        // never hits this: the finger sits right on the line being
+        // selected, so `globalGesturePosition.dy` happened to already
+        // agree with the line's center there.
         final focal = Offset(
           info.globalGesturePosition.dx.clamp(
             info.currentLineBoundaries.left,
             info.currentLineBoundaries.right,
           ),
-          info.globalGesturePosition.dy,
+          info.currentLineBoundaries.center.dy,
         );
         return Positioned(
           left: focal.dx - _magnifierSize.width / 2,
