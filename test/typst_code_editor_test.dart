@@ -471,6 +471,68 @@ void main() {
     );
   });
 
+  group('long-press-and-drag granularity', () {
+    // Flutter's own default snaps a long-press-drag to whole words on every
+    // platform except iOS/macOS (TextSelectionGestureDetectorBuilder
+    // .onSingleLongTapMoveUpdate) — the right choice for prose, but Typst
+    // source is code: identifiers and punctuation don't split into words
+    // the way prose does, and dragging a handle after releasing already
+    // gives character precision. TypstEditorGestureDetectorBuilder makes
+    // the initial drag (before release) match that.
+    final platforms = TargetPlatformVariant({TargetPlatform.android, TargetPlatform.linux});
+
+    Offset caretCenter(WidgetTester tester, int offset) {
+      final render = tester.state<EditableTextState>(find.byType(EditableText)).renderEditable;
+      return render.localToGlobal(render.getLocalRectForCaret(TextPosition(offset: offset)).center);
+    }
+
+    testWidgets('extends one character at a time, not by whole words', (tester) async {
+      final fake = FakeRustSession();
+      final session = TypstSession.forTesting(fake, const TypstSessionOptions());
+      final controller = TypstEditorController(session: session, text: 'some words here to select carefully');
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: TypstCodeEditor(controller: controller))));
+      await tester.pump();
+
+      // Long-press "to" (offsets 16..18) — a standard word-grab start.
+      final press = await tester.startGesture(caretCenter(tester, 17), kind: PointerDeviceKind.touch);
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(controller.selection.textInside(controller.text), 'to');
+
+      // Drag 3 characters into "select" (19..25) — a whole-word snap would
+      // land on "to select"; character precision stops mid-word instead.
+      await press.moveTo(caretCenter(tester, 22));
+      await tester.pump(const Duration(milliseconds: 20));
+      expect(controller.selection.textInside(controller.text), 'to sel');
+
+      await press.up();
+      controller.dispose();
+      await session.dispose();
+    }, variant: platforms);
+
+    testWidgets('dragging back past the original word keeps a valid, shrinking selection', (tester) async {
+      final fake = FakeRustSession();
+      final session = TypstSession.forTesting(fake, const TypstSessionOptions());
+      final controller = TypstEditorController(session: session, text: 'some words here to select carefully');
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: TypstCodeEditor(controller: controller))));
+      await tester.pump();
+
+      final press = await tester.startGesture(caretCenter(tester, 17), kind: PointerDeviceKind.touch);
+      await tester.pump(const Duration(milliseconds: 600));
+      // Establish the fixed edge by first dragging right...
+      await press.moveTo(caretCenter(tester, 22));
+      await tester.pump(const Duration(milliseconds: 20));
+      // ...then drag left, back across the original word and past it.
+      await press.moveTo(caretCenter(tester, 12));
+      await tester.pump(const Duration(milliseconds: 20));
+      expect(controller.selection.isCollapsed, isFalse);
+      expect(controller.selection.textInside(controller.text), 'ere ');
+
+      await press.up();
+      controller.dispose();
+      await session.dispose();
+    }, variant: platforms);
+  });
+
   testWidgets('shows a line-number gutter by default, hidden via showLineNumbers: false', (tester) async {
     final fake = FakeRustSession();
     final session = TypstSession.forTesting(fake, const TypstSessionOptions());

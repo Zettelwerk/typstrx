@@ -12,6 +12,7 @@ import '../../document/typst_tooltip.dart';
 import 'typst_completions_builder.dart';
 import 'typst_details_builder.dart';
 import 'typst_editor_controller.dart';
+import 'typst_editor_gesture_detector_builder.dart';
 import 'typst_editor_selection_controls.dart';
 import 'typst_line_number_gutter.dart';
 
@@ -311,7 +312,7 @@ class TypstCodeEditor extends StatefulWidget {
 
 class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelectionGestureDetectorBuilderDelegate {
   final GlobalKey<EditableTextState> _editableTextKey = GlobalKey<EditableTextState>();
-  late final _gestureDetectorBuilder = TextSelectionGestureDetectorBuilder(delegate: this);
+  late final _gestureDetectorBuilder = TypstEditorGestureDetectorBuilder(delegate: this);
 
   // What `TextField` works out as its own `_showSelectionHandles` and passes
   // down: `EditableText.showSelectionHandles` defaults to false, and without
