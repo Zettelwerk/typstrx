@@ -407,6 +407,59 @@ void main() {
     },
   );
 
+  testWidgets(
+    'pinching past minScale stretches elastically instead of hard-clamping',
+    (tester) async {
+      final (session, _) = await makeSession();
+      final controller = TypstViewerController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: TypstViewer(
+            session: session,
+            controller: controller,
+            params: const TypstViewerParams(minScale: 0.5, maxScale: 4),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      controller.setZoom(0.5);
+      await tester.pump();
+      expect(controller.currentZoom, 0.5);
+
+      // Pinch inward hard, well past minScale — a wide starting span
+      // pinched to a quarter of itself, well short of the fingers
+      // crossing (which would start opening the span, hence the zoom,
+      // back up again). This is a live gesture update, not an animation —
+      // no fake-clock ticking involved, so (unlike the release-time
+      // snap-back below) this part is reliably observable frame by frame
+      // in a widget test.
+      final p1 = await tester.startGesture(const Offset(200, 300), kind: PointerDeviceKind.touch);
+      final p2 = await tester.startGesture(const Offset(600, 300), kind: PointerDeviceKind.touch);
+      await tester.pump(const Duration(milliseconds: 20));
+      for (var i = 0; i < 15; i++) {
+        await p1.moveBy(const Offset(10, 0));
+        await p2.moveBy(const Offset(-10, 0));
+        await tester.pump(const Duration(milliseconds: 10));
+      }
+
+      expect(
+        controller.currentZoom,
+        lessThan(0.5),
+        reason: 'a hard clamp would have stopped exactly at minScale instead of stretching past it',
+      );
+
+      await p1.up();
+      await p2.up();
+      await tester.pumpAndSettle();
+      expect(
+        controller.currentZoom,
+        moreOrLessEquals(0.5, epsilon: 0.01),
+        reason: 'released, it should spring back to minScale',
+      );
+    },
+  );
+
   testWidgets('goToPage scrolls and triggers renders for that page',
       (tester) async {
     final (session, fake) = await makeSession();

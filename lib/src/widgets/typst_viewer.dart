@@ -105,9 +105,16 @@ class _TypstViewerState extends State<TypstViewer> with TickerProviderStateMixin
   // Touch pan/pinch-zoom gesture state (see _onGestureScale*).
   double? _gestureStartZoom;
   Offset? _gestureReferenceFocalPoint;
-  // Post-release pan momentum (see _startPanFling below) — drives
-  // _txController directly, same as a live gesture would.
+  // Last focal point seen during the gesture — kept for _startZoomSnapBack,
+  // since (unlike pan velocity) ScaleEndDetails carries no focal point of
+  // its own for the snap-back animation to pin.
+  Offset? _lastLocalFocalPoint;
+
+  // Post-release momentum/snap-back (see _startPanFling and
+  // _startZoomSnapBack below) — each drives _txController directly, same
+  // as a live gesture would.
   AnimationController? _panFlingController;
+  AnimationController? _zoomSnapBackController;
 
   @override
   void initState() {
@@ -146,6 +153,7 @@ class _TypstViewerState extends State<TypstViewer> with TickerProviderStateMixin
     _txController.removeListener(_onMatrixChanged);
     _txController.dispose();
     _panFlingController?.dispose();
+    _zoomSnapBackController?.dispose();
     _cache.dispose();
     super.dispose();
   }
@@ -374,6 +382,8 @@ class _TypstViewerState extends State<TypstViewer> with TickerProviderStateMixin
     // A new touch always takes over from whatever momentum was still
     // running — matches InteractiveViewer's own _onScaleStart.
     _panFlingController?.stop();
+    _zoomSnapBackController?.stop();
+    _lastGestureScale = 1.0;
     _gestureStartZoom = _currentZoom;
     _gestureReferenceFocalPoint = MatrixUtils.transformPoint(
       Matrix4.inverted(_txController.value),
@@ -385,14 +395,11 @@ class _TypstViewerState extends State<TypstViewer> with TickerProviderStateMixin
     final startZoom = _gestureStartZoom;
     final referenceFocalPoint = _gestureReferenceFocalPoint;
     if (startZoom == null || referenceFocalPoint == null) return;
+    _lastLocalFocalPoint = details.localFocalPoint;
 
-    final desiredZoom = clampDouble(
-      startZoom * details.scale,
-      widget.params.minScale,
-      widget.params.maxScale,
-    );
-    final scaleChange =
-        _currentZoom == 0 ? 1.0 : desiredZoom / _currentZoom;
+    final desiredZoom = startZoom * details.scale;
+    final allowedZoom = _elasticZoom(desiredZoom, details.scale);
+    final scaleChange = _currentZoom == 0 ? 1.0 : allowedZoom / _currentZoom;
     _applyScaleKeepingScenePointFixed(scaleChange, referenceFocalPoint, details.localFocalPoint);
   }
 
@@ -400,7 +407,115 @@ class _TypstViewerState extends State<TypstViewer> with TickerProviderStateMixin
     _gestureStartZoom = null;
     _gestureReferenceFocalPoint = null;
     _txController.value = _clampMatrix(_txController.value);
-    _startPanFling(details.velocity);
+    // A snap-back animation already keeps the view sensibly positioned as
+    // it springs the zoom back into range — stacking pan momentum on top
+    // of that would just fight it, so it's skipped for this release.
+    if (!_startZoomSnapBack()) {
+      _startPanFling(details.velocity);
+    }
+  }
+
+  // ---- elastic zoom bounds ----
+  //
+  // A pinch is allowed to push the zoom slightly past minScale/maxScale,
+  // with resistance that increases the further past the limit it goes,
+  // springing back smoothly once released — the same rubber-band feel
+  // Flutter's own BouncingScrollPhysics gives a scroll view at its edges,
+  // reused here by treating the zoom factor as if it were a scroll
+  // position between minScale and maxScale. Panning itself stays
+  // hard-clamped, as before: only the zoom bound requested this, and
+  // stretch-panning past the document edge wasn't part of the ask.
+  static const _zoomBoundsPhysics = BouncingScrollPhysics();
+
+  // details.scale as of the previous _onGestureScaleUpdate call this
+  // gesture — see _elasticZoom for why the incremental change since then,
+  // not the gesture's cumulative change from its start, is what physics
+  // gets applied to.
+  double _lastGestureScale = 1.0;
+
+  // BouncingScrollPhysics's spring and tolerance constants are tuned for
+  // scroll positions in logical pixels (its own default tolerance alone is
+  // ~1 full pixel) — feeding it a bare zoom factor (typically 0.05-8.0)
+  // makes every one of our distances read as "already within tolerance",
+  // so createBallisticSimulation reports "done" before it's animated
+  // anything at all (confirmed live: a pinch stretched to 0.44 against a
+  // 0.5 minimum sprang back in a single frame, not a visible motion).
+  // pdfrx's own InteractiveViewer fork works around exactly this by
+  // multiplying scale by a "content width" before handing it to
+  // ScrollPhysics; this does the same with the viewport width — any
+  // pixel-scale stand-in works, since only its rough order of magnitude
+  // matters here, not its exact value.
+  double get _zoomMetricScale => math.max(_viewSize?.width ?? 1.0, 1.0);
+
+  ScrollMetrics _zoomMetrics(double zoomInPixelUnits) => FixedScrollMetrics(
+    pixels: zoomInPixelUnits,
+    minScrollExtent: widget.params.minScale * _zoomMetricScale,
+    maxScrollExtent: widget.params.maxScale * _zoomMetricScale,
+    viewportDimension: (widget.params.maxScale - widget.params.minScale) * _zoomMetricScale,
+    axisDirection: AxisDirection.right,
+    devicePixelRatio: 1.0,
+  );
+
+  // The zoom this frame is actually allowed to reach, given [desiredZoom]
+  // (this frame's unclamped target) and [gestureScale] (details.scale,
+  // the pinch's cumulative scale change since the gesture started).
+  double _elasticZoom(double desiredZoom, double gestureScale) {
+    final minScale = widget.params.minScale;
+    final maxScale = widget.params.maxScale;
+    if (desiredZoom >= minScale && desiredZoom <= maxScale) {
+      _lastGestureScale = gestureScale;
+      return desiredZoom;
+    }
+    // Only this frame's own incremental change gets physics applied to it
+    // — applying it to the gesture's cumulative change instead would make
+    // the resistance depend on how long the gesture has been going, not
+    // on how far past the limit the zoom already is (which is what
+    // ScrollPosition itself does for each incremental drag update).
+    final scaleRatio = _lastGestureScale == 0 ? 1.0 : gestureScale / _lastGestureScale;
+    _lastGestureScale = gestureScale;
+    final scale = _zoomMetricScale;
+    final delta = (_currentZoom * scaleRatio - _currentZoom) * scale;
+    if (delta == 0) return _currentZoom;
+    final damped = _zoomBoundsPhysics.applyPhysicsToUserOffset(_zoomMetrics(_currentZoom * scale), delta);
+    return _currentZoom + damped / scale;
+  }
+
+  /// Springs the zoom back to [TypstViewerParams.minScale]/`maxScale` if
+  /// the elastic overshoot above left it outside that range — same
+  /// physics as [_elasticZoom], via [BouncingScrollPhysics
+  /// .createBallisticSimulation]'s own spring, rather than a hand-picked
+  /// curve. Returns whether an animation was actually started.
+  bool _startZoomSnapBack() {
+    final zoom = _currentZoom;
+    final minScale = widget.params.minScale;
+    final maxScale = widget.params.maxScale;
+    if (zoom >= minScale && zoom <= maxScale) return false;
+
+    final scale = _zoomMetricScale;
+    final simulation = _zoomBoundsPhysics.createBallisticSimulation(_zoomMetrics(zoom * scale), 0);
+    if (simulation == null) return false;
+
+    final viewSize = _viewSize;
+    final focalPoint = _lastLocalFocalPoint ??
+        (viewSize == null ? Offset.zero : Offset(viewSize.width / 2, viewSize.height / 2));
+
+    final controller = AnimationController.unbounded(vsync: this);
+    _zoomSnapBackController?.dispose();
+    _zoomSnapBackController = controller;
+    controller.addListener(() {
+      final referenceScenePoint = MatrixUtils.transformPoint(
+        Matrix4.inverted(_txController.value),
+        focalPoint,
+      );
+      // controller.value is in the same pixel-scaled units the simulation
+      // was built with (see _zoomMetricScale) — back to a plain zoom
+      // factor before treating it as one.
+      final desiredZoom = controller.value / scale;
+      final scaleChange = _currentZoom == 0 ? 1.0 : desiredZoom / _currentZoom;
+      _applyScaleKeepingScenePointFixed(scaleChange, referenceScenePoint, focalPoint);
+    });
+    controller.animateWith(simulation);
+    return true;
   }
 
   // Scales the current matrix by [scaleChange] around [localFocalPoint],
