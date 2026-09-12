@@ -27,7 +27,9 @@ class FakeRustSession implements rust.TypstSession {
   }
 
   @override
-  Future<List<rust.TypstFoldingRange>> foldingRanges({required String source}) async => const [];
+  Future<List<rust.TypstFoldingRange>> foldingRanges({
+    required String source,
+  }) async => const [];
 
   @override
   Future<rust.HighlightNode> highlight({required String source}) async {
@@ -39,7 +41,11 @@ class FakeRustSession implements rust.TypstSession {
     required int cursorUtf16,
     required bool explicit,
   }) async {
-    return rust.CompletionResult(generation: BigInt.zero, applyFromUtf16: 0, completions: const []);
+    return rust.CompletionResult(
+      generation: BigInt.zero,
+      applyFromUtf16: 0,
+      completions: const [],
+    );
   }
 
   @override
@@ -48,7 +54,10 @@ class FakeRustSession implements rust.TypstSession {
   }
 
   @override
-  Future<rust.FunctionInfoResult> functionInfo({required int cursorUtf16, required String label}) async {
+  Future<rust.FunctionInfoResult> functionInfo({
+    required int cursorUtf16,
+    required String label,
+  }) async {
     return rust.FunctionInfoResult(generation: BigInt.zero, info: null);
   }
 
@@ -115,7 +124,12 @@ class FakeRustSession implements rust.TypstSession {
         rust.TextFragmentData(
           index: 0,
           length: text.length,
-          bounds: const rust.RectPt(left: 50, top: 100, right: 250, bottom: 120),
+          bounds: const rust.RectPt(
+            left: 50,
+            top: 100,
+            right: 250,
+            bottom: 120,
+          ),
         ),
       ],
       links: const [
@@ -174,8 +188,9 @@ void main() {
     }
   }
 
-  testWidgets('renders visible pages lazily, not the whole document',
-      (tester) async {
+  testWidgets('renders visible pages lazily, not the whole document', (
+    tester,
+  ) async {
     final (session, fake) = await makeSession();
     final controller = TypstViewerController();
 
@@ -201,40 +216,44 @@ void main() {
   });
 
   testWidgets(
-      'currentRasterScale reflects the sharpest cached image and updates '
-      'as tiles render', (tester) async {
-    final (session, _) = await makeSession();
-    final controller = TypstViewerController();
-    final scaleHistory = <double>[];
-    controller.addListener(() => scaleHistory.add(controller.currentRasterScale));
+    'currentRasterScale reflects the sharpest cached image and updates '
+    'as tiles render',
+    (tester) async {
+      final (session, _) = await makeSession();
+      final controller = TypstViewerController();
+      final scaleHistory = <double>[];
+      controller.addListener(
+        () => scaleHistory.add(controller.currentRasterScale),
+      );
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: TypstViewer(
-          session: session,
-          controller: controller,
-          params: const TypstViewerParams(
-            renderDelay: Duration(milliseconds: 1),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: TypstViewer(
+            session: session,
+            controller: controller,
+            params: const TypstViewerParams(
+              renderDelay: Duration(milliseconds: 1),
+            ),
           ),
         ),
-      ),
-    );
-    await settle(tester);
+      );
+      await settle(tester);
 
-    // Once the preview has rendered, the raster scale must be positive and
-    // recorded via a controller notification (not just readable after the
-    // fact) so a UI can display a live DPI readout.
-    expect(controller.currentRasterScale, greaterThan(0));
-    expect(scaleHistory, contains(controller.currentRasterScale));
+      // Once the preview has rendered, the raster scale must be positive and
+      // recorded via a controller notification (not just readable after the
+      // fact) so a UI can display a live DPI readout.
+      expect(controller.currentRasterScale, greaterThan(0));
+      expect(scaleHistory, contains(controller.currentRasterScale));
 
-    // Zooming in triggers a sharper tile; the reported scale must increase
-    // to match once that tile finishes rendering.
-    final scaleAtFitWidth = controller.currentRasterScale;
-    controller.setZoom(4);
-    await settle(tester);
+      // Zooming in triggers a sharper tile; the reported scale must increase
+      // to match once that tile finishes rendering.
+      final scaleAtFitWidth = controller.currentRasterScale;
+      controller.setZoom(4);
+      await settle(tester);
 
-    expect(controller.currentRasterScale, greaterThan(scaleAtFitWidth));
-  });
+      expect(controller.currentRasterScale, greaterThan(scaleAtFitWidth));
+    },
+  );
 
   testWidgets('plain mouse wheel pans, ctrl+wheel zooms', (tester) async {
     final (session, _) = await makeSession();
@@ -252,33 +271,36 @@ void main() {
 
     final testPointer = TestPointer(1, PointerDeviceKind.mouse);
     await tester.sendEventToBinding(testPointer.hover(const Offset(400, 300)));
-    await tester.sendEventToBinding(
-      testPointer.scroll(const Offset(0, 100)),
-    );
+    await tester.sendEventToBinding(testPointer.scroll(const Offset(0, 100)));
     await tester.pump();
 
-    expect(controller.currentZoom, zoomBefore,
-        reason: 'plain wheel must not zoom');
-    expect(controller.visibleRect.top, greaterThan(topBefore),
-        reason: 'plain wheel must pan the view downward');
+    expect(
+      controller.currentZoom,
+      zoomBefore,
+      reason: 'plain wheel must not zoom',
+    );
+    expect(
+      controller.visibleRect.top,
+      greaterThan(topBefore),
+      reason: 'plain wheel must pan the view downward',
+    );
 
     // Now with Control held: should zoom, not pan.
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     final topBeforeZoom = controller.visibleRect.top;
-    await tester.sendEventToBinding(
-      testPointer.scroll(const Offset(0, -100)),
-    );
+    await tester.sendEventToBinding(testPointer.scroll(const Offset(0, -100)));
     await tester.pump();
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
 
-    expect(controller.currentZoom, greaterThan(zoomBefore),
-        reason: 'ctrl+wheel must zoom in');
+    expect(
+      controller.currentZoom,
+      greaterThan(zoomBefore),
+      reason: 'ctrl+wheel must zoom in',
+    );
     expect(controller.visibleRect.top, isNot(topBeforeZoom));
   });
 
-  testWidgets('wheelZoomTrigger.always makes plain wheel zoom', (
-    tester,
-  ) async {
+  testWidgets('wheelZoomTrigger.always makes plain wheel zoom', (tester) async {
     final (session, _) = await makeSession();
     final controller = TypstViewerController();
 
@@ -298,9 +320,7 @@ void main() {
     final zoomBefore = controller.currentZoom;
     final testPointer = TestPointer(1, PointerDeviceKind.mouse);
     await tester.sendEventToBinding(testPointer.hover(const Offset(400, 300)));
-    await tester.sendEventToBinding(
-      testPointer.scroll(const Offset(0, -100)),
-    );
+    await tester.sendEventToBinding(testPointer.scroll(const Offset(0, -100)));
     await tester.pump();
 
     expect(controller.currentZoom, greaterThan(zoomBefore));
@@ -367,7 +387,9 @@ void main() {
       final controller = TypstViewerController();
 
       await tester.pumpWidget(
-        MaterialApp(home: TypstViewer(session: session, controller: controller)),
+        MaterialApp(
+          home: TypstViewer(session: session, controller: controller),
+        ),
       );
       await tester.pump(const Duration(milliseconds: 100));
 
@@ -395,13 +417,19 @@ void main() {
       // reliably even so, which is enough to prove momentum carried the
       // view well past whatever the raw gesture alone covered.
       final topAtRelease = controller.visibleRect.top;
-      await tester.fling(find.byType(TypstViewer), const Offset(0, -300), 3000, deviceKind: PointerDeviceKind.touch);
+      await tester.fling(
+        find.byType(TypstViewer),
+        const Offset(0, -300),
+        3000,
+        deviceKind: PointerDeviceKind.touch,
+      );
       final topRightAfterGesture = controller.visibleRect.top;
       await tester.pumpAndSettle();
       expect(
         controller.visibleRect.top,
         greaterThan(topRightAfterGesture),
-        reason: 'momentum should carry the view further than the raw gesture alone moved it',
+        reason:
+            'momentum should carry the view further than the raw gesture alone moved it',
       );
       expect(controller.visibleRect.top, greaterThan(topAtRelease));
     },
@@ -434,8 +462,14 @@ void main() {
       // no fake-clock ticking involved, so (unlike the release-time
       // snap-back below) this part is reliably observable frame by frame
       // in a widget test.
-      final p1 = await tester.startGesture(const Offset(200, 300), kind: PointerDeviceKind.touch);
-      final p2 = await tester.startGesture(const Offset(600, 300), kind: PointerDeviceKind.touch);
+      final p1 = await tester.startGesture(
+        const Offset(200, 300),
+        kind: PointerDeviceKind.touch,
+      );
+      final p2 = await tester.startGesture(
+        const Offset(600, 300),
+        kind: PointerDeviceKind.touch,
+      );
       await tester.pump(const Duration(milliseconds: 20));
       for (var i = 0; i < 15; i++) {
         await p1.moveBy(const Offset(10, 0));
@@ -446,7 +480,8 @@ void main() {
       expect(
         controller.currentZoom,
         lessThan(0.5),
-        reason: 'a hard clamp would have stopped exactly at minScale instead of stretching past it',
+        reason:
+            'a hard clamp would have stopped exactly at minScale instead of stretching past it',
       );
 
       await p1.up();
@@ -460,8 +495,73 @@ void main() {
     },
   );
 
-  testWidgets('goToPage scrolls and triggers renders for that page',
-      (tester) async {
+  testWidgets(
+    'changing margin re-fits the view even without a viewport resize',
+    (tester) async {
+      final (session, _) = await makeSession();
+      final controller = TypstViewerController();
+
+      Widget build(double margin) => MaterialApp(
+        home: TypstViewer(
+          session: session,
+          controller: controller,
+          params: TypstViewerParams(margin: margin),
+        ),
+      );
+
+      await tester.pumpWidget(build(8));
+      await tester.pump(const Duration(milliseconds: 100));
+      final zoomBefore = controller.currentZoom;
+
+      // A bigger margin widens the document canvas the same fit-width
+      // zoom is computed against, so a genuine re-fit must produce a
+      // smaller zoom — with the viewport itself unchanged, the only other
+      // trigger for a re-fit (see the LayoutBuilder in build()).
+      await tester.pumpWidget(build(400));
+      await tester.pump();
+      expect(
+        controller.currentZoom,
+        lessThan(zoomBefore),
+        reason: 'a larger margin should have triggered a re-fit to a smaller zoom',
+      );
+    },
+  );
+
+  testWidgets(
+    'changing rasterBackgroundColor clears the cache and re-renders',
+    (tester) async {
+      final (session, fake) = await makeSession();
+      final controller = TypstViewerController();
+
+      Widget build(Color color) => MaterialApp(
+        home: TypstViewer(
+          session: session,
+          controller: controller,
+          params: TypstViewerParams(
+            renderDelay: const Duration(milliseconds: 1),
+            rasterBackgroundColor: color,
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(build(const Color(0xffffffff)));
+      await settle(tester);
+      final renderedBefore = fake.renderedPages.length;
+      expect(renderedBefore, greaterThan(0));
+
+      await tester.pumpWidget(build(const Color(0xff000000)));
+      await settle(tester);
+      expect(
+        fake.renderedPages.length,
+        greaterThan(renderedBefore),
+        reason: 'the stale-background cache entries should have been cleared and re-rendered',
+      );
+    },
+  );
+
+  testWidgets('goToPage scrolls and triggers renders for that page', (
+    tester,
+  ) async {
     final (session, fake) = await makeSession();
     final controller = TypstViewerController();
 
@@ -487,8 +587,9 @@ void main() {
     expect(fake.renderedPages, isNot(contains(1)));
   });
 
-  testWidgets('a tile survives leaving the viewport and is reused on return',
-      (tester) async {
+  testWidgets('a tile survives leaving the viewport and is reused on return', (
+    tester,
+  ) async {
     final (session, fake) = await makeSession();
     final controller = TypstViewerController();
 
@@ -511,8 +612,9 @@ void main() {
     controller.goToPage(1);
     await settle(tester);
     expect(
-      fake.renderedRegions
-          .where((r) => r.page == 1 && (r.w < r.fullW || r.h < r.fullH)),
+      fake.renderedRegions.where(
+        (r) => r.page == 1 && (r.w < r.fullW || r.h < r.fullH),
+      ),
       isNotEmpty,
       reason: 'zooming in should have produced a tile for page 1',
     );
@@ -528,8 +630,9 @@ void main() {
     // returning to the same window must not re-render it. Every render pass
     // used to drop tiles for pages that were no longer visible.
     expect(
-      fake.renderedRegions
-          .where((r) => r.page == 1 && (r.w < r.fullW || r.h < r.fullH)),
+      fake.renderedRegions.where(
+        (r) => r.page == 1 && (r.w < r.fullW || r.h < r.fullH),
+      ),
       isEmpty,
       reason: 'returning to a page should reuse its retained tile',
     );
@@ -552,8 +655,9 @@ void main() {
     expect(controller.currentZoom, 0.25); // default minScale
   });
 
-  testWidgets('zooming in renders a partial high-resolution tile',
-      (tester) async {
+  testWidgets('zooming in renders a partial high-resolution tile', (
+    tester,
+  ) async {
     final (session, fake) = await makeSession();
     final controller = TypstViewerController();
 
@@ -589,18 +693,22 @@ void main() {
     expect(tiles.first.h, lessThan(tiles.first.fullH));
   });
 
-  testWidgets('mouse drag selects text and controller exposes it',
-      (tester) async {
+  testWidgets('mouse drag selects text and controller exposes it', (
+    tester,
+  ) async {
     final (session, _) = await makeSession();
     final controller = TypstViewerController();
+    final changes = <TypstTextSelection?>[];
 
     await tester.pumpWidget(
       MaterialApp(
         home: TypstViewer(
           session: session,
           controller: controller,
-          params: const TypstViewerParams(
-            renderDelay: Duration(milliseconds: 1),
+          params: TypstViewerParams(
+            renderDelay: const Duration(milliseconds: 1),
+            showSelectionToolbar: false,
+            onSelectionChanged: changes.add,
           ),
         ),
       ),
@@ -627,9 +735,16 @@ void main() {
     expect(controller.selectedText, isNotEmpty);
     expect('HELLO WORLD', contains(controller.selectedText));
     expect(controller.selectedText.length, greaterThanOrEqualTo(4));
+    expect(controller.selection, isNotNull);
+    expect(controller.selection!.text, controller.selectedText);
+    expect(controller.selection!.start.pageNumber, 1);
+    expect(controller.selection!.rects, isNotEmpty);
+    expect(changes.last, controller.selection);
 
     controller.clearSelection();
     expect(controller.selectedText, isEmpty);
+    expect(controller.selection, isNull);
+    expect(changes.last, isNull);
   });
 
   testWidgets(
@@ -656,34 +771,52 @@ void main() {
       Offset docToView(Offset doc) => Offset(doc.dx * zoom, doc.dy * zoom);
       final wordPoint = docToView(const Offset(8 + 60, 8 + 110));
 
-      final press = await tester.startGesture(wordPoint, kind: PointerDeviceKind.touch);
-      await tester.pump(const Duration(milliseconds: 600)); // past the long-press timeout
+      final press = await tester.startGesture(
+        wordPoint,
+        kind: PointerDeviceKind.touch,
+      );
+      await tester.pump(
+        const Duration(milliseconds: 600),
+      ); // past the long-press timeout
       await press.up();
       await tester.pump();
 
-      expect(controller.selectedText, isNotEmpty, reason: 'long-press should have selected the word under it');
+      expect(
+        controller.selectedText,
+        isNotEmpty,
+        reason: 'long-press should have selected the word under it',
+      );
 
       // The two selection handles: identified structurally (a pan-draggable
       // GestureDetector), not by exact pixel position, since that's an
       // implementation detail of char-rect geometry this test shouldn't
       // need to reproduce.
-      bool isHandle(Widget w) => w is GestureDetector && w.onPanStart != null && w.onPanUpdate != null;
+      bool isHandle(Widget w) =>
+          w is GestureDetector && w.onPanStart != null && w.onPanUpdate != null;
       final handles = find.byWidgetPredicate(isHandle);
       expect(handles, findsNWidgets(2));
 
       expect(
         find.byType(RawMagnifier),
         findsNothing,
-        reason: 'the magnifier only shows once a handle is actually being dragged',
+        reason:
+            'the magnifier only shows once a handle is actually being dragged',
       );
 
       final handleCenter = tester.getCenter(handles.first);
-      final drag = await tester.startGesture(handleCenter, kind: PointerDeviceKind.touch);
+      final drag = await tester.startGesture(
+        handleCenter,
+        kind: PointerDeviceKind.touch,
+      );
       await tester.pump(const Duration(milliseconds: 20));
       await drag.moveBy(const Offset(15, 0));
       await tester.pump(const Duration(milliseconds: 20));
 
-      expect(find.byType(RawMagnifier), findsOneWidget, reason: 'shown while a handle is being dragged');
+      expect(
+        find.byType(RawMagnifier),
+        findsOneWidget,
+        reason: 'shown while a handle is being dragged',
+      );
 
       // The magnifier floats clear above the finger (~1cm above the actual
       // text row, not merely resting on top of it) rather than nearly
@@ -700,13 +833,18 @@ void main() {
       expect(
         fingerY - magnifierBottom,
         greaterThan(5),
-        reason: 'the magnifier should sit clear of the fingertip, not touch or overlap it',
+        reason:
+            'the magnifier should sit clear of the fingertip, not touch or overlap it',
       );
 
       await drag.up();
       await tester.pump(const Duration(milliseconds: 20));
 
-      expect(find.byType(RawMagnifier), findsNothing, reason: 'hidden again once the drag ends');
+      expect(
+        find.byType(RawMagnifier),
+        findsNothing,
+        reason: 'hidden again once the drag ends',
+      );
     },
   );
 
@@ -734,12 +872,16 @@ void main() {
       Offset docToView(Offset doc) => Offset(doc.dx * zoom, doc.dy * zoom);
       final wordPoint = docToView(const Offset(8 + 60, 8 + 110));
 
-      final press = await tester.startGesture(wordPoint, kind: PointerDeviceKind.touch);
+      final press = await tester.startGesture(
+        wordPoint,
+        kind: PointerDeviceKind.touch,
+      );
       await tester.pump(const Duration(milliseconds: 600));
       await press.up();
       await tester.pump();
 
-      bool isHandle(Widget w) => w is GestureDetector && w.onPanStart != null && w.onPanUpdate != null;
+      bool isHandle(Widget w) =>
+          w is GestureDetector && w.onPanStart != null && w.onPanUpdate != null;
       final handles = find.byWidgetPredicate(isHandle);
       expect(handles, findsNWidgets(2));
 
@@ -756,7 +898,10 @@ void main() {
       final rowCenter = rowBottom - 10 * zoom;
       final grabPoint = endHandleRect.center;
 
-      final drag = await tester.startGesture(grabPoint, kind: PointerDeviceKind.touch);
+      final drag = await tester.startGesture(
+        grabPoint,
+        kind: PointerDeviceKind.touch,
+      );
       await tester.pump(const Duration(milliseconds: 20));
       // Horizontal-only movement: the finger's height above the true text
       // row never changes from wherever it first grabbed.
@@ -774,7 +919,8 @@ void main() {
       expect(
         magnifierBottom,
         moreOrLessEquals(rowCenter - 39, epsilon: 3),
-        reason: 'the magnifier should stay pinned to the text row the finger grabbed, not drift by the grab offset',
+        reason:
+            'the magnifier should stay pinned to the text row the finger grabbed, not drift by the grab offset',
       );
 
       // Independent of the above: whatever's shown at the magnifier
@@ -785,11 +931,15 @@ void main() {
       // version of this code did) shows roughly the bottom half of the
       // selection highlight instead of all of it, centered.
       final magnifier = tester.widget<RawMagnifier>(find.byType(RawMagnifier));
-      final magnifierCenterY = tester.getRect(find.byType(RawMagnifier)).center.dy;
+      final magnifierCenterY = tester
+          .getRect(find.byType(RawMagnifier))
+          .center
+          .dy;
       expect(
         magnifierCenterY + magnifier.focalPointOffset.dy,
         moreOrLessEquals(rowCenter, epsilon: 0.5),
-        reason: 'the magnifier should show content centered on the row, not shifted down by half its own height',
+        reason:
+            'the magnifier should show content centered on the row, not shifted down by half its own height',
       );
 
       await drag.up();
@@ -808,7 +958,9 @@ void main() {
           home: TypstViewer(
             session: session,
             controller: controller,
-            params: const TypstViewerParams(renderDelay: Duration(milliseconds: 1)),
+            params: const TypstViewerParams(
+              renderDelay: Duration(milliseconds: 1),
+            ),
           ),
         ),
       );
@@ -817,13 +969,17 @@ void main() {
       const zoom = 800 / 611;
       Offset docToView(Offset doc) => Offset(doc.dx * zoom, doc.dy * zoom);
       final wordPoint = docToView(const Offset(8 + 60, 8 + 110));
-      final press = await tester.startGesture(wordPoint, kind: PointerDeviceKind.touch);
+      final press = await tester.startGesture(
+        wordPoint,
+        kind: PointerDeviceKind.touch,
+      );
       await tester.pump(const Duration(milliseconds: 600));
       await press.up();
       await tester.pump();
       expect(controller.selectedText, 'HELLO');
 
-      bool isHandle(Widget w) => w is GestureDetector && w.onPanStart != null && w.onPanUpdate != null;
+      bool isHandle(Widget w) =>
+          w is GestureDetector && w.onPanStart != null && w.onPanUpdate != null;
       final handles = find.byWidgetPredicate(isHandle);
       // The end handle's flag hangs below-right of the text edge, so its
       // visual center — where a real finger naturally lands — is off the
@@ -831,7 +987,10 @@ void main() {
       // horizontally.
       final grabPoint = tester.getRect(handles.last).center;
 
-      final drag = await tester.startGesture(grabPoint, kind: PointerDeviceKind.touch);
+      final drag = await tester.startGesture(
+        grabPoint,
+        kind: PointerDeviceKind.touch,
+      );
       await tester.pump(const Duration(milliseconds: 20));
       await drag.moveBy(const Offset(15, 0));
       await tester.pump(const Duration(milliseconds: 20));
@@ -841,6 +1000,66 @@ void main() {
       // column further right than this net finger movement actually
       // implies ('HELLO W' instead of 'HELLO ').
       expect(controller.selectedText, 'HELLO ');
+
+      await drag.up();
+    },
+  );
+
+  testWidgets(
+    'dragging a handle only notifies selection listeners on an actual change',
+    (tester) async {
+      final (session, _) = await makeSession();
+      final controller = TypstViewerController();
+      var notifications = 0;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: TypstViewer(
+            session: session,
+            controller: controller,
+            params: TypstViewerParams(onSelectionChanged: (_) => notifications++),
+          ),
+        ),
+      );
+      await settle(tester);
+
+      const zoom = 800 / 611;
+      Offset docToView(Offset doc) => Offset(doc.dx * zoom, doc.dy * zoom);
+      // "HELLO" (chars 0..5), with "WORLD" free to its right — room for
+      // the end handle to actually move into a new character.
+      final wordPoint = docToView(const Offset(8 + 60, 8 + 110));
+      final press = await tester.startGesture(wordPoint, kind: PointerDeviceKind.touch);
+      await tester.pump(const Duration(milliseconds: 600));
+      await press.up();
+      await tester.pump();
+      expect(controller.selectedText, 'HELLO');
+
+      bool isHandle(Widget w) => w is GestureDetector && w.onPanStart != null && w.onPanUpdate != null;
+      final handles = find.byWidgetPredicate(isHandle);
+      final endHandleCenter = tester.getCenter(handles.last);
+
+      final drag = await tester.startGesture(endHandleCenter, kind: PointerDeviceKind.touch);
+      await tester.pump(const Duration(milliseconds: 20));
+      // One real move, extending the selection into "WORLD".
+      final target = endHandleCenter + const Offset(60, 0);
+      await drag.moveTo(target);
+      await tester.pump(const Duration(milliseconds: 10));
+      expect(notifications, greaterThan(0), reason: 'an actual selection change should notify');
+      final afterRealMove = notifications;
+
+      // Several more frames landing on that exact same point (e.g. a
+      // finger holding still, or jitter that resolves to the same
+      // character) — none of these introduce any further change, so none
+      // should notify again.
+      for (var i = 0; i < 5; i++) {
+        await drag.moveTo(target);
+        await tester.pump(const Duration(milliseconds: 10));
+      }
+      expect(
+        notifications,
+        afterRealMove,
+        reason: 'repeating the same resolved position should not fire redundant selection notifications',
+      );
 
       await drag.up();
     },
@@ -857,7 +1076,9 @@ void main() {
           home: TypstViewer(
             session: session,
             controller: controller,
-            params: const TypstViewerParams(renderDelay: Duration(milliseconds: 1)),
+            params: const TypstViewerParams(
+              renderDelay: Duration(milliseconds: 1),
+            ),
           ),
         ),
       );
@@ -870,13 +1091,17 @@ void main() {
       // leaving "HELLO" (chars 0..5) untouched to its left — room to drag
       // the end handle all the way past the (fixed) start handle.
       final wordPoint = docToView(const Offset(8 + 220, 8 + 110));
-      final press = await tester.startGesture(wordPoint, kind: PointerDeviceKind.touch);
+      final press = await tester.startGesture(
+        wordPoint,
+        kind: PointerDeviceKind.touch,
+      );
       await tester.pump(const Duration(milliseconds: 600));
       await press.up();
       await tester.pump();
       expect(controller.selectedText, 'WORLD');
 
-      bool isHandle(Widget w) => w is GestureDetector && w.onPanStart != null && w.onPanUpdate != null;
+      bool isHandle(Widget w) =>
+          w is GestureDetector && w.onPanStart != null && w.onPanUpdate != null;
       final handles = find.byWidgetPredicate(isHandle);
       expect(handles, findsNWidgets(2));
       final endHandleCenter = tester.getCenter(handles.last);
@@ -884,7 +1109,10 @@ void main() {
       // Drag the end handle, in several incremental steps (reproducing the
       // multi-frame drift the original bug needed to manifest), all the
       // way past the fixed start handle and into "HELLO".
-      final drag = await tester.startGesture(endHandleCenter, kind: PointerDeviceKind.touch);
+      final drag = await tester.startGesture(
+        endHandleCenter,
+        kind: PointerDeviceKind.touch,
+      );
       await tester.pump(const Duration(milliseconds: 20));
       for (final doc in [
         const Offset(8 + 180, 8 + 110),
@@ -906,15 +1134,20 @@ void main() {
         greaterThanOrEqualTo(3),
         reason: 'a 1-2 char selection here is the collapse-to-nothing bug',
       );
-      expect(find.byWidgetPredicate(isHandle), findsNWidgets(2), reason: 'both handles still render post-crossing');
+      expect(
+        find.byWidgetPredicate(isHandle),
+        findsNWidgets(2),
+        reason: 'both handles still render post-crossing',
+      );
 
       await drag.up();
       await tester.pump(const Duration(milliseconds: 20));
     },
   );
 
-  testWidgets('tapping links fires callback and navigates internal dests',
-      (tester) async {
+  testWidgets('tapping links fires callback and navigates internal dests', (
+    tester,
+  ) async {
     final (session, _) = await makeSession();
     final controller = TypstViewerController();
     final tappedLinks = <TypstLink>[];
@@ -949,8 +1182,9 @@ void main() {
     expect(controller.currentPageNumber, 3);
   });
 
-  testWidgets('recompile keeps old images until replacements arrive',
-      (tester) async {
+  testWidgets('recompile keeps old images until replacements arrive', (
+    tester,
+  ) async {
     final (session, fake) = await makeSession();
 
     await tester.pumpWidget(

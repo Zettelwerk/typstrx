@@ -1,7 +1,7 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart' show Rect;
+import 'package:flutter/widgets.dart' show Color, Rect;
 
 import '../document/typst_page.dart';
 
@@ -105,10 +105,21 @@ class RasterizationMetrics {
 /// Notifies listeners whenever an image is added or removed so the viewer's
 /// painter can repaint.
 class TypstPageImageCache extends ChangeNotifier {
-  TypstPageImageCache({required this.maxBytes});
+  TypstPageImageCache({
+    required this.maxBytes,
+    this.backgroundColor = const Color(0xffffffff),
+  });
 
   /// Byte budget for all cached images together.
   final int maxBytes;
+
+  /// The color new renders composite against. Mutable (not `final`) so a
+  /// runtime change (e.g. [TypstViewerParams.rasterBackgroundColor]
+  /// following a theme toggle) takes effect on the next render — call
+  /// [clear] alongside setting it, since already-cached images have this
+  /// color baked into their pixels and won't pick up the change on their
+  /// own.
+  Color backgroundColor;
 
   final _previews = <int, CachedPageImage>{};
   final _tiles = <int, CachedPageTile>{};
@@ -146,6 +157,7 @@ class TypstPageImageCache extends ChangeNotifier {
       final image = await page.render(
         fullWidth: page.width * scale,
         fullHeight: page.height * scale,
+        backgroundColor: backgroundColor,
       );
       if (image == null) return; // stale generation — drop silently
       final uiImage = await image.createImage();
@@ -198,7 +210,9 @@ class TypstPageImageCache extends ChangeNotifier {
         r.right >= rect.right - 1 &&
         r.bottom >= rect.bottom - 1;
     final tile = _tiles[pageNumber];
-    if (tile != null && tile.generation == generation && matches(tile.rect, tile.scale)) {
+    if (tile != null &&
+        tile.generation == generation &&
+        matches(tile.rect, tile.scale)) {
       return true;
     }
     final inFlight = _renderingTiles[pageNumber];
@@ -225,6 +239,7 @@ class TypstPageImageCache extends ChangeNotifier {
         height: (inPage.height * scale).ceil(),
         fullWidth: pageRect.width * scale,
         fullHeight: pageRect.height * scale,
+        backgroundColor: backgroundColor,
       );
       if (image == null) return; // stale generation — drop silently
       final uiImage = await image.createImage();
@@ -267,10 +282,12 @@ class TypstPageImageCache extends ChangeNotifier {
     var total = totalBytes;
     if (total <= maxBytes) return;
 
-    final evictable = <int>{..._previews.keys, ..._tiles.keys}
-        .where((pageNumber) => !protectedPages.contains(pageNumber))
-        .toList()
-      ..sort((a, b) => (b - currentPage).abs() - (a - currentPage).abs());
+    final evictable =
+        <int>{
+            ..._previews.keys,
+            ..._tiles.keys,
+          }.where((pageNumber) => !protectedPages.contains(pageNumber)).toList()
+          ..sort((a, b) => (b - currentPage).abs() - (a - currentPage).abs());
     for (final pageNumber in evictable) {
       if (total <= maxBytes) break;
       final removed = _previews.remove(pageNumber);
@@ -292,10 +309,12 @@ class TypstPageImageCache extends ChangeNotifier {
   /// (even from an older generation) until their re-render replaces them, so
   /// typing never flashes blank pages.
   void removePagesAbove(int pageCount) {
-    final stalePreviews =
-        _previews.keys.where((pageNumber) => pageNumber > pageCount).toList();
-    final staleTiles =
-        _tiles.keys.where((pageNumber) => pageNumber > pageCount).toList();
+    final stalePreviews = _previews.keys
+        .where((pageNumber) => pageNumber > pageCount)
+        .toList();
+    final staleTiles = _tiles.keys
+        .where((pageNumber) => pageNumber > pageCount)
+        .toList();
     if (stalePreviews.isEmpty && staleTiles.isEmpty) return;
     for (final pageNumber in stalePreviews) {
       _previews.remove(pageNumber)!.dispose();
@@ -303,6 +322,22 @@ class TypstPageImageCache extends ChangeNotifier {
     for (final pageNumber in staleTiles) {
       _tiles.remove(pageNumber)!.dispose();
     }
+    notifyListeners();
+  }
+
+  /// Drops every cached image (previews and tiles alike) so the next render
+  /// pass starts fresh — for a change that invalidates already-rendered
+  /// pixels outright (e.g. [backgroundColor]), rather than just some pages
+  /// (see [removePagesAbove]) or the byte budget (see [evictIfNeeded]).
+  void clear() {
+    for (final entry in _previews.values) {
+      entry.dispose();
+    }
+    _previews.clear();
+    for (final tile in _tiles.values) {
+      tile.dispose();
+    }
+    _tiles.clear();
     notifyListeners();
   }
 
@@ -332,4 +367,3 @@ class TypstPageImageCache extends ChangeNotifier {
     super.dispose();
   }
 }
-

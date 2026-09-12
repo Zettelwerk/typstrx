@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
-/// A rendered image tile: straight RGBA8888 pixels, rows top-to-bottom.
+/// A rendered image tile: premultiplied RGBA8888 pixels, rows top-to-bottom.
 class TypstImage {
   TypstImage({required this.width, required this.height, required this.pixels});
 

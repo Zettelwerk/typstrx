@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/widgets.dart';
 
 import '../document/typst_link.dart';
+import '../document/typst_text_selection.dart';
 
 /// Which modifier key makes mouse-wheel scroll zoom a [TypstViewer] instead
 /// of panning it. See [TypstViewerParams.wheelZoomTrigger].
@@ -41,6 +42,7 @@ class TypstViewerParams {
     this.maxImageCacheBytes = 100 * 1024 * 1024,
     this.renderDelay = const Duration(milliseconds: 16),
     this.backgroundColor = const Color(0xffdddddd),
+    this.pageColor = const Color(0xffffffff),
     this.pageDropShadow = const BoxShadow(
       color: Color(0x40000000),
       blurRadius: 4,
@@ -48,6 +50,10 @@ class TypstViewerParams {
     ),
     this.enableTextSelection = true,
     this.selectionColor = const Color(0x553b82f6),
+    this.showSelectionToolbar = true,
+    this.onSelectionChanged,
+    this.enableNavigation = true,
+    this.rasterBackgroundColor = const Color(0xffffffff),
     this.onLinkTap,
     this.wheelZoomTrigger = WheelZoomTrigger.control,
     this.shouldZoomOnWheelScroll,
@@ -280,6 +286,10 @@ class TypstViewerParams {
   /// Defaults to a light gray, `Color(0xffdddddd)`.
   final Color backgroundColor;
 
+  /// Color painted behind each page raster. Pass `null` for an embedded,
+  /// transparent surface (the compiled page fill still paints normally).
+  final Color? pageColor;
+
   /// Drop shadow painted behind every page, giving pages visual separation
   /// from [backgroundColor] and from each other. Pass `null` for no shadow.
   ///
@@ -304,6 +314,20 @@ class TypstViewerParams {
   ///
   /// Defaults to a translucent blue, `Color(0x553b82f6)`.
   final Color selectionColor;
+
+  /// Whether typstrx builds its own Copy toolbar for rendered selections.
+  /// Disable this when the host coordinates selection UI across surfaces.
+  final bool showSelectionToolbar;
+
+  /// Called whenever the rendered-text selection changes or is cleared.
+  final ValueChanged<TypstTextSelection?>? onSelectionChanged;
+
+  /// Whether this viewer owns pan, pinch-zoom, and mouse-wheel navigation.
+  /// Text-selection gestures remain enabled independently.
+  final bool enableNavigation;
+
+  /// Color below the compiled page. Alpha is preserved by the renderer.
+  final Color rasterBackgroundColor;
 
   // ---- links ----
 

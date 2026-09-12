@@ -336,7 +336,7 @@ class RectPt {
           bottom == other.bottom;
 }
 
-/// A rendered tile of a page: straight RGBA8888 pixels, `width * height * 4`
+/// A rendered tile of a page: premultiplied RGBA8888 pixels, `width * height * 4`
 /// bytes, rows top-to-bottom.
 class RenderedRegion {
   final int width;

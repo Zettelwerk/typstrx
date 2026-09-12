@@ -147,6 +147,56 @@ extension _TypstViewerSelection on _TypstViewerState {
 
   bool get _hasSelection => _normalizedSelection != null;
 
+  /// The character range of [pageIndex] covered by a selection spanning
+  /// [start] to [end] (inclusive start, exclusive end, per the usual
+  /// convention here — see [_SelPoint]), clamped to [length]. Shared by
+  /// every place that needs "how much of this page is selected": the
+  /// three previously each re-derived it themselves, with a shared bug
+  /// (say, an off-by-one at a page boundary) only one edit away from
+  /// slipping in between them.
+  ({int from, int to}) _selectionRangeForPage(
+    int pageIndex,
+    _SelPoint start,
+    _SelPoint end,
+    int length,
+  ) {
+    final from = pageIndex == start.pageIndex ? start.charIndex : 0;
+    final to = pageIndex == end.pageIndex ? end.charIndex.clamp(0, length) : length;
+    return (from: from, to: to);
+  }
+
+  TypstTextSelection? get _publicSelection {
+    final selection = _normalizedSelection;
+    if (selection == null) return null;
+    final (start, end) = selection;
+    final rects = <TypstTextSelectionRect>[];
+    for (var pageIndex = start.pageIndex;
+        pageIndex <= end.pageIndex;
+        pageIndex++) {
+      final text = _pageTexts[pageIndex + 1];
+      if (text == null) continue;
+      final (:from, :to) = _selectionRangeForPage(pageIndex, start, end, text.charRects.length);
+      for (final rect in text.rectsForRange(from, to)) {
+        rects.add(TypstTextSelectionRect(
+          pageNumber: pageIndex + 1,
+          rect: rect.toRect(),
+        ));
+      }
+    }
+    return TypstTextSelection(
+      start: TypstTextPosition(
+        pageNumber: start.pageIndex + 1,
+        offset: start.charIndex,
+      ),
+      end: TypstTextPosition(
+        pageNumber: end.pageIndex + 1,
+        offset: end.charIndex,
+      ),
+      text: _selectedText(),
+      rects: List.unmodifiable(rects),
+    );
+  }
+
   void _clearSelection() {
     if (_selAnchor == null && _selFocus == null) return;
     _selAnchor = null;
@@ -164,7 +214,7 @@ extension _TypstViewerSelection on _TypstViewerState {
     _handleDragFixedEnd = null;
     _handleDragMovingPoint = null;
     _handleDragGrabOffset = null;
-    _repaint();
+    _selectionChanged();
   }
 
   /// The selected text across pages.
@@ -178,10 +228,7 @@ extension _TypstViewerSelection on _TypstViewerState {
         pageIndex++) {
       final text = _pageTexts[pageIndex + 1];
       if (text == null) continue;
-      final from = pageIndex == start.pageIndex ? start.charIndex : 0;
-      final to = pageIndex == end.pageIndex
-          ? end.charIndex.clamp(0, text.fullText.length)
-          : text.fullText.length;
+      final (:from, :to) = _selectionRangeForPage(pageIndex, start, end, text.fullText.length);
       if (from < to) parts.add(text.fullText.substring(from, to));
     }
     return parts.join('\n');
@@ -205,10 +252,7 @@ extension _TypstViewerSelection on _TypstViewerState {
     }
     final text = _pageTexts[pageIndex + 1];
     if (text == null) return const [];
-    final from = pageIndex == start.pageIndex ? start.charIndex : 0;
-    final to = pageIndex == end.pageIndex
-        ? end.charIndex.clamp(0, text.charRects.length)
-        : text.charRects.length;
+    final (:from, :to) = _selectionRangeForPage(pageIndex, start, end, text.charRects.length);
     return [
       for (final rect in text.rectsForRange(from, to))
         rect.toRectInDocument(pageRect),
@@ -323,7 +367,7 @@ extension _TypstViewerSelection on _TypstViewerState {
     _selAnchor = _SelPoint(point.pageIndex, start);
     _selFocus = _SelPoint(point.pageIndex, end);
     _toolbarAnchor = showToolbar ? docPoint : null;
-    _repaint();
+    _selectionChanged();
   }
 
   // Mouse drag selection.
@@ -334,7 +378,7 @@ extension _TypstViewerSelection on _TypstViewerState {
     final point = _charPointAt(_viewToDoc(details.localPosition), tolerance: 2);
     _selAnchor = point;
     _selFocus = point;
-    _repaint();
+    _selectionChanged();
   }
 
   void _onSelectionDragUpdate(DragUpdateDetails details) {
@@ -347,7 +391,7 @@ extension _TypstViewerSelection on _TypstViewerState {
       _selFocus = _selAnchor!.compareTo(point) <= 0
           ? _SelPoint(point.pageIndex, point.charIndex + 1)
           : point;
-      _repaint();
+      _selectionChanged();
     }
   }
 
@@ -414,7 +458,9 @@ extension _TypstViewerSelection on _TypstViewerState {
     // in-flight drag — the pointer's route would be dropped and
     // onPanUpdate would simply stop firing partway through a drag.
     final toolbarAnchor = _toolbarAnchor;
-    if (selection != null && toolbarAnchor != null) {
+    if (selection != null &&
+        toolbarAnchor != null &&
+        widget.params.showSelectionToolbar) {
       final view = _docToView(toolbarAnchor);
       // The default `view.dy - 56` placement assumes nothing else occupies
       // that space above the touch point — true for a mouse selection
@@ -650,6 +696,8 @@ extension _TypstViewerSelection on _TypstViewerState {
     // used for the isDragging comparison there) rather than the raw
     // hit-tested character — those two can differ by the +1 above.
     _handleDragMovingPoint = moving;
+    final previousAnchor = _selAnchor;
+    final previousFocus = _selFocus;
     if (moving.compareTo(fixed) <= 0) {
       _selAnchor = moving;
       _selFocus = fixed;
@@ -658,7 +706,18 @@ extension _TypstViewerSelection on _TypstViewerState {
       _selFocus = moving;
     }
     _toolbarAnchor = null;
-    _repaint();
+    // Sub-character finger jitter frequently re-hits the same character as
+    // last frame — _onSelectionDragUpdate above already only notifies on an
+    // actual change; this matches that, rather than reallocating the public
+    // selection and firing the host callback/controller listeners on every
+    // pan-update tick regardless. The magnifier still needs to move though
+    // (see _handleDragPoint above), so a plain repaint replaces it when
+    // nothing about the selection itself changed.
+    if (_selAnchor != previousAnchor || _selFocus != previousFocus) {
+      _selectionChanged();
+    } else {
+      _repaint();
+    }
   }
 
   Offset _viewOrigin() {

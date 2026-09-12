@@ -14,6 +14,7 @@ import '../document/typst_link.dart';
 import '../document/typst_page.dart';
 import '../document/typst_session.dart';
 import '../document/typst_text.dart';
+import '../document/typst_text_selection.dart';
 import 'typst_page_image_cache.dart';
 import 'typst_viewer_params.dart';
 
@@ -62,7 +63,8 @@ class TypstViewer extends StatefulWidget {
   State<TypstViewer> createState() => _TypstViewerState();
 }
 
-class _TypstViewerState extends State<TypstViewer> with TickerProviderStateMixin {
+class _TypstViewerState extends State<TypstViewer>
+    with TickerProviderStateMixin {
   final _txController = TransformationController();
   late TypstPageImageCache _cache;
   StreamSubscription<TypstDocument>? _subscription;
@@ -119,7 +121,10 @@ class _TypstViewerState extends State<TypstViewer> with TickerProviderStateMixin
   @override
   void initState() {
     super.initState();
-    _cache = TypstPageImageCache(maxBytes: widget.params.maxImageCacheBytes);
+    _cache = TypstPageImageCache(
+      maxBytes: widget.params.maxImageCacheBytes,
+      backgroundColor: widget.params.rasterBackgroundColor,
+    );
     widget.controller?._attach(this);
     _txController.addListener(_onMatrixChanged);
     _subscription = widget.session.documents.listen(_onDocument);
@@ -142,6 +147,38 @@ class _TypstViewerState extends State<TypstViewer> with TickerProviderStateMixin
       _fitDone = false;
       final initial = widget.session.document;
       if (initial != null) _onDocument(initial);
+    }
+    if (oldWidget.params.margin != widget.params.margin) {
+      final document = _document;
+      if (document != null) _layout = _layoutPages(document);
+      _fitDone = false;
+      // Unlike the minScale/maxScale branch below, a margin change doesn't
+      // necessarily also change the viewport size — the only other trigger
+      // for _fitInitialView (see the LayoutBuilder in build()) — so without
+      // this, _fitDone would sit false with nothing left to clear it until
+      // an unrelated resize happened to come along.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _fitInitialView();
+        _scheduleRender();
+      });
+    }
+    if (oldWidget.params.minScale != widget.params.minScale ||
+        oldWidget.params.maxScale != widget.params.maxScale) {
+      _fitDone = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _fitInitialView();
+        _scheduleRender();
+      });
+    }
+    if (oldWidget.params.rasterBackgroundColor != widget.params.rasterBackgroundColor) {
+      // Already-cached previews/tiles have the old color baked into their
+      // pixels (see TypstPageImageCache.renderPreview/renderTile) — merely
+      // pointing the cache at the new color wouldn't touch them.
+      _cache.backgroundColor = widget.params.rasterBackgroundColor;
+      _cache.clear();
+      _scheduleRender();
     }
   }
 
@@ -179,18 +216,17 @@ class _TypstViewerState extends State<TypstViewer> with TickerProviderStateMixin
     final rects = <Rect>[];
     var top = margin;
     for (final page in document.pages) {
-      rects.add(Rect.fromLTWH(
-        (docWidth - page.width) / 2,
-        top,
-        page.width,
-        page.height,
-      ));
+      rects.add(
+        Rect.fromLTWH(
+          (docWidth - page.width) / 2,
+          top,
+          page.width,
+          page.height,
+        ),
+      );
       top += page.height + margin;
     }
-    return TypstPageLayout(
-      pageRects: rects,
-      documentSize: Size(docWidth, top),
-    );
+    return TypstPageLayout(pageRects: rects, documentSize: Size(docWidth, top));
   }
 
   // ---- view transform ----
@@ -256,6 +292,13 @@ class _TypstViewerState extends State<TypstViewer> with TickerProviderStateMixin
     if (mounted) setState(() {});
   }
 
+  void _selectionChanged() {
+    final selection = _publicSelection;
+    widget.params.onSelectionChanged?.call(selection);
+    widget.controller?._notifySelectionChanged();
+    _repaint();
+  }
+
   /// Scrolls the view so that the given document offset lands at the top-left
   /// (clamped to the document bounds).
   void _goTo(Offset documentOffset) {
@@ -275,8 +318,7 @@ class _TypstViewerState extends State<TypstViewer> with TickerProviderStateMixin
       widget.params.minScale,
       widget.params.maxScale,
     );
-    final focal = focalPoint ??
-        Offset(viewSize.width / 2, viewSize.height / 2);
+    final focal = focalPoint ?? Offset(viewSize.width / 2, viewSize.height / 2);
     final docPoint = MatrixUtils.transformPoint(
       Matrix4.inverted(_txController.value),
       focal,
@@ -400,7 +442,11 @@ class _TypstViewerState extends State<TypstViewer> with TickerProviderStateMixin
     final desiredZoom = startZoom * details.scale;
     final allowedZoom = _elasticZoom(desiredZoom, details.scale);
     final scaleChange = _currentZoom == 0 ? 1.0 : allowedZoom / _currentZoom;
-    _applyScaleKeepingScenePointFixed(scaleChange, referenceFocalPoint, details.localFocalPoint);
+    _applyScaleKeepingScenePointFixed(
+      scaleChange,
+      referenceFocalPoint,
+      details.localFocalPoint,
+    );
   }
 
   void _onGestureScaleEnd(ScaleEndDetails details) {
@@ -451,7 +497,8 @@ class _TypstViewerState extends State<TypstViewer> with TickerProviderStateMixin
     pixels: zoomInPixelUnits,
     minScrollExtent: widget.params.minScale * _zoomMetricScale,
     maxScrollExtent: widget.params.maxScale * _zoomMetricScale,
-    viewportDimension: (widget.params.maxScale - widget.params.minScale) * _zoomMetricScale,
+    viewportDimension:
+        (widget.params.maxScale - widget.params.minScale) * _zoomMetricScale,
     axisDirection: AxisDirection.right,
     devicePixelRatio: 1.0,
   );
@@ -471,12 +518,17 @@ class _TypstViewerState extends State<TypstViewer> with TickerProviderStateMixin
     // the resistance depend on how long the gesture has been going, not
     // on how far past the limit the zoom already is (which is what
     // ScrollPosition itself does for each incremental drag update).
-    final scaleRatio = _lastGestureScale == 0 ? 1.0 : gestureScale / _lastGestureScale;
+    final scaleRatio = _lastGestureScale == 0
+        ? 1.0
+        : gestureScale / _lastGestureScale;
     _lastGestureScale = gestureScale;
     final scale = _zoomMetricScale;
     final delta = (_currentZoom * scaleRatio - _currentZoom) * scale;
     if (delta == 0) return _currentZoom;
-    final damped = _zoomBoundsPhysics.applyPhysicsToUserOffset(_zoomMetrics(_currentZoom * scale), delta);
+    final damped = _zoomBoundsPhysics.applyPhysicsToUserOffset(
+      _zoomMetrics(_currentZoom * scale),
+      delta,
+    );
     return _currentZoom + damped / scale;
   }
 
@@ -492,12 +544,18 @@ class _TypstViewerState extends State<TypstViewer> with TickerProviderStateMixin
     if (zoom >= minScale && zoom <= maxScale) return false;
 
     final scale = _zoomMetricScale;
-    final simulation = _zoomBoundsPhysics.createBallisticSimulation(_zoomMetrics(zoom * scale), 0);
+    final simulation = _zoomBoundsPhysics.createBallisticSimulation(
+      _zoomMetrics(zoom * scale),
+      0,
+    );
     if (simulation == null) return false;
 
     final viewSize = _viewSize;
-    final focalPoint = _lastLocalFocalPoint ??
-        (viewSize == null ? Offset.zero : Offset(viewSize.width / 2, viewSize.height / 2));
+    final focalPoint =
+        _lastLocalFocalPoint ??
+        (viewSize == null
+            ? Offset.zero
+            : Offset(viewSize.width / 2, viewSize.height / 2));
 
     final controller = AnimationController.unbounded(vsync: this);
     _zoomSnapBackController?.dispose();
@@ -512,7 +570,11 @@ class _TypstViewerState extends State<TypstViewer> with TickerProviderStateMixin
       // factor before treating it as one.
       final desiredZoom = controller.value / scale;
       final scaleChange = _currentZoom == 0 ? 1.0 : desiredZoom / _currentZoom;
-      _applyScaleKeepingScenePointFixed(scaleChange, referenceScenePoint, focalPoint);
+      _applyScaleKeepingScenePointFixed(
+        scaleChange,
+        referenceScenePoint,
+        focalPoint,
+      );
     });
     controller.animateWith(simulation);
     return true;
@@ -551,7 +613,11 @@ class _TypstViewerState extends State<TypstViewer> with TickerProviderStateMixin
   // effectively stops — ported from InteractiveViewer's own (private)
   // _getFinalTime, needed here for the same reason it exists there: sizing
   // the AnimationController's duration to the simulation it's approximating.
-  static double _flingFinalTime(double velocity, double drag, {double effectivelyMotionless = 10}) {
+  static double _flingFinalTime(
+    double velocity,
+    double drag, {
+    double effectivelyMotionless = 10,
+  }) {
     return math.log(effectivelyMotionless / velocity) / math.log(drag / 100);
   }
 
@@ -565,9 +631,20 @@ class _TypstViewerState extends State<TypstViewer> with TickerProviderStateMixin
     if (velocity.pixelsPerSecond.distance < kMinFlingVelocity) return;
     final translation = _txController.value.getTranslation();
     final start = Offset(translation.x, translation.y);
-    final frictionX = FrictionSimulation(_flingFriction, start.dx, velocity.pixelsPerSecond.dx);
-    final frictionY = FrictionSimulation(_flingFriction, start.dy, velocity.pixelsPerSecond.dy);
-    final tFinal = _flingFinalTime(velocity.pixelsPerSecond.distance, _flingFriction);
+    final frictionX = FrictionSimulation(
+      _flingFriction,
+      start.dx,
+      velocity.pixelsPerSecond.dx,
+    );
+    final frictionY = FrictionSimulation(
+      _flingFriction,
+      start.dy,
+      velocity.pixelsPerSecond.dy,
+    );
+    final tFinal = _flingFinalTime(
+      velocity.pixelsPerSecond.distance,
+      _flingFriction,
+    );
     if (!tFinal.isFinite || tFinal <= 0) return;
 
     final controller = AnimationController(
@@ -628,7 +705,15 @@ class _TypstViewerState extends State<TypstViewer> with TickerProviderStateMixin
   /// *up*, so a snapped tile is never softer than the zoom asks for — it is at
   /// most one rung sharper than strictly needed.
   static const _tileDpiRungs = <double>[
-    72, 108, 144, 216, 288, 432, 576, 864, 1152,
+    72,
+    108,
+    144,
+    216,
+    288,
+    432,
+    576,
+    864,
+    1152,
   ];
 
   /// Stage two's zoom-adaptive rasterization scale, capped by maxRenderDpi.
@@ -674,7 +759,10 @@ class _TypstViewerState extends State<TypstViewer> with TickerProviderStateMixin
       final pageNumber = i + 1;
       visiblePages.add(pageNumber);
       if (!_cache.hasFreshPreview(
-          pageNumber, previewScale, document.generation)) {
+        pageNumber,
+        previewScale,
+        document.generation,
+      )) {
         toRender.add(document.pages[i]);
       }
     }
@@ -693,9 +781,11 @@ class _TypstViewerState extends State<TypstViewer> with TickerProviderStateMixin
     // Nearest pages first, so the page being read is sharp before its
     // neighbours are speculatively filled in.
     final currentPage = _currentPageNumber;
-    toRender.sort((a, b) => (a.pageNumber - currentPage)
-        .abs()
-        .compareTo((b.pageNumber - currentPage).abs()));
+    toRender.sort(
+      (a, b) => (a.pageNumber - currentPage).abs().compareTo(
+        (b.pageNumber - currentPage).abs(),
+      ),
+    );
     for (final page in toRender) {
       if (!mounted || _document != document) return;
       await _cache.renderPreview(page, previewScale);
@@ -726,7 +816,11 @@ class _TypstViewerState extends State<TypstViewer> with TickerProviderStateMixin
       if (tileRect.isEmpty) continue;
       final pageNumber = i + 1;
       if (!_cache.hasFreshTile(
-          pageNumber, tileRect, tileScale, document.generation)) {
+        pageNumber,
+        tileRect,
+        tileScale,
+        document.generation,
+      )) {
         requests.add((document.pages[i], pageRect, tileRect));
       }
     }
@@ -784,7 +878,9 @@ class _TypstViewerState extends State<TypstViewer> with TickerProviderStateMixin
                       width: viewSize.width,
                       height: viewSize.height,
                       child: Listener(
-                        onPointerSignal: _onPointerSignal,
+                        onPointerSignal: widget.params.enableNavigation
+                            ? _onPointerSignal
+                            : null,
                         onPointerDown: (event) => _lastInputWasTouch =
                             event.kind == PointerDeviceKind.touch,
                         child: MouseRegion(
@@ -834,57 +930,56 @@ class _TypstViewerState extends State<TypstViewer> with TickerProviderStateMixin
     return {
       TapGestureRecognizer:
           GestureRecognizerFactoryWithHandlers<TapGestureRecognizer>(
-        TapGestureRecognizer.new,
-        (recognizer) => recognizer
-          ..onTapUp = _onTapUp
-          ..onSecondaryTapUp = _onSecondaryTapUp,
-      ),
+            TapGestureRecognizer.new,
+            (recognizer) => recognizer
+              ..onTapUp = _onTapUp
+              ..onSecondaryTapUp = _onSecondaryTapUp,
+          ),
       DoubleTapGestureRecognizer:
           GestureRecognizerFactoryWithHandlers<DoubleTapGestureRecognizer>(
-        DoubleTapGestureRecognizer.new,
-        (recognizer) => recognizer.onDoubleTapDown = _onDoubleTapDown,
-      ),
+            DoubleTapGestureRecognizer.new,
+            (recognizer) => recognizer.onDoubleTapDown = _onDoubleTapDown,
+          ),
       LongPressGestureRecognizer:
           GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
-        LongPressGestureRecognizer.new,
-        (recognizer) => recognizer.onLongPressStart = _onLongPressStart,
-      ),
-      ScaleGestureRecognizer:
-          GestureRecognizerFactoryWithHandlers<ScaleGestureRecognizer>(
-        () => ScaleGestureRecognizer(
-          supportedDevices: {
-            PointerDeviceKind.touch,
-            PointerDeviceKind.stylus,
-          },
-        ),
-        (recognizer) => recognizer
-          ..onStart = _onGestureScaleStart
-          ..onUpdate = _onGestureScaleUpdate
-          ..onEnd = _onGestureScaleEnd,
-      ),
+            LongPressGestureRecognizer.new,
+            (recognizer) => recognizer.onLongPressStart = _onLongPressStart,
+          ),
+      if (widget.params.enableNavigation)
+        ScaleGestureRecognizer:
+            GestureRecognizerFactoryWithHandlers<ScaleGestureRecognizer>(
+              () => ScaleGestureRecognizer(
+                supportedDevices: {
+                  PointerDeviceKind.touch,
+                  PointerDeviceKind.stylus,
+                },
+              ),
+              (recognizer) => recognizer
+                ..onStart = _onGestureScaleStart
+                ..onUpdate = _onGestureScaleUpdate
+                ..onEnd = _onGestureScaleEnd,
+            ),
       if (widget.params.enableTextSelection)
         PanGestureRecognizer:
             GestureRecognizerFactoryWithHandlers<PanGestureRecognizer>(
-          () => PanGestureRecognizer(
-            supportedDevices: {PointerDeviceKind.mouse},
-          ),
-          (recognizer) => recognizer
-            // Anchor the selection at the press position, not where the
-            // recognizer won the gesture arena.
-            ..dragStartBehavior = DragStartBehavior.down
-            ..onStart = _onSelectionDragStart
-            ..onUpdate = _onSelectionDragUpdate
-            ..onEnd = _onSelectionDragEnd,
-        ),
+              () => PanGestureRecognizer(
+                supportedDevices: {PointerDeviceKind.mouse},
+              ),
+              (recognizer) => recognizer
+                // Anchor the selection at the press position, not where the
+                // recognizer won the gesture arena.
+                ..dragStartBehavior = DragStartBehavior.down
+                ..onStart = _onSelectionDragStart
+                ..onUpdate = _onSelectionDragUpdate
+                ..onEnd = _onSelectionDragEnd,
+            ),
     };
   }
 }
 
 class _TypstDocumentPainter extends CustomPainter {
   _TypstDocumentPainter(this.state)
-      : super(
-          repaint: Listenable.merge([state._cache, state._txController]),
-        );
+    : super(repaint: Listenable.merge([state._cache, state._txController]));
 
   final _TypstViewerState state;
 
@@ -896,7 +991,8 @@ class _TypstDocumentPainter extends CustomPainter {
 
     final visible = state._visibleRect.inflate(state._visibleRect.height / 2);
     final shadow = state.widget.params.pageDropShadow;
-    final pagePaint = Paint()..color = const Color(0xffffffff);
+    final pageColor = state.widget.params.pageColor;
+    final pagePaint = pageColor == null ? null : (Paint()..color = pageColor);
 
     for (var i = 0; i < layout.pageRects.length; i++) {
       final rect = layout.pageRects[i];
@@ -907,11 +1003,13 @@ class _TypstDocumentPainter extends CustomPainter {
           rect.shift(shadow.offset),
           Paint()
             ..color = shadow.color
-            ..maskFilter =
-                MaskFilter.blur(BlurStyle.normal, shadow.blurRadius / 2),
+            ..maskFilter = MaskFilter.blur(
+              BlurStyle.normal,
+              shadow.blurRadius / 2,
+            ),
         );
       }
-      canvas.drawRect(rect, pagePaint);
+      if (pagePaint != null) canvas.drawRect(rect, pagePaint);
 
       final imagePaint = Paint()..filterQuality = FilterQuality.medium;
       final cached = state._cache.previewOf(i + 1);

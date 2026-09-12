@@ -19,6 +19,7 @@ class FakeRustSession implements rust.TypstSession {
   Completer<void>? gate;
 
   var nextCompileSucceeds = true;
+  List<rust.TypstDiagnostic> nextDiagnostics = const [];
 
   @override
   Future<rust.CompileResult> compile({required String source}) async {
@@ -29,7 +30,7 @@ class FakeRustSession implements rust.TypstSession {
         generation: BigInt.from(generation),
         success: false,
         pages: const [],
-        diagnostics: const [],
+        diagnostics: nextDiagnostics,
         elapsedMs: BigInt.zero,
       );
     }
@@ -38,7 +39,7 @@ class FakeRustSession implements rust.TypstSession {
       generation: BigInt.from(generation),
       success: true,
       pages: [const rust.PageInfo(widthPt: 595, heightPt: 842)],
-      diagnostics: [],
+      diagnostics: nextDiagnostics,
       elapsedMs: BigInt.zero,
     );
   }
@@ -49,12 +50,16 @@ class FakeRustSession implements rust.TypstSession {
   List<rust.TypstCompletion> completionsToReturn = const [];
   int applyFromUtf16ToReturn = 0;
   rust.TypstTooltip? tooltipToReturn;
+  int? lastCompletionCursor;
+  int? lastHoverCursor;
+  int? lastFunctionInfoCursor;
 
   @override
   Future<rust.CompletionResult> completions({
     required int cursorUtf16,
     required bool explicit,
   }) async {
+    lastCompletionCursor = cursorUtf16;
     return rust.CompletionResult(
       generation: BigInt.from(analysisGeneration),
       applyFromUtf16: applyFromUtf16ToReturn,
@@ -64,6 +69,7 @@ class FakeRustSession implements rust.TypstSession {
 
   @override
   Future<rust.HoverResult> hover({required int cursorUtf16}) async {
+    lastHoverCursor = cursorUtf16;
     return rust.HoverResult(
       generation: BigInt.from(analysisGeneration),
       tooltip: tooltipToReturn,
@@ -71,8 +77,15 @@ class FakeRustSession implements rust.TypstSession {
   }
 
   @override
-  Future<rust.FunctionInfoResult> functionInfo({required int cursorUtf16, required String label}) async {
-    return rust.FunctionInfoResult(generation: BigInt.from(analysisGeneration), info: null);
+  Future<rust.FunctionInfoResult> functionInfo({
+    required int cursorUtf16,
+    required String label,
+  }) async {
+    lastFunctionInfoCursor = cursorUtf16;
+    return rust.FunctionInfoResult(
+      generation: BigInt.from(analysisGeneration),
+      info: null,
+    );
   }
 
   @override
@@ -117,7 +130,9 @@ class FakeRustSession implements rust.TypstSession {
   List<rust.TypstFoldingRange> foldingRangesToReturn = const [];
 
   @override
-  Future<List<rust.TypstFoldingRange>> foldingRanges({required String source}) async {
+  Future<List<rust.TypstFoldingRange>> foldingRanges({
+    required String source,
+  }) async {
     foldingRangesRequestedFor.add(source);
     return foldingRangesToReturn;
   }
@@ -163,9 +178,58 @@ void main() {
     expect(session.document, result.document);
   });
 
+  test(
+    'compileFragment wraps layout and maps analysis back to user source',
+    () async {
+      final fake = FakeRustSession();
+      final session = makeSession(fake);
+      const source = '#rect(width: 10pt)';
+      fake.nextDiagnostics = const [
+        rust.TypstDiagnostic(
+          severity: rust.DiagnosticSeverity.warning,
+          message: 'test warning',
+          hints: [],
+          utf16Start: 80,
+          utf16End: 84,
+          line: 3,
+          column: 2,
+        ),
+      ];
+
+      final result = await session.compileFragment(
+        source,
+        const TypstFragmentOptions(width: 420, margin: 12),
+      );
+      final compiled = fake.compiledSources.single;
+      final prefixLength = compiled.length - source.length;
+      expect(
+        compiled,
+        startsWith(
+          '#set page(width: 420pt, height: auto, margin: 12pt, fill: none)\n',
+        ),
+      );
+      expect(compiled, endsWith(source));
+      expect(session.lastCompiledSource, source);
+      expect(result.diagnostics.single.sourceStart, 80 - prefixLength);
+      expect(result.diagnostics.single.line, 2);
+
+      fake.applyFromUtf16ToReturn = prefixLength + 2;
+      await session.completions(5);
+      await session.hover(6);
+      await session.functionInfo(7, 'rect');
+      expect(fake.lastCompletionCursor, prefixLength + 5);
+      expect(fake.lastHoverCursor, prefixLength + 6);
+      expect(fake.lastFunctionInfoCursor, prefixLength + 7);
+      expect((await session.completions(5)).applyFromUtf16, 2);
+    },
+  );
+
   test('updateSource debounces rapid edits into one compile', () async {
     final fake = FakeRustSession();
-    final session = makeSession(fake, debounce: const Duration(milliseconds: 20));
+    final session = makeSession(
+      fake,
+      debounce: const Duration(milliseconds: 20),
+    );
     session.updateSource('a');
     session.updateSource('ab');
     session.updateSource('abc');
@@ -173,29 +237,31 @@ void main() {
     expect(fake.compiledSources, ['abc']);
   });
 
-  test('updateSource coalesces edits arriving during a running compile',
-      () async {
-    final fake = FakeRustSession();
-    final session = makeSession(fake, debounce: Duration.zero);
+  test(
+    'updateSource coalesces edits arriving during a running compile',
+    () async {
+      final fake = FakeRustSession();
+      final session = makeSession(fake, debounce: Duration.zero);
 
-    fake.gate = Completer<void>();
-    session.updateSource('first');
-    await Future<void>.delayed(const Duration(milliseconds: 20));
-    expect(fake.compiledSources, ['first']);
+      fake.gate = Completer<void>();
+      session.updateSource('first');
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(fake.compiledSources, ['first']);
 
-    // While 'first' is compiling, several newer sources arrive.
-    session.updateSource('second');
-    await Future<void>.delayed(const Duration(milliseconds: 20));
-    session.updateSource('third');
-    await Future<void>.delayed(const Duration(milliseconds: 20));
+      // While 'first' is compiling, several newer sources arrive.
+      session.updateSource('second');
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      session.updateSource('third');
+      await Future<void>.delayed(const Duration(milliseconds: 20));
 
-    fake.gate!.complete();
-    fake.gate = null;
-    await Future<void>.delayed(const Duration(milliseconds: 50));
+      fake.gate!.complete();
+      fake.gate = null;
+      await Future<void>.delayed(const Duration(milliseconds: 50));
 
-    // 'second' was superseded by 'third' before it ever started.
-    expect(fake.compiledSources, ['first', 'third']);
-  });
+      // 'second' was superseded by 'third' before it ever started.
+      expect(fake.compiledSources, ['first', 'third']);
+    },
+  );
 
   test('documents stream emits only successful compiles', () async {
     final fake = FakeRustSession();
@@ -219,7 +285,10 @@ void main() {
 
   test('dispose stops scheduled work and further calls throw', () async {
     final fake = FakeRustSession();
-    final session = makeSession(fake, debounce: const Duration(milliseconds: 20));
+    final session = makeSession(
+      fake,
+      debounce: const Duration(milliseconds: 20),
+    );
     session.updateSource('pending');
     await session.dispose();
     await Future<void>.delayed(const Duration(milliseconds: 50));
@@ -228,52 +297,58 @@ void main() {
     expect(() => session.compile('x'), throwsStateError);
   });
 
-  test('lastCompiledSource tracks the most recent compile call, including failures', () async {
-    final fake = FakeRustSession();
-    final session = makeSession(fake);
-    expect(session.lastCompiledSource, isNull);
+  test(
+    'lastCompiledSource tracks the most recent compile call, including failures',
+    () async {
+      final fake = FakeRustSession();
+      final session = makeSession(fake);
+      expect(session.lastCompiledSource, isNull);
 
-    await session.compile('good');
-    expect(session.lastCompiledSource, 'good');
+      await session.compile('good');
+      expect(session.lastCompiledSource, 'good');
 
-    fake.nextCompileSucceeds = false;
-    await session.compile('broken(');
-    expect(
-      session.lastCompiledSource,
-      'broken(',
-      reason: 'the native side registers the source regardless of success',
-    );
-  });
+      fake.nextCompileSucceeds = false;
+      await session.compile('broken(');
+      expect(
+        session.lastCompiledSource,
+        'broken(',
+        reason: 'the native side registers the source regardless of success',
+      );
+    },
+  );
 
-  test('completions converts kinds, including the data-carrying Symbol variant', () async {
-    final fake = FakeRustSession();
-    final session = makeSession(fake);
-    fake.analysisGeneration = 3;
-    fake.applyFromUtf16ToReturn = 5;
-    fake.completionsToReturn = const [
-      rust.TypstCompletion(
-        kind: rust.TypstCompletionKind.func(),
-        label: 'lorem',
-        apply: 'lorem(\${})',
-        detail: 'Lorem ipsum text.',
-      ),
-      rust.TypstCompletion(
-        kind: rust.TypstCompletionKind.symbol(notation: 'alpha'),
-        label: 'alpha',
-        apply: 'alpha',
-      ),
-    ];
+  test(
+    'completions converts kinds, including the data-carrying Symbol variant',
+    () async {
+      final fake = FakeRustSession();
+      final session = makeSession(fake);
+      fake.analysisGeneration = 3;
+      fake.applyFromUtf16ToReturn = 5;
+      fake.completionsToReturn = const [
+        rust.TypstCompletion(
+          kind: rust.TypstCompletionKind.func(),
+          label: 'lorem',
+          apply: 'lorem(\${})',
+          detail: 'Lorem ipsum text.',
+        ),
+        rust.TypstCompletion(
+          kind: rust.TypstCompletionKind.symbol(notation: 'alpha'),
+          label: 'alpha',
+          apply: 'alpha',
+        ),
+      ];
 
-    final result = await session.completions(10);
-    expect(result.generation, 3);
-    expect(result.applyFromUtf16, 5);
-    expect(result.completions, hasLength(2));
-    expect(result.completions[0].kind.tag, TypstCompletionKindTag.func);
-    expect(result.completions[0].kind.notation, isNull);
-    expect(result.completions[0].detail, 'Lorem ipsum text.');
-    expect(result.completions[1].kind.tag, TypstCompletionKindTag.symbol);
-    expect(result.completions[1].kind.notation, 'alpha');
-  });
+      final result = await session.completions(10);
+      expect(result.generation, 3);
+      expect(result.applyFromUtf16, 5);
+      expect(result.completions, hasLength(2));
+      expect(result.completions[0].kind.tag, TypstCompletionKindTag.func);
+      expect(result.completions[0].kind.notation, isNull);
+      expect(result.completions[0].detail, 'Lorem ipsum text.');
+      expect(result.completions[1].kind.tag, TypstCompletionKindTag.symbol);
+      expect(result.completions[1].kind.notation, 'alpha');
+    },
+  );
 
   test('hover converts Text/Code tooltips and null', () async {
     final fake = FakeRustSession();
@@ -294,24 +369,35 @@ void main() {
     expect(result.tooltip, isNull);
   });
 
-  test('foldingRanges converts kinds and is analyzed against the passed-in source directly', () async {
-    final fake = FakeRustSession();
-    final session = makeSession(fake);
-    fake.foldingRangesToReturn = const [
-      rust.TypstFoldingRange(startUtf16: 1, endUtf16: 20, kind: rust.TypstFoldingKind.codeBlock),
-      rust.TypstFoldingRange(startUtf16: 25, endUtf16: 40, kind: rust.TypstFoldingKind.comment),
-    ];
+  test(
+    'foldingRanges converts kinds and is analyzed against the passed-in source directly',
+    () async {
+      final fake = FakeRustSession();
+      final session = makeSession(fake);
+      fake.foldingRangesToReturn = const [
+        rust.TypstFoldingRange(
+          startUtf16: 1,
+          endUtf16: 20,
+          kind: rust.TypstFoldingKind.codeBlock,
+        ),
+        rust.TypstFoldingRange(
+          startUtf16: 25,
+          endUtf16: 40,
+          kind: rust.TypstFoldingKind.comment,
+        ),
+      ];
 
-    final ranges = await session.foldingRanges('#{ ... }');
+      final ranges = await session.foldingRanges('#{ ... }');
 
-    // Unlike completions/hover, this takes the caller's own text — not
-    // whatever the native side last compiled — so no session.compile() is
-    // needed first, and the fake sees exactly what was passed.
-    expect(fake.foldingRangesRequestedFor, ['#{ ... }']);
-    expect(ranges, hasLength(2));
-    expect(ranges[0].startUtf16, 1);
-    expect(ranges[0].endUtf16, 20);
-    expect(ranges[0].kind, TypstFoldingKind.codeBlock);
-    expect(ranges[1].kind, TypstFoldingKind.comment);
-  });
+      // Unlike completions/hover, this takes the caller's own text — not
+      // whatever the native side last compiled — so no session.compile() is
+      // needed first, and the fake sees exactly what was passed.
+      expect(fake.foldingRangesRequestedFor, ['#{ ... }']);
+      expect(ranges, hasLength(2));
+      expect(ranges[0].startUtf16, 1);
+      expect(ranges[0].endUtf16, 20);
+      expect(ranges[0].kind, TypstFoldingKind.codeBlock);
+      expect(ranges[1].kind, TypstFoldingKind.comment);
+    },
+  );
 }

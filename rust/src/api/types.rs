@@ -314,7 +314,7 @@ pub struct LinkData {
     pub dest_y_pt: Option<f64>,
 }
 
-/// A rendered tile of a page: straight RGBA8888 pixels, `width * height * 4`
+/// A rendered tile of a page: premultiplied RGBA8888 pixels, `width * height * 4`
 /// bytes, rows top-to-bottom.
 pub struct RenderedRegion {
     pub width: u32,

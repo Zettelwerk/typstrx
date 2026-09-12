@@ -76,8 +76,13 @@ class TypstViewerController extends ChangeNotifier
   /// The currently selected text (empty when nothing is selected).
   String get selectedText => _state?._selectedText() ?? '';
 
+  /// The current rendered-text selection, including page-local geometry.
+  TypstTextSelection? get selection => _state?._publicSelection;
+
   /// Clears the text selection.
   void clearSelection() => _state?._clearSelection();
+
+  void _notifySelectionChanged() => notifyListeners();
 
   void _attach(_TypstViewerState state) {
     _state = state;

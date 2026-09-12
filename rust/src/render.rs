@@ -25,10 +25,9 @@ const MAX_TILE_PIXELS: u64 = 64_000_000;
 /// Renders the window `(x, y, width, height)` (in pixels) out of the page
 /// rasterized at a virtual full size of `full_width` × `full_height` pixels.
 ///
-/// The result is straight (non-premultiplied) RGBA8888. With an opaque page
-/// fill, premultiplied and straight RGBA are identical, so no conversion pass
-/// is needed. `background_argb` covers any part of the tile that falls outside
-/// the page.
+/// The result is premultiplied RGBA8888, ready for Flutter's
+/// `PixelFormat.rgba8888`. `background_argb` covers transparent parts of the
+/// page and its alpha is preserved.
 #[allow(clippy::too_many_arguments)] // deliberate region-API shape
 pub fn render_region(
     page: &Page,
@@ -71,7 +70,7 @@ pub fn render_region(
     // buffer to compose against: it only ever shows where the tile overhangs
     // the page edge (rounding can push a request a pixel or two past it) or
     // where the page fill is not opaque.
-    let a = 0xff;
+    let a = ((background_argb >> 24) & 0xff) as u8;
     let r = ((background_argb >> 16) & 0xff) as u8;
     let g = ((background_argb >> 8) & 0xff) as u8;
     let b = (background_argb & 0xff) as u8;
@@ -301,5 +300,23 @@ mod tests {
             "gradient",
             16,
         );
+    }
+
+    #[test]
+    fn transparent_background_preserves_alpha() {
+        let s = session();
+        let result = s.compile(
+            "#set page(width: 100pt, height: 100pt, margin: 0pt, fill: none)\n\
+             #rect(width: 20pt, height: 20pt, fill: red)"
+                .to_owned(),
+        );
+        assert!(result.success, "transparent fragment failed to compile");
+        s.with_page(0, |page| {
+            let image = render_region(page, 0, 0, 100, 100, 100, 100, 0).unwrap();
+            let pixel = |x: usize, y: usize| &image.pixels[(y * 100 + x) * 4..][..4];
+            assert_eq!(pixel(90, 90), &[0, 0, 0, 0]);
+            assert_eq!(pixel(10, 10)[3], 255);
+        })
+        .expect("no compiled page");
     }
 }

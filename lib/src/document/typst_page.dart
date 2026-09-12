@@ -40,7 +40,8 @@ class TypstPage {
   ///   used (72 dpi).
   ///
   /// [backgroundColor] fills the tile before the page is composited onto it;
-  /// it is forced opaque.
+  /// its alpha is preserved. To get a transparent page, the Typst page fill
+  /// must also be `none` (for example `#set page(fill: none)`).
   ///
   /// Returns null when the document has been replaced by a newer compilation
   /// (the render would be stale) — callers should simply drop the request.

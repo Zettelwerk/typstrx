@@ -35,6 +35,74 @@ class TypstSessionOptions {
   final Duration compileDebounce;
 }
 
+/// Page constraints used when compiling Typst as an embedded fragment.
+///
+/// The generated preamble makes the page exactly [width] points wide, lets
+/// its height follow the content, and removes the page fill by default. A
+/// `#set page(...)` rule in [source] comes later and can deliberately
+/// override any of these defaults.
+class TypstFragmentOptions {
+  const TypstFragmentOptions({
+    required this.width,
+    this.margin = 0,
+    this.transparent = true,
+  });
+
+  final double width;
+  final double margin;
+  final bool transparent;
+
+  String _preamble() {
+    if (!width.isFinite || width <= 0) {
+      throw ArgumentError.value(width, 'width', 'must be finite and positive');
+    }
+    if (!margin.isFinite || margin < 0) {
+      throw ArgumentError.value(
+        margin,
+        'margin',
+        'must be finite and non-negative',
+      );
+    }
+    final fill = transparent ? ', fill: none' : '';
+    return '#set page(width: ${_number(width)}pt, height: auto, '
+        'margin: ${_number(margin)}pt$fill)\n';
+  }
+
+  static String _number(double value) => value == value.truncateToDouble()
+      ? value.toInt().toString()
+      : value.toString();
+}
+
+class _CompileRequest {
+  const _CompileRequest(
+    this.userSource,
+    this.compiledSource,
+    this.prefixLength,
+    this.prefixLines,
+  );
+
+  final String userSource;
+  final String compiledSource;
+  final int prefixLength;
+  final int prefixLines;
+
+  factory _CompileRequest.document(String source) =>
+      _CompileRequest(source, source, 0, 0);
+
+  factory _CompileRequest.fragment(
+    String source,
+    TypstFragmentOptions options,
+  ) {
+    final prefix = options._preamble();
+    return _CompileRequest(
+      source,
+      '$prefix$source',
+      prefix.length,
+      '\n'.allMatches(prefix).length,
+    );
+  }
+}
+
 /// The result of a compilation.
 class TypstCompileResult {
   const TypstCompileResult({
@@ -73,7 +141,7 @@ class TypstSession {
   /// Injects a custom bridge session — for tests only.
   @visibleForTesting
   TypstSession.forTesting(rust.TypstSession native, TypstSessionOptions options)
-      : this._(native, options);
+    : this._(native, options);
 
   final rust.TypstSession _native;
   final TypstSessionOptions _options;
@@ -89,8 +157,9 @@ class TypstSession {
   Future<void> _lock = Future.value();
 
   Timer? _debounce;
-  String? _pendingSource;
+  _CompileRequest? _pendingRequest;
   bool _drainScheduled = false;
+  int _analysisPrefixLength = 0;
 
   /// Creates a new session with the embedded default fonts.
   static Future<TypstSession> create({
@@ -133,10 +202,19 @@ class TypstSession {
   /// a compilation is running at most one more is queued, always with the
   /// most recent source. Results are delivered on [results]/[documents].
   void updateSource(String source) {
+    _update(_CompileRequest.document(source));
+  }
+
+  /// Schedules an embedded-fragment compilation of [source].
+  void updateFragmentSource(String source, TypstFragmentOptions options) {
+    _update(_CompileRequest.fragment(source, options));
+  }
+
+  void _update(_CompileRequest request) {
     if (_disposed) return;
     _debounce?.cancel();
     _debounce = Timer(_options.compileDebounce, () {
-      _pendingSource = source;
+      _pendingRequest = request;
       _scheduleDrain();
     });
   }
@@ -145,7 +223,21 @@ class TypstSession {
   /// and returns the result. Also emits on [results]/[documents].
   Future<TypstCompileResult> compile(String source) {
     _checkDisposed();
-    return _serialized(() => _compileNow(source));
+    return _serialized(() => _compileNow(_CompileRequest.document(source)));
+  }
+
+  /// Compiles [source] as a content-sized embedded page.
+  ///
+  /// Diagnostics and editor analysis offsets are mapped back to [source], so
+  /// callers never need to account for typstrx's generated page preamble.
+  Future<TypstCompileResult> compileFragment(
+    String source,
+    TypstFragmentOptions options,
+  ) {
+    _checkDisposed();
+    return _serialized(
+      () => _compileNow(_CompileRequest.fragment(source, options)),
+    );
   }
 
   /// Computes a syntax-highlighting tree for [source].
@@ -172,7 +264,8 @@ class TypstSession {
   Future<List<TypstFoldingRange>> foldingRanges(String source) async {
     _checkDisposed();
     return [
-      for (final r in await _native.foldingRanges(source: source)) TypstFoldingRange.fromRust(r),
+      for (final r in await _native.foldingRanges(source: source))
+        TypstFoldingRange.fromRust(r),
     ];
   }
 
@@ -180,18 +273,48 @@ class TypstSession {
   ///
   /// See [lastCompiledSource] for why this doesn't take a `source`
   /// parameter, and what a caller must check before using the result.
-  Future<TypstCompletionResult> completions(int cursorUtf16, {bool explicit = false}) async {
+  Future<TypstCompletionResult> completions(
+    int cursorUtf16, {
+    bool explicit = false,
+  }) async {
     _checkDisposed();
-    return TypstCompletionResult.fromRust(
-      await _native.completions(cursorUtf16: cursorUtf16, explicit: explicit),
+    final prefixLength = _analysisPrefixLength;
+    final result = TypstCompletionResult.fromRust(
+      await _native.completions(
+        cursorUtf16: cursorUtf16 + prefixLength,
+        explicit: explicit,
+      ),
+    );
+    // Only a fragment compilation's applyFromUtf16 needs mapping back to
+    // the caller's own source — same guard _mapDiagnostic uses, and for
+    // the same reason: skip touching an offset (here, a subtract-then-
+    // clamp) that has nothing to correct for on the plain-compile path,
+    // rather than relying on prefixLength being 0 to make it a no-op.
+    if (prefixLength == 0) return result;
+    return TypstCompletionResult(
+      generation: result.generation,
+      applyFromUtf16: (result.applyFromUtf16 - prefixLength).clamp(
+        0,
+        cursorUtf16,
+      ),
+      completions: result.completions,
     );
   }
 
   /// Computes a hover tooltip at [cursorUtf16] in [lastCompiledSource]. See
   /// [lastCompiledSource] for what a caller must check before using it.
+  ///
+  /// Unlike [completions], nothing in [TypstHoverResult] carries a source
+  /// offset that a fragment's prefix could throw off, so — besides adding
+  /// the prefix to [cursorUtf16] itself, safe at any prefix length,
+  /// including zero — there's no output to guard the way [completions]
+  /// guards `applyFromUtf16` (see [_mapDiagnostic] for the same reasoning
+  /// applied to diagnostics).
   Future<TypstHoverResult> hover(int cursorUtf16) async {
     _checkDisposed();
-    return TypstHoverResult.fromRust(await _native.hover(cursorUtf16: cursorUtf16));
+    return TypstHoverResult.fromRust(
+      await _native.hover(cursorUtf16: cursorUtf16 + _analysisPrefixLength),
+    );
   }
 
   /// Looks up documentation for the function named [label], for an
@@ -204,10 +327,20 @@ class TypstSession {
   /// (handles browsing completions before a full expression exists, e.g.
   /// `#re|`). See [lastCompiledSource] for what a caller must check before
   /// using the result.
-  Future<TypstFunctionInfoResult> functionInfo(int cursorUtf16, String label) async {
+  ///
+  /// Like [hover], [TypstFunctionInfoResult] carries no source offset a
+  /// fragment's prefix could throw off, so there's nothing on the output
+  /// side to guard against a nonzero prefix — see the note on [hover].
+  Future<TypstFunctionInfoResult> functionInfo(
+    int cursorUtf16,
+    String label,
+  ) async {
     _checkDisposed();
     return TypstFunctionInfoResult.fromRust(
-      await _native.functionInfo(cursorUtf16: cursorUtf16, label: label),
+      await _native.functionInfo(
+        cursorUtf16: cursorUtf16 + _analysisPrefixLength,
+        label: label,
+      ),
     );
   }
 
@@ -270,7 +403,7 @@ class TypstSession {
     if (_disposed) return;
     _disposed = true;
     _debounce?.cancel();
-    _pendingSource = null;
+    _pendingRequest = null;
     // Wait for an in-flight compile before dropping the native handle.
     await _lock;
     _native.dispose();
@@ -283,10 +416,10 @@ class TypstSession {
     _drainScheduled = true;
     _serialized(() async {
       _drainScheduled = false;
-      final source = _pendingSource;
-      _pendingSource = null;
-      if (source == null || _disposed) return;
-      await _compileNow(source);
+      final request = _pendingRequest;
+      _pendingRequest = null;
+      if (request == null || _disposed) return;
+      await _compileNow(request);
     });
   }
 
@@ -296,12 +429,13 @@ class TypstSession {
     return result;
   }
 
-  Future<TypstCompileResult> _compileNow(String source) async {
-    final raw = await _native.compile(source: source);
+  Future<TypstCompileResult> _compileNow(_CompileRequest request) async {
+    final raw = await _native.compile(source: request.compiledSource);
     // Unconditional: the native side registers `source` as the compiler's
     // main file regardless of whether compilation succeeded, which is
     // exactly what completions/hover analyze — see `lastCompiledSource`.
-    _lastCompiledSource = source;
+    _lastCompiledSource = request.userSource;
+    _analysisPrefixLength = request.prefixLength;
     final result = TypstCompileResult(
       document: raw.success
           ? TypstDocument(
@@ -315,7 +449,7 @@ class TypstSession {
           : null,
       diagnostics: [
         for (final diagnostic in raw.diagnostics)
-          TypstDiagnostic.fromRust(diagnostic),
+          _mapDiagnostic(TypstDiagnostic.fromRust(diagnostic), request),
       ],
       generation: raw.generation.toInt(),
       elapsed: Duration(milliseconds: raw.elapsedMs.toInt()),
@@ -327,6 +461,37 @@ class TypstSession {
     }
     _results.add(result);
     return result;
+  }
+
+  static TypstDiagnostic _mapDiagnostic(
+    TypstDiagnostic diagnostic,
+    _CompileRequest request,
+  ) {
+    if (request.prefixLength == 0 || diagnostic.sourceStart == null) {
+      return diagnostic;
+    }
+    final start = diagnostic.sourceStart! - request.prefixLength;
+    final end = diagnostic.sourceEnd == null
+        ? null
+        : diagnostic.sourceEnd! - request.prefixLength;
+    if (start < 0 || (end != null && end < 0)) {
+      return TypstDiagnostic(
+        severity: diagnostic.severity,
+        message: diagnostic.message,
+        hints: diagnostic.hints,
+      );
+    }
+    return TypstDiagnostic(
+      severity: diagnostic.severity,
+      message: diagnostic.message,
+      hints: diagnostic.hints,
+      sourceStart: start,
+      sourceEnd: end,
+      line: diagnostic.line == null
+          ? null
+          : diagnostic.line! - request.prefixLines,
+      column: diagnostic.column,
+    );
   }
 
   void _checkDisposed() {
