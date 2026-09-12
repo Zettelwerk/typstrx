@@ -360,6 +360,53 @@ void main() {
     expect(controller.currentZoom, greaterThan(zoomBeforePinch));
   });
 
+  testWidgets(
+    'a fast pan carries momentum past where the raw gesture alone would stop',
+    (tester) async {
+      final (session, _) = await makeSession();
+      final controller = TypstViewerController();
+
+      await tester.pumpWidget(
+        MaterialApp(home: TypstViewer(session: session, controller: controller)),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // tester.fling (not a hand-rolled drag+moveBy sequence) is what
+      // reliably produces a velocity ScaleGestureRecognizer's tracker
+      // recognizes as a fling — see _isFlingGesture in the SDK's
+      // gestures/scale.dart, which silently reports Velocity.zero
+      // otherwise, no matter how fast the on-screen movement looked.
+      // tester.fling (not a hand-rolled drag+moveBy sequence) is what
+      // reliably produces a velocity ScaleGestureRecognizer's tracker
+      // recognizes as a fling — see _isFlingGesture in the SDK's
+      // gestures/scale.dart, which silently reports Velocity.zero
+      // otherwise, no matter how fast the on-screen movement looked.
+      //
+      // The moment-by-moment trajectory isn't asserted on here: an
+      // AnimationController driven from a gesture callback is unreliable
+      // to sample frame-by-frame under the widget-test fake clock (its
+      // Ticker either sits at t=0 or jumps straight to "completed" in one
+      // step, depending on exactly how the preceding gesture's own pump
+      // calls left the fake scheduler clock — confirmed as a test-harness
+      // artifact, not a real bug, by driving the same fling on a live
+      // Linux build and watching it decelerate smoothly frame by frame).
+      // pumpAndSettle, which just keeps pumping until nothing is
+      // scheduled, reaches the fling's true final resting position
+      // reliably even so, which is enough to prove momentum carried the
+      // view well past whatever the raw gesture alone covered.
+      final topAtRelease = controller.visibleRect.top;
+      await tester.fling(find.byType(TypstViewer), const Offset(0, -300), 3000, deviceKind: PointerDeviceKind.touch);
+      final topRightAfterGesture = controller.visibleRect.top;
+      await tester.pumpAndSettle();
+      expect(
+        controller.visibleRect.top,
+        greaterThan(topRightAfterGesture),
+        reason: 'momentum should carry the view further than the raw gesture alone moved it',
+      );
+      expect(controller.visibleRect.top, greaterThan(topAtRelease));
+    },
+  );
+
   testWidgets('goToPage scrolls and triggers renders for that page',
       (tester) async {
     final (session, fake) = await makeSession();

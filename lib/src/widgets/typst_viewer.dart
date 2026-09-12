@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart'
     show Colors, Material, MaterialLocalizations, TextButton;
+import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -61,7 +62,7 @@ class TypstViewer extends StatefulWidget {
   State<TypstViewer> createState() => _TypstViewerState();
 }
 
-class _TypstViewerState extends State<TypstViewer> {
+class _TypstViewerState extends State<TypstViewer> with TickerProviderStateMixin {
   final _txController = TransformationController();
   late TypstPageImageCache _cache;
   StreamSubscription<TypstDocument>? _subscription;
@@ -104,6 +105,9 @@ class _TypstViewerState extends State<TypstViewer> {
   // Touch pan/pinch-zoom gesture state (see _onGestureScale*).
   double? _gestureStartZoom;
   Offset? _gestureReferenceFocalPoint;
+  // Post-release pan momentum (see _startPanFling below) — drives
+  // _txController directly, same as a live gesture would.
+  AnimationController? _panFlingController;
 
   @override
   void initState() {
@@ -141,6 +145,7 @@ class _TypstViewerState extends State<TypstViewer> {
     widget.controller?._detach();
     _txController.removeListener(_onMatrixChanged);
     _txController.dispose();
+    _panFlingController?.dispose();
     _cache.dispose();
     super.dispose();
   }
@@ -366,6 +371,9 @@ class _TypstViewerState extends State<TypstViewer> {
   // boundary/rotation handling we don't need (we clamp ourselves).
 
   void _onGestureScaleStart(ScaleStartDetails details) {
+    // A new touch always takes over from whatever momentum was still
+    // running — matches InteractiveViewer's own _onScaleStart.
+    _panFlingController?.stop();
     _gestureStartZoom = _currentZoom;
     _gestureReferenceFocalPoint = MatrixUtils.transformPoint(
       Matrix4.inverted(_txController.value),
@@ -385,29 +393,100 @@ class _TypstViewerState extends State<TypstViewer> {
     );
     final scaleChange =
         _currentZoom == 0 ? 1.0 : desiredZoom / _currentZoom;
-
-    final matrix = _txController.value.clone();
-    if (scaleChange != 1.0) {
-      matrix.scaleByDouble(scaleChange, scaleChange, scaleChange, 1);
-    }
-
-    // Keep the reference document point pinned under the current focal
-    // point — this also carries the pan component of the gesture (which is
-    // just a scale-1.0 "pin" of a moving focal point).
-    final focalPointScene = MatrixUtils.transformPoint(
-      Matrix4.inverted(matrix),
-      details.localFocalPoint,
-    );
-    final translation = focalPointScene - referenceFocalPoint;
-    matrix.translateByDouble(translation.dx, translation.dy, 0, 1);
-
-    _txController.value = _clampMatrix(matrix);
+    _applyScaleKeepingScenePointFixed(scaleChange, referenceFocalPoint, details.localFocalPoint);
   }
 
   void _onGestureScaleEnd(ScaleEndDetails details) {
     _gestureStartZoom = null;
     _gestureReferenceFocalPoint = null;
     _txController.value = _clampMatrix(_txController.value);
+    _startPanFling(details.velocity);
+  }
+
+  // Scales the current matrix by [scaleChange] around [localFocalPoint],
+  // keeping [referenceScenePoint] (a document-space point, read from the
+  // matrix *before* this scale) pinned under that same screen point
+  // afterward — shared by a live pinch update and the scale-fling tick
+  // below, which is really just this same per-frame update run
+  // automatically instead of from a finger.
+  void _applyScaleKeepingScenePointFixed(
+    double scaleChange,
+    Offset referenceScenePoint,
+    Offset localFocalPoint,
+  ) {
+    final matrix = _txController.value.clone();
+    if (scaleChange != 1.0) {
+      matrix.scaleByDouble(scaleChange, scaleChange, scaleChange, 1);
+    }
+    final focalPointScene = MatrixUtils.transformPoint(
+      Matrix4.inverted(matrix),
+      localFocalPoint,
+    );
+    final translation = focalPointScene - referenceScenePoint;
+    matrix.translateByDouble(translation.dx, translation.dy, 0, 1);
+    _txController.value = _clampMatrix(matrix);
+  }
+
+  // Friction coefficient for both fling animations below — Flutter's own
+  // InteractiveViewer default (_kDrag), picked for a well-tested feel
+  // rather than anything specific to this viewer.
+  static const _flingFriction = 0.0000135;
+
+  // Given a velocity and drag, the time at which a FrictionSimulation
+  // effectively stops — ported from InteractiveViewer's own (private)
+  // _getFinalTime, needed here for the same reason it exists there: sizing
+  // the AnimationController's duration to the simulation it's approximating.
+  static double _flingFinalTime(double velocity, double drag, {double effectivelyMotionless = 10}) {
+    return math.log(effectivelyMotionless / velocity) / math.log(drag / 100);
+  }
+
+  /// Continues panning after the finger lifts, decelerating smoothly to a
+  /// stop instead of the view halting the instant contact ends — mirrors
+  /// InteractiveViewer's own inertia animation, adapted to update
+  /// [_txController] (and go through [_clampMatrix]) directly rather than
+  /// its private transform helpers. Below [kMinFlingVelocity] (a slow or
+  /// stationary release), does nothing — no perceptible motion to continue.
+  void _startPanFling(Velocity velocity) {
+    if (velocity.pixelsPerSecond.distance < kMinFlingVelocity) return;
+    final translation = _txController.value.getTranslation();
+    final start = Offset(translation.x, translation.y);
+    final frictionX = FrictionSimulation(_flingFriction, start.dx, velocity.pixelsPerSecond.dx);
+    final frictionY = FrictionSimulation(_flingFriction, start.dy, velocity.pixelsPerSecond.dy);
+    final tFinal = _flingFinalTime(velocity.pixelsPerSecond.distance, _flingFriction);
+    if (!tFinal.isFinite || tFinal <= 0) return;
+
+    final controller = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: (tFinal * 1000).round().clamp(1, 10000)),
+    );
+    final animation = Tween<Offset>(
+      begin: start,
+      end: Offset(frictionX.finalX, frictionY.finalX),
+    ).animate(CurvedAnimation(parent: controller, curve: Curves.decelerate));
+
+    _panFlingController?.dispose();
+    _panFlingController = controller;
+    animation.addListener(() {
+      // The matrix's stored translation (unlike a document-space offset)
+      // is already in view pixels — see _clampMatrix, which reads/writes
+      // it directly the same way — so the animated value can be written
+      // straight in, no scale conversion needed. Applied unconditionally
+      // (not gated on controller.isAnimating): the very notification that
+      // carries the fling's final resting value can arrive already
+      // reporting AnimationStatus.completed, particularly when a frame's
+      // delta covers the animation's remaining duration in one step —
+      // skipping that update would leave the view short of where the
+      // fling was actually headed.
+      final matrix = _txController.value.clone();
+      matrix.storage[12] = animation.value.dx;
+      matrix.storage[13] = animation.value.dy;
+      // A boundary reached mid-fling isn't a special case: _clampMatrix
+      // just holds the position there every subsequent frame while the
+      // (now purely notional) animation keeps ticking underneath —
+      // equivalent to a hard stop, with no separate handling needed.
+      _txController.value = _clampMatrix(matrix);
+    });
+    controller.forward();
   }
 
   // ---- rendering pipeline ----
