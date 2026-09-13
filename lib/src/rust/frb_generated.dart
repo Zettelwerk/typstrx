@@ -67,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 1775829977;
+  int get rustContentHash => 1706532137;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -92,6 +92,11 @@ abstract class RustLibApi extends BaseApi {
 
   Future<TypstSession> crateApiSessionTypstSessionCreate({
     required SessionOptions options,
+  });
+
+  Future<Uint8List> crateApiSessionTypstSessionExportPdf({
+    required TypstSession that,
+    required BigInt generation,
   });
 
   Future<List<TypstFoldingRange>> crateApiSessionTypstSessionFoldingRanges({
@@ -279,6 +284,44 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<Uint8List> crateApiSessionTypstSessionExportPdf({
+    required TypstSession that,
+    required BigInt generation,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_Auto_Ref_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerTypstSession(
+            that,
+            serializer,
+          );
+          sse_encode_u_64(generation, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 4,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_prim_u_8_strict,
+          decodeErrorData: sse_decode_typstrx_error,
+        ),
+        constMeta: kCrateApiSessionTypstSessionExportPdfConstMeta,
+        argValues: [that, generation],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSessionTypstSessionExportPdfConstMeta =>
+      const TaskConstMeta(
+        debugName: "TypstSession_export_pdf",
+        argNames: ["that", "generation"],
+      );
+
+  @override
   Future<List<TypstFoldingRange>> crateApiSessionTypstSessionFoldingRanges({
     required TypstSession that,
     required String source,
@@ -295,7 +338,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 4,
+            funcId: 5,
             port: port_,
           );
         },
@@ -335,7 +378,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 5,
+            funcId: 6,
             port: port_,
           );
         },
@@ -373,7 +416,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 6,
+            funcId: 7,
             port: port_,
           );
         },
@@ -411,7 +454,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 7,
+            funcId: 8,
             port: port_,
           );
         },
@@ -451,7 +494,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 8,
+            funcId: 9,
             port: port_,
           );
         },
@@ -489,7 +532,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 9,
+            funcId: 10,
             port: port_,
           );
         },
@@ -543,7 +586,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 10,
+            funcId: 11,
             port: port_,
           );
         },
@@ -605,7 +648,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 12,
             port: port_,
           );
         },
@@ -635,7 +678,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 12,
+            funcId: 13,
             port: port_,
           );
         },
@@ -662,7 +705,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 13,
+            funcId: 14,
             port: port_,
           );
         },
@@ -2637,6 +2680,16 @@ class TypstSessionImpl extends RustOpaque implements TypstSession {
     cursorUtf16: cursorUtf16,
     explicit: explicit,
   );
+
+  /// Exports the latest compiled document as vector PDF bytes.
+  ///
+  /// Fails with [`TypstrxError::Stale`] when `generation` no longer matches
+  /// the latest compiled document. The returned PDF retains Typst's vector
+  /// paths, fonts, text, links, and other native PDF resources.
+  Future<Uint8List> exportPdf({required BigInt generation}) => RustLib
+      .instance
+      .api
+      .crateApiSessionTypstSessionExportPdf(that: this, generation: generation);
 
   /// Computes folding ranges for `source` — collapsible regions like code
   /// blocks, content blocks, argument lists, array/dict literals, and

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/cupertino.dart' show CupertinoTextSelectionToolbarButton;
 import 'package:flutter/gestures.dart';
@@ -111,6 +112,11 @@ class FakeRustSession implements rust.TypstSession {
 
   @override
   Future<rust.PageTextData> pageText({required BigInt generation, required int pageIndex}) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Uint8List> exportPdf({required BigInt generation}) async {
     throw UnimplementedError();
   }
 

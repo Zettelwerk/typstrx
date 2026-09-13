@@ -33,6 +33,13 @@ abstract class TypstSession implements RustOpaqueInterface {
   static Future<TypstSession> create({required SessionOptions options}) =>
       RustLib.instance.api.crateApiSessionTypstSessionCreate(options: options);
 
+  /// Exports the latest compiled document as vector PDF bytes.
+  ///
+  /// Fails with [`TypstrxError::Stale`] when `generation` no longer matches
+  /// the latest compiled document. The returned PDF retains Typst's vector
+  /// paths, fonts, text, links, and other native PDF resources.
+  Future<Uint8List> exportPdf({required BigInt generation});
+
   /// Computes folding ranges for `source` — collapsible regions like code
   /// blocks, content blocks, argument lists, array/dict literals, and
   /// block comments that span more than one line. See

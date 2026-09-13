@@ -152,6 +152,11 @@ class FakeRustSession implements rust.TypstSession {
   }
 
   @override
+  Future<Uint8List> exportPdf({required BigInt generation}) async {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<int> registerFont({required List<int> data}) async => 1;
 
   @override

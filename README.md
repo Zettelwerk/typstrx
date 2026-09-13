@@ -19,6 +19,7 @@ from the compiled document.
 - High-resolution, viewport-based partial page rendering (only the visible
   window of each page is rasterized at high zoom)
 - `TypstViewer` widget with pan/zoom, text selection, and link navigation
+- Vector PDF export from any successful compilation snapshot
 - Live recompilation while the source changes (debounced, flicker-free)
 - Embedded default fonts (Libertinus, New Computer Modern Math, DejaVu Sans
   Mono) plus an API to register custom font bytes
@@ -80,6 +81,7 @@ final page = result.document!.pages.first;      // sizes in points
 final image = await page.render(fullWidth: page.width * 2); // RGBA pixels
 final text = await page.loadStructuredText();   // text + char rects
 final links = await page.loadLinks();           // URL / internal dests
+final pdf = await result.document!.exportPdf(); // vector PDF bytes
 ```
 
 ## Roadmap

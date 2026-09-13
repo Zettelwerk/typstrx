@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -79,6 +80,11 @@ class FakeRustSession implements rust.TypstSession {
 
   @override
   Future<rust.PageTextData> pageText({required BigInt generation, required int pageIndex}) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<Uint8List> exportPdf({required BigInt generation}) async {
     throw UnimplementedError();
   }
 

@@ -126,6 +126,17 @@ class FakeRustSession implements rust.TypstSession {
     );
   }
 
+  int? lastExportGeneration;
+
+  @override
+  Future<Uint8List> exportPdf({required BigInt generation}) async {
+    lastExportGeneration = generation.toInt();
+    if (generation.toInt() != this.generation) {
+      throw const rust.TypstrxError.stale();
+    }
+    return Uint8List.fromList('%PDF-fake'.codeUnits);
+  }
+
   final foldingRangesRequestedFor = <String>[];
   List<rust.TypstFoldingRange> foldingRangesToReturn = const [];
 
@@ -176,6 +187,17 @@ void main() {
     expect(result.document!.pages.first.pageNumber, 1);
     expect(result.generation, 1);
     expect(session.document, result.document);
+  });
+
+  test('document exports its exact compilation generation as PDF', () async {
+    final fake = FakeRustSession();
+    final session = makeSession(fake);
+    final result = await session.compile('hello');
+
+    final pdf = await result.document!.exportPdf();
+
+    expect(String.fromCharCodes(pdf), '%PDF-fake');
+    expect(fake.lastExportGeneration, result.generation);
   });
 
   test(

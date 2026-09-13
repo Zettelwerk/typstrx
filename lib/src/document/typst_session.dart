@@ -398,6 +398,13 @@ class TypstSession {
     );
   }
 
+  /// Exports the compiled document identified by [generation] as vector PDF.
+  @internal
+  Future<Uint8List> exportPdf({required int generation}) {
+    _checkDisposed();
+    return _native.exportPdf(generation: BigInt.from(generation));
+  }
+
   /// Releases the native session. Streams close and further calls throw.
   Future<void> dispose() async {
     if (_disposed) return;

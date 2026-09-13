@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'typst_page.dart';
 import 'typst_session.dart';
 
@@ -31,4 +33,10 @@ class TypstDocument {
   /// The document's pages, in order. The first page is `pages[0]` with
   /// [TypstPage.pageNumber] 1.
   late final List<TypstPage> pages;
+
+  /// Exports this immutable compilation snapshot as vector PDF bytes.
+  ///
+  /// Throws a stale-document error after the session successfully compiles a
+  /// newer document, matching page rendering and structured-text behavior.
+  Future<Uint8List> exportPdf() => session.exportPdf(generation: generation);
 }

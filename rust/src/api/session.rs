@@ -281,6 +281,33 @@ impl TypstSession {
         ))
     }
 
+    /// Exports the latest compiled document as vector PDF bytes.
+    ///
+    /// Fails with [`TypstrxError::Stale`] when `generation` no longer matches
+    /// the latest compiled document. The returned PDF retains Typst's vector
+    /// paths, fonts, text, links, and other native PDF resources.
+    pub fn export_pdf(&self, generation: u64) -> Result<Vec<u8>, TypstrxError> {
+        let inner = self.inner.read();
+        let compiled = inner.compiled.as_ref().ok_or(TypstrxError::NoDocument)?;
+        if compiled.generation != generation {
+            return Err(TypstrxError::Stale);
+        }
+        let options = typst_pdf::PdfOptions {
+            // Embedded fragments are stamped into a different document, so
+            // their standalone structure tree would no longer describe the
+            // final PDF. Text remains real/selectable PDF text without tags.
+            tagged: false,
+            ..typst_pdf::PdfOptions::default()
+        };
+        typst_pdf::pdf(&compiled.document, &options).map_err(|diagnostics| TypstrxError::Other {
+            message: diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.message.to_string())
+                .collect::<Vec<_>>()
+                .join("\n"),
+        })
+    }
+
     /// Registers all font faces contained in `data` (TTF/OTF, also
     /// collections). Returns the number of faces added. Takes effect on the
     /// next compilation.
@@ -343,4 +370,31 @@ fn map_diagnostics(
             mapped
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn exports_compiled_document_as_pdf_and_rejects_stale_generation() {
+        let session = TypstSession::create(SessionOptions::default());
+        assert!(matches!(
+            session.export_pdf(0),
+            Err(TypstrxError::NoDocument)
+        ));
+
+        let first = session.compile("#set page(fill: none)\nHello, vector PDF!".into());
+        assert!(first.success);
+        let pdf = session.export_pdf(first.generation).unwrap();
+        assert!(pdf.starts_with(b"%PDF-"));
+        assert!(pdf.len() > 1_000);
+
+        let second = session.compile("A newer document".into());
+        assert!(second.success);
+        assert!(matches!(
+            session.export_pdf(first.generation),
+            Err(TypstrxError::Stale)
+        ));
+    }
 }

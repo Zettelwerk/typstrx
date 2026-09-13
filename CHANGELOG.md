@@ -8,6 +8,7 @@ Initial release.
 - `TypstViewer` widget with pan/zoom, text selection, and links
 - Embedded default fonts + custom font registration
 - `@preview` package downloads with local caching
+- `TypstDocument.exportPdf()` for generation-checked vector PDF export
 - `TypstViewerController.currentRasterScale`/`currentRasterDpi`/
   `lastRender`/`cacheBytes` for reading back the actual on-screen
   rasterization resolution and render cost live
