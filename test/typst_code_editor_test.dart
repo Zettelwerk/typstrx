@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/cupertino.dart' show CupertinoTextSelectionToolbarButton;
 import 'package:flutter/gestures.dart';
