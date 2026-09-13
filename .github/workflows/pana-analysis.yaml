@@ -1,0 +1,40 @@
+name: Pana Analysis
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "doc/**"
+  pull_request:
+    paths-ignore:
+      - "**.md"
+      - "doc/**"
+  workflow_dispatch:
+
+jobs:
+  pana:
+    name: Run pana analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - run: flutter pub get
+
+      - name: Activate pana
+        run: |
+          dart pub global activate pana
+          echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
+
+      - name: Run pana
+        run: pana --no-warning --json | tee pana-report.json | jq -r '"Score: \(.scores.grantedPoints) / \(.scores.maxPoints)"'
+
+      - name: Upload pana report
+        uses: actions/upload-artifact@v4
+        with:
+          name: pana-report
+          path: pana-report.json
