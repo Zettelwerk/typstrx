@@ -20,7 +20,7 @@ use typst::foundations::{Func, Value};
 use typst_ide::IdeWorld;
 use typst_layout::PagedDocument;
 use typst_syntax::ast::AstNode;
-use typst_syntax::{LinkedNode, Side, Source, ast};
+use typst_syntax::{ast, LinkedNode, Side, Source};
 
 use crate::api::types::{
     TypstCompletion, TypstCompletionKind, TypstFunctionInfo, TypstSignatureToken,
@@ -151,9 +151,7 @@ fn as_func(value: Value) -> Option<Func> {
 /// variables or closures — only built-ins reachable from the global scope.
 fn resolve_expr(world: &dyn IdeWorld, node: &LinkedNode) -> Option<Value> {
     match node.cast::<ast::Expr>()? {
-        ast::Expr::Ident(ident) => {
-            Some(world.library().global.scope().get(&ident)?.read().clone())
-        }
+        ast::Expr::Ident(ident) => Some(world.library().global.scope().get(&ident)?.read().clone()),
         ast::Expr::FieldAccess(access) => {
             let target = match access.target() {
                 ast::Expr::Ident(target) => target,
@@ -187,7 +185,13 @@ fn describe_func(func: &Func) -> TypstFunctionInfo {
     let description = docs
         .map(|d| d.split("= Example").next().unwrap_or(d).trim().to_string())
         .filter(|d| !d.is_empty());
-    TypstFunctionInfo { name, signature, description, example, example_highlight }
+    TypstFunctionInfo {
+        name,
+        signature,
+        description,
+        example,
+        example_highlight,
+    }
 }
 
 /// Builds a signature like `rect(width?:, height?:, fill?:, body)`, split
@@ -195,14 +199,19 @@ fn describe_func(func: &Func) -> TypstFunctionInfo {
 /// differently — see [`TypstSignatureToken`].
 fn signature_tokens(name: &str, func: &Func) -> Vec<TypstSignatureToken> {
     fn text(text: impl Into<String>, kind: TypstSignatureTokenKind) -> TypstSignatureToken {
-        TypstSignatureToken { text: text.into(), kind }
+        TypstSignatureToken {
+            text: text.into(),
+            kind,
+        }
     }
     use TypstSignatureTokenKind::{Name, Param, Punctuation};
 
     let mut tokens = vec![text(name, Name), text("(", Punctuation)];
     let mut first = true;
     for param in func.params() {
-        let Some(param_name) = param.name() else { continue };
+        let Some(param_name) = param.name() else {
+            continue;
+        };
         if !first {
             tokens.push(text(", ", Punctuation));
         }
@@ -381,7 +390,9 @@ mod tests {
         assert!(signature_text.starts_with("rect("), "{signature_text}");
         assert!(signature_text.contains("width"), "{signature_text}");
         assert!(
-            info.signature.iter().any(|t| t.text == "width" && matches!(t.kind, TypstSignatureTokenKind::Param)),
+            info.signature
+                .iter()
+                .any(|t| t.text == "width" && matches!(t.kind, TypstSignatureTokenKind::Param)),
             "expected a Param-kind token for width, got {signature_text}"
         );
         let description = info.description.expect("expected a description");
@@ -391,8 +402,13 @@ mod tests {
         );
         let example = info.example.expect("expected an extracted example");
         assert!(example.contains("rect("), "{example}");
-        let example_highlight = info.example_highlight.expect("expected an example highlight tree");
-        assert!(!example_highlight.children.is_empty(), "expected the example to actually be parsed");
+        let example_highlight = info
+            .example_highlight
+            .expect("expected an example highlight tree");
+        assert!(
+            !example_highlight.children.is_empty(),
+            "expected the example to actually be parsed"
+        );
     }
 
     #[test]
@@ -419,19 +435,28 @@ mod tests {
             "#let outer(body) = body\n#outer({\n  import \"other.typ\": *\n  helper()\n})\n",
         );
         world
-            .set_file("other.typ", b"#let helper(width: 1, height: 2) = width + height".to_vec())
+            .set_file(
+                "other.typ",
+                b"#let helper(width: 1, height: 2) = width + height".to_vec(),
+            )
             .unwrap();
-        assert!(typst::compile::<typst_layout::PagedDocument>(&world).output.is_ok());
+        assert!(typst::compile::<typst_layout::PagedDocument>(&world)
+            .output
+            .is_ok());
         let text = world.source(world.main()).unwrap().text().to_string();
         let cursor = text.find("helper(").unwrap() as u32 + "helper(".len() as u32;
         let source = world.source(world.main()).unwrap();
         // Bogus label, same as above: proves cursor-context resolution, not
         // the global-scope fallback (which would never find a local import
         // regardless of label).
-        let info = function_info(&world, &source, cursor, "not-helper").expect("expected helper to resolve");
+        let info = function_info(&world, &source, cursor, "not-helper")
+            .expect("expected helper to resolve");
         assert_eq!(info.name, "helper");
         let signature: String = info.signature.iter().map(|t| t.text.as_str()).collect();
-        assert!(signature.contains("width") && signature.contains("height"), "{signature}");
+        assert!(
+            signature.contains("width") && signature.contains("height"),
+            "{signature}"
+        );
     }
 
     #[test]
@@ -448,19 +473,36 @@ mod tests {
 
         let mut world = world_with_source(text);
         world.set_packages_for_testing(vec![(
-            PackageSpec { namespace: "preview".into(), name: "mypkg".into(), version: "1.2.3".parse().unwrap() },
+            PackageSpec {
+                namespace: "preview".into(),
+                name: "mypkg".into(),
+                version: "1.2.3".parse().unwrap(),
+            },
             Some("A test package.".into()),
         )]);
         let source = world.source(world.main()).unwrap();
-        let (apply_from_utf16, completions) = complete(&world, None::<&PagedDocument>, &source, cursor, false);
+        let (apply_from_utf16, completions) =
+            complete(&world, None::<&PagedDocument>, &source, cursor, false);
 
         let package = completions
             .iter()
             .find(|c| c.label.contains("mypkg"))
-            .unwrap_or_else(|| panic!("expected a package completion, got labels {:?}", completions.iter().map(|c| &c.label).collect::<Vec<_>>()));
-        assert!(matches!(package.kind, TypstCompletionKind::Package), "expected Package kind, got a different kind");
+            .unwrap_or_else(|| {
+                panic!(
+                    "expected a package completion, got labels {:?}",
+                    completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+                )
+            });
+        assert!(
+            matches!(package.kind, TypstCompletionKind::Package),
+            "expected Package kind, got a different kind"
+        );
         assert_eq!(package.detail.as_deref(), Some("A test package."));
-        assert!(package.label.contains("1.2.3"), "expected the label to include the version, got {:?}", package.label);
+        assert!(
+            package.label.contains("1.2.3"),
+            "expected the label to include the version, got {:?}",
+            package.label
+        );
 
         // The Dart-side filter computes `prefix = text[applyFrom..cursor]`
         // and checks `apply.startsWith(prefix)` — both must agree on

@@ -185,7 +185,10 @@ fn tiny_skia_clipping_actually_saves_work() {
     // Stand-in for page content: many small filled paths spread over the page,
     // like glyphs and rules on a text page.
     fn draw(pixmap: &mut Pixmap, ts: Transform, full_w: u32, full_h: u32) {
-        let mut paint = Paint { anti_alias: true, ..Default::default() };
+        let mut paint = Paint {
+            anti_alias: true,
+            ..Default::default()
+        };
         let cols = 60;
         let rows = 90;
         for row in 0..rows {
@@ -325,10 +328,8 @@ fn tile_cost_versus_page_content_density() {
         // of walking the page's items and rejecting them.
         let walk_ms = best_ms(
             || {
-                s.render_page_region(
-                    result.generation, 0, x, y, 1, 1, full_w, full_h, 0xffffffff,
-                )
-                .unwrap();
+                s.render_page_region(result.generation, 0, x, y, 1, 1, full_w, full_h, 0xffffffff)
+                    .unwrap();
             },
             5,
         );

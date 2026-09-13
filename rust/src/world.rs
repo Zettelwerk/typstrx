@@ -6,7 +6,6 @@ use ecow::EcoString;
 use parking_lot::Mutex;
 use typst::diag::{FileError, FileResult};
 use typst::foundations::{Bytes, Datetime, Duration};
-use typst::syntax::package::PackageSpec;
 use typst::syntax::{FileId, RootedPath, Source, VirtualPath, VirtualRoot};
 use typst::text::{Font, FontBook};
 use typst::utils::LazyHash;
@@ -17,7 +16,7 @@ use typst_kit::files::{FileLoader, FileStore};
 use typst_kit::fonts::FontStore;
 use typst_kit::packages::{FsPackages, SystemPackages, UniversePackages};
 
-use crate::packages::PackageIndex;
+use crate::packages::{PackageEntry, PackageIndex};
 
 /// The virtual path under which the main source is registered.
 const MAIN_PATH: &str = "/main.typ";
@@ -143,7 +142,7 @@ impl TypstrxWorld {
     /// (see [`PackageIndex::for_testing`]) — for deterministic package
     /// completion tests, bypassing the network entirely.
     #[cfg(test)]
-    pub fn set_packages_for_testing(&mut self, packages: Vec<(PackageSpec, Option<EcoString>)>) {
+    pub fn set_packages_for_testing(&mut self, packages: Vec<PackageEntry>) {
         self.package_index = PackageIndex::for_testing(packages);
     }
 }
@@ -153,7 +152,7 @@ impl typst_ide::IdeWorld for TypstrxWorld {
         self
     }
 
-    fn packages(&self) -> &[(PackageSpec, Option<EcoString>)] {
+    fn packages(&self) -> &[PackageEntry] {
         self.package_index.packages()
     }
 }

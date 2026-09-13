@@ -9,7 +9,7 @@
 //! This only parses — it never touches a [`crate::world::TypstrxWorld`], so
 //! it takes no lock and cannot contend with an in-flight compile or render.
 
-use typst_syntax::{LinkedNode, Tag, highlight};
+use typst_syntax::{highlight, LinkedNode, Tag};
 
 use crate::api::types::{HighlightNode, HighlightTag};
 
@@ -135,8 +135,7 @@ mod tests {
         // exact tree shape (that is upstream's `highlight`'s job, not
         // ours — this just checks the walk reaches them at all).
         fn any_tag(node: &HighlightNode, tag: HighlightTag) -> bool {
-            node.tag == Some(tag)
-                || node.children.iter().any(|child| any_tag(child, tag))
+            node.tag == Some(tag) || node.children.iter().any(|child| any_tag(child, tag))
         }
 
         let tree = highlight_source("= Heading\n*strong* _emph_ `raw` #f()");

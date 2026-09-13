@@ -192,10 +192,12 @@ impl TypstSession {
         let inner = self.inner.read();
         let generation = inner.generation;
         let Ok(source) = inner.world.source(inner.world.main()) else {
-            return FunctionInfoResult { generation, info: None };
+            return FunctionInfoResult {
+                generation,
+                info: None,
+            };
         };
-        let info =
-            crate::completion::function_info(&inner.world, &source, cursor_utf16, &label);
+        let info = crate::completion::function_info(&inner.world, &source, cursor_utf16, &label);
         FunctionInfoResult { generation, info }
     }
 

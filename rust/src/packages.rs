@@ -9,6 +9,9 @@ use typst_syntax::package::PackageSpec;
 
 const INDEX_URL: &str = "https://packages.typst.org/preview/index.json";
 
+/// One `@preview` package version: its spec plus an optional description.
+pub(crate) type PackageEntry = (PackageSpec, Option<EcoString>);
+
 /// Shared, lazily-populated cache of every published `@preview` package
 /// version.
 ///
@@ -25,12 +28,12 @@ const INDEX_URL: &str = "https://packages.typst.org/preview/index.json";
 /// only ever consulted for autocompletion (staleness of a few hours is a
 /// non-issue there).
 #[derive(Clone, Default)]
-pub struct PackageIndex(Arc<OnceLock<Vec<(PackageSpec, Option<EcoString>)>>>);
+pub struct PackageIndex(Arc<OnceLock<Vec<PackageEntry>>>);
 
 impl PackageIndex {
     /// Every known package version, most-recently-fetched — or empty if the
     /// background fetch hasn't landed (or was never started).
-    pub fn packages(&self) -> &[(PackageSpec, Option<EcoString>)] {
+    pub fn packages(&self) -> &[PackageEntry] {
         self.0.get().map(Vec::as_slice).unwrap_or(&[])
     }
 
@@ -56,14 +59,14 @@ impl PackageIndex {
     /// Pre-fills this index synchronously, bypassing the network — for
     /// tests that need deterministic package completions.
     #[cfg(test)]
-    pub fn for_testing(packages: Vec<(PackageSpec, Option<EcoString>)>) -> Self {
+    pub fn for_testing(packages: Vec<PackageEntry>) -> Self {
         let cell = OnceLock::new();
         let _ = cell.set(packages);
         Self(Arc::new(cell))
     }
 }
 
-fn fetch(user_agent: &str) -> Option<Vec<(PackageSpec, Option<EcoString>)>> {
+fn fetch(user_agent: &str) -> Option<Vec<PackageEntry>> {
     // Reuses `typst-kit`'s own HTTPS client (system-native TLS, proxy-aware,
     // same one package *downloads* already go through) rather than adding a
     // second HTTP stack just for this.
@@ -77,11 +80,18 @@ fn fetch(user_agent: &str) -> Option<Vec<(PackageSpec, Option<EcoString>)>> {
 /// entry there (not just the latest) — `typst_ide::complete::package_completions`
 /// already dedups to the newest version per package itself, so all of them
 /// are passed through here unfiltered.
-fn parse_entry(entry: &serde_json::Value) -> Option<(PackageSpec, Option<EcoString>)> {
+fn parse_entry(entry: &serde_json::Value) -> Option<PackageEntry> {
     let name = entry.get("name")?.as_str()?;
     let version = entry.get("version")?.as_str()?.parse().ok()?;
-    let description = entry.get("description").and_then(|d| d.as_str()).map(EcoString::from);
-    let spec = PackageSpec { namespace: "preview".into(), name: name.into(), version };
+    let description = entry
+        .get("description")
+        .and_then(|d| d.as_str())
+        .map(EcoString::from);
+    let spec = PackageSpec {
+        namespace: "preview".into(),
+        name: name.into(),
+        version,
+    };
     Some((spec, description))
 }
 
@@ -97,7 +107,12 @@ mod tests {
             {"name": "no-description", "version": "1.0.0", "entrypoint": "lib.typ"},
             {"name": "malformed"},
         ]);
-        let entries: Vec<_> = json.as_array().unwrap().iter().filter_map(parse_entry).collect();
+        let entries: Vec<_> = json
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(parse_entry)
+            .collect();
 
         // The malformed entry (missing `version`) is skipped, not fatal to
         // the rest of the fetch.
@@ -109,6 +124,9 @@ mod tests {
         assert_eq!(spec.version.to_string(), "0.3.1");
         assert_eq!(desc.as_deref(), Some("Draw diagrams."));
 
-        assert_eq!(entries[2].1, None, "a missing description must become None, not an empty string");
+        assert_eq!(
+            entries[2].1, None,
+            "a missing description must become None, not an empty string"
+        );
     }
 }

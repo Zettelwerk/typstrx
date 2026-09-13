@@ -134,12 +134,14 @@ fn region_render_matches_full_render_crop() {
         let full_off = ((200 + row) * 1190 + 100) * 4;
         let tile_off = row * 300 * 4;
         for i in 0..300 * 4 {
-            let delta =
-                full.pixels[full_off + i] as i32 - tile.pixels[tile_off + i] as i32;
+            let delta = full.pixels[full_off + i] as i32 - tile.pixels[tile_off + i] as i32;
             worst = worst.max(delta.abs());
         }
     }
-    assert!(worst <= 32, "tile diverges from full-render crop by {worst}");
+    assert!(
+        worst <= 32,
+        "tile diverges from full-render crop by {worst}"
+    );
 }
 
 #[test]

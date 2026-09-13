@@ -221,7 +221,9 @@ pub enum TypstCompletionKind {
     Font,
     /// A symbol (e.g. a math shorthand). `notation` is its literal
     /// shorthand/name, not user-facing text.
-    Symbol { notation: String },
+    Symbol {
+        notation: String,
+    },
 }
 
 /// A hover tooltip, mirroring `typst_ide::Tooltip`.

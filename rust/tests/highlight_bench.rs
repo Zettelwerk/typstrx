@@ -75,7 +75,10 @@ fn bench_highlight_repeated_keystrokes() {
     let s = session();
     let base = synthetic_doc(500);
     let iterations = 50;
-    println!("\n== {iterations} sequential re-highlights of a {}-byte doc ==", base.len());
+    println!(
+        "\n== {iterations} sequential re-highlights of a {}-byte doc ==",
+        base.len()
+    );
     let start = Instant::now();
     for i in 0..iterations {
         let source = format!("{base}x{i}");

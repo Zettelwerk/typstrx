@@ -99,7 +99,9 @@ mod tests {
         // should fold, innermost included.
         let text = "#box[\n  #{\n    1\n  }\n]";
         let ranges = folding_ranges(text);
-        assert!(ranges.iter().any(|r| r.kind == TypstFoldingKind::ContentBlock));
+        assert!(ranges
+            .iter()
+            .any(|r| r.kind == TypstFoldingKind::ContentBlock));
         assert!(ranges.iter().any(|r| r.kind == TypstFoldingKind::CodeBlock));
         let content = ranges
             .iter()
