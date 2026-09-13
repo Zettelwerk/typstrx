@@ -31,7 +31,8 @@ jobs:
           echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
 
       - name: Run pana
-        run: pana --no-warning --json | tee pana-report.json | jq -r '"Score: \(.scores.grantedPoints) / \(.scores.maxPoints)"'
+        run: |
+          pana --no-warning --json | tee pana-report.json | jq -r '"Score: \(.scores.grantedPoints) / \(.scores.maxPoints)"'
 
       - name: Upload pana report
         uses: actions/upload-artifact@v4
