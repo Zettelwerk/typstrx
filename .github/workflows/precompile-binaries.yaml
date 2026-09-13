@@ -36,6 +36,17 @@ jobs:
         working-directory: cargokit/build_tool
         run: dart pub get
 
+      - name: Ensure Android NDK is installed
+        env:
+          NDK_VERSION: 27.0.12077973
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$NDK_VERSION"
+          echo "--- installed NDK versions ---"
+          find "$ANDROID_HOME/ndk" -maxdepth 1
+          echo "--- toolchain bin dir for $NDK_VERSION ---"
+          ls -la "$ANDROID_HOME/ndk/$NDK_VERSION/toolchains/llvm/prebuilt/linux-x86_64/bin" | grep -i ar || true
+
       # cargokit computes a hash of the Rust crate and skips any target
       # whose artifacts already exist for that hash, so re-running this on
       # every push to main (even when rust/ didn't change) is a no-op.
