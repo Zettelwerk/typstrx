@@ -97,6 +97,7 @@ abstract class RustLibApi extends BaseApi {
   Future<Uint8List> crateApiSessionTypstSessionExportPdf({
     required TypstSession that,
     required BigInt generation,
+    required bool tagged,
   });
 
   Future<List<TypstFoldingRange>> crateApiSessionTypstSessionFoldingRanges({
@@ -287,6 +288,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Future<Uint8List> crateApiSessionTypstSessionExportPdf({
     required TypstSession that,
     required BigInt generation,
+    required bool tagged,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -297,6 +299,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             serializer,
           );
           sse_encode_u_64(generation, serializer);
+          sse_encode_bool(tagged, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -309,7 +312,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_typstrx_error,
         ),
         constMeta: kCrateApiSessionTypstSessionExportPdfConstMeta,
-        argValues: [that, generation],
+        argValues: [that, generation, tagged],
         apiImpl: this,
       ),
     );
@@ -318,7 +321,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiSessionTypstSessionExportPdfConstMeta =>
       const TaskConstMeta(
         debugName: "TypstSession_export_pdf",
-        argNames: ["that", "generation"],
+        argNames: ["that", "generation", "tagged"],
       );
 
   @override
@@ -2686,10 +2689,20 @@ class TypstSessionImpl extends RustOpaque implements TypstSession {
   /// Fails with [`TypstrxError::Stale`] when `generation` no longer matches
   /// the latest compiled document. The returned PDF retains Typst's vector
   /// paths, fonts, text, links, and other native PDF resources.
-  Future<Uint8List> exportPdf({required BigInt generation}) => RustLib
-      .instance
-      .api
-      .crateApiSessionTypstSessionExportPdf(that: this, generation: generation);
+  ///
+  /// `tagged` controls whether a structure tree describing the document
+  /// (used by screen readers and required for PDF/UA) is written. Defaults
+  /// to `true` (matching typst-pdf's own default) via the Dart API. Pass
+  /// `false` for an embedded fragment that will be stamped into another
+  /// document — its own structure tree wouldn't describe the final file.
+  Future<Uint8List> exportPdf({
+    required BigInt generation,
+    required bool tagged,
+  }) => RustLib.instance.api.crateApiSessionTypstSessionExportPdf(
+    that: this,
+    generation: generation,
+    tagged: tagged,
+  );
 
   /// Computes folding ranges for `source` — collapsible regions like code
   /// blocks, content blocks, argument lists, array/dict literals, and

@@ -38,5 +38,12 @@ class TypstDocument {
   ///
   /// Throws a stale-document error after the session successfully compiles a
   /// newer document, matching page rendering and structured-text behavior.
-  Future<Uint8List> exportPdf() => session.exportPdf(generation: generation);
+  ///
+  /// [tagged] controls whether a structure tree describing the document
+  /// (used by screen readers and required for PDF/UA) is written. Defaults
+  /// to `true`. Pass `false` when exporting an embedded fragment that will
+  /// be stamped into another document — its own structure tree wouldn't
+  /// describe the final file.
+  Future<Uint8List> exportPdf({bool tagged = true}) =>
+      session.exportPdf(generation: generation, tagged: tagged);
 }

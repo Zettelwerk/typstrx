@@ -19,6 +19,8 @@ from the compiled document.
 - High-resolution, viewport-based partial page rendering (only the visible
   window of each page is rasterized at high zoom)
 - `TypstViewer` widget with pan/zoom, text selection, and link navigation
+- `TypstPageView`, a host-controlled embeddable surface for canvases and
+  notebooks that need Typst content inline rather than a paginated document
 - Vector PDF export from any successful compilation snapshot
 - Live recompilation while the source changes (debounced, flicker-free)
 - Embedded default fonts (Libertinus, New Computer Modern Math, DejaVu Sans
@@ -81,7 +83,47 @@ final page = result.document!.pages.first;      // sizes in points
 final image = await page.render(fullWidth: page.width * 2); // RGBA pixels
 final text = await page.loadStructuredText();   // text + char rects
 final links = await page.loadLinks();           // URL / internal dests
-final pdf = await result.document!.exportPdf(); // vector PDF bytes
+final pdf = await result.document!.exportPdf(); // vector PDF bytes, tagged
+final untaggedPdf = await result.document!.exportPdf(tagged: false); // for embedding
+```
+
+## Embedding content with `TypstPageView`
+
+For canvases, notebooks, or any surface where Typst content sits inline
+among other widgets rather than as a paginated document, compile as an
+embedded fragment and render it with `TypstPageView` — no pan/zoom, sized
+to its own content:
+
+```dart
+const width = 300.0; // Typst points — must match the scale below
+await session.compileFragment(
+  '#text(fill: blue)[Hello, fragment!]',
+  const TypstFragmentOptions(width: width, transparent: true),
+);
+
+TypstPageView(
+  session: session,
+  scale: 1.0, // logical pixels per Typst point; keep in sync with `width`
+  onSizeChanged: (size) => print('content is now $size'),
+)
+```
+
+`TypstFragmentOptions` wraps your source in a generated `#set page(...)`
+preamble (fixed width, height following content, transparent by default);
+diagnostics, completions, and hover all report positions in *your* source,
+not the wrapped one. `TypstPageView` only ever shows `pages.first`, so it
+expects a session compiled with `compileFragment`/`updateFragmentSource`
+rather than a multi-page `compile()`/`updateSource()` document.
+
+Reading the current text selection (from either widget) works the same
+way regardless of embedding:
+
+```dart
+TypstViewerParams(
+  onSelectionChanged: (selection) => print(selection?.text),
+)
+// or, via a controller:
+final text = controller.selection?.text;
 ```
 
 ## Roadmap

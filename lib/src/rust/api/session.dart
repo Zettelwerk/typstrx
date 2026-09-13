@@ -38,7 +38,16 @@ abstract class TypstSession implements RustOpaqueInterface {
   /// Fails with [`TypstrxError::Stale`] when `generation` no longer matches
   /// the latest compiled document. The returned PDF retains Typst's vector
   /// paths, fonts, text, links, and other native PDF resources.
-  Future<Uint8List> exportPdf({required BigInt generation});
+  ///
+  /// `tagged` controls whether a structure tree describing the document
+  /// (used by screen readers and required for PDF/UA) is written. Defaults
+  /// to `true` (matching typst-pdf's own default) via the Dart API. Pass
+  /// `false` for an embedded fragment that will be stamped into another
+  /// document — its own structure tree wouldn't describe the final file.
+  Future<Uint8List> exportPdf({
+    required BigInt generation,
+    required bool tagged,
+  });
 
   /// Computes folding ranges for `source` — collapsible regions like code
   /// blocks, content blocks, argument lists, array/dict literals, and

@@ -8,7 +8,28 @@ Initial release.
 - `TypstViewer` widget with pan/zoom, text selection, and links
 - Embedded default fonts + custom font registration
 - `@preview` package downloads with local caching
-- `TypstDocument.exportPdf()` for generation-checked vector PDF export
+- `TypstDocument.exportPdf({tagged})` for generation-checked vector PDF
+  export. `tagged` defaults to `true` (matching typst-pdf's own default,
+  writing a structure tree for accessibility/PDF-UA); pass `false` for an
+  embedded fragment that will be stamped into another document, whose own
+  structure tree wouldn't describe the final file
+- `TypstPageView`, a host-controlled, single-page, transparent Typst
+  surface for canvases/notebooks that embed rendered content inline
+  instead of showing a paginated document — sized to its compiled content,
+  with no pan/zoom of its own
+- `TypstSession.compileFragment`/`updateFragmentSource` +
+  `TypstFragmentOptions` to compile Typst source as a content-sized,
+  transparent embedded page; diagnostics and editor analysis offsets are
+  mapped back to the caller's own source, so a host never accounts for the
+  generated page preamble
+- `TypstTextSelection`/`TypstTextPosition`/`TypstTextSelectionRect` and
+  `TypstViewerController.selection`/`TypstViewerParams.onSelectionChanged`
+  so a host can read or react to a rendered-text selection directly
+  instead of only copying it
+- `TypstViewerParams.pageColor`/`showSelectionToolbar`/`enableNavigation`/
+  `rasterBackgroundColor`, letting a host disable typstrx's own page
+  background, copy toolbar, and pan/zoom gestures when it's driving those
+  itself (used by `TypstPageView`)
 - `TypstViewerController.currentRasterScale`/`currentRasterDpi`/
   `lastRender`/`cacheBytes` for reading back the actual on-screen
   rasterization resolution and render cost live

@@ -286,17 +286,20 @@ impl TypstSession {
     /// Fails with [`TypstrxError::Stale`] when `generation` no longer matches
     /// the latest compiled document. The returned PDF retains Typst's vector
     /// paths, fonts, text, links, and other native PDF resources.
-    pub fn export_pdf(&self, generation: u64) -> Result<Vec<u8>, TypstrxError> {
+    ///
+    /// `tagged` controls whether a structure tree describing the document
+    /// (used by screen readers and required for PDF/UA) is written. Defaults
+    /// to `true` (matching typst-pdf's own default) via the Dart API. Pass
+    /// `false` for an embedded fragment that will be stamped into another
+    /// document — its own structure tree wouldn't describe the final file.
+    pub fn export_pdf(&self, generation: u64, tagged: bool) -> Result<Vec<u8>, TypstrxError> {
         let inner = self.inner.read();
         let compiled = inner.compiled.as_ref().ok_or(TypstrxError::NoDocument)?;
         if compiled.generation != generation {
             return Err(TypstrxError::Stale);
         }
         let options = typst_pdf::PdfOptions {
-            // Embedded fragments are stamped into a different document, so
-            // their standalone structure tree would no longer describe the
-            // final PDF. Text remains real/selectable PDF text without tags.
-            tagged: false,
+            tagged,
             ..typst_pdf::PdfOptions::default()
         };
         typst_pdf::pdf(&compiled.document, &options).map_err(|diagnostics| TypstrxError::Other {
@@ -380,21 +383,34 @@ mod tests {
     fn exports_compiled_document_as_pdf_and_rejects_stale_generation() {
         let session = TypstSession::create(SessionOptions::default());
         assert!(matches!(
-            session.export_pdf(0),
+            session.export_pdf(0, true),
             Err(TypstrxError::NoDocument)
         ));
 
         let first = session.compile("#set page(fill: none)\nHello, vector PDF!".into());
         assert!(first.success);
-        let pdf = session.export_pdf(first.generation).unwrap();
+        let pdf = session.export_pdf(first.generation, true).unwrap();
         assert!(pdf.starts_with(b"%PDF-"));
         assert!(pdf.len() > 1_000);
 
         let second = session.compile("A newer document".into());
         assert!(second.success);
         assert!(matches!(
-            session.export_pdf(first.generation),
+            session.export_pdf(first.generation, true),
             Err(TypstrxError::Stale)
         ));
+    }
+
+    #[test]
+    fn export_pdf_tagged_flag_changes_output() {
+        let session = TypstSession::create(SessionOptions::default());
+        let compiled = session.compile("Hello, tagged PDF!".into());
+        assert!(compiled.success);
+
+        let tagged = session.export_pdf(compiled.generation, true).unwrap();
+        let untagged = session.export_pdf(compiled.generation, false).unwrap();
+        assert!(tagged.starts_with(b"%PDF-"));
+        assert!(untagged.starts_with(b"%PDF-"));
+        assert_ne!(tagged, untagged);
     }
 }

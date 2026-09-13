@@ -84,7 +84,10 @@ class FakeRustSession implements rust.TypstSession {
   }
 
   @override
-  Future<Uint8List> exportPdf({required BigInt generation}) async {
+  Future<Uint8List> exportPdf({
+    required BigInt generation,
+    required bool tagged,
+  }) async {
     throw UnimplementedError();
   }
 

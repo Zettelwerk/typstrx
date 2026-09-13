@@ -216,6 +216,7 @@ fn wire__crate__api__session__TypstSession_export_pdf_impl(
                 flutter_rust_bridge::for_generated::RustAutoOpaqueInner<TypstSession>,
             >>::sse_decode(&mut deserializer);
             let api_generation = <u64>::sse_decode(&mut deserializer);
+            let api_tagged = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, crate::api::types::TypstrxError>((move || {
@@ -236,6 +237,7 @@ fn wire__crate__api__session__TypstSession_export_pdf_impl(
                     let output_ok = crate::api::session::TypstSession::export_pdf(
                         &*api_that_guard,
                         api_generation,
+                        api_tagged,
                     )?;
                     std::result::Result::Ok(output_ok)
                 })())

@@ -127,10 +127,15 @@ class FakeRustSession implements rust.TypstSession {
   }
 
   int? lastExportGeneration;
+  bool? lastExportTagged;
 
   @override
-  Future<Uint8List> exportPdf({required BigInt generation}) async {
+  Future<Uint8List> exportPdf({
+    required BigInt generation,
+    required bool tagged,
+  }) async {
     lastExportGeneration = generation.toInt();
+    lastExportTagged = tagged;
     if (generation.toInt() != this.generation) {
       throw const rust.TypstrxError.stale();
     }
@@ -198,6 +203,17 @@ void main() {
 
     expect(String.fromCharCodes(pdf), '%PDF-fake');
     expect(fake.lastExportGeneration, result.generation);
+    expect(fake.lastExportTagged, isTrue);
+  });
+
+  test('document exportPdf forwards tagged: false', () async {
+    final fake = FakeRustSession();
+    final session = makeSession(fake);
+    final result = await session.compile('hello');
+
+    await result.document!.exportPdf(tagged: false);
+
+    expect(fake.lastExportTagged, isFalse);
   });
 
   test(
