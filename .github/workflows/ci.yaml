@@ -35,7 +35,29 @@ jobs:
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
-      - run: dart pub publish --dry-run
+      - name: dart pub publish --dry-run
+        run: |
+          set +e
+          output="$(dart pub publish --dry-run 2>&1)"
+          status=$?
+          echo "$output"
+          set -e
+          if [ "$status" -eq 0 ]; then
+            exit 0
+          fi
+          # flutter_rust_bridge is pinned exactly on purpose (must match
+          # rust/Cargo.toml's `=` pin), which pub always flags as a warning.
+          # Fail on anything else: a real error, or any other warning.
+          if echo "$output" | grep -qi "error"; then
+            echo "::error::dart pub publish --dry-run reported an error"
+            exit 1
+          fi
+          unexpected="$(echo "$output" | grep -E '^\* ' | grep -v 'flutter_rust_bridge' || true)"
+          if [ -n "$unexpected" ]; then
+            echo "::error::unexpected pub publish warning(s):"
+            echo "$unexpected"
+            exit 1
+          fi
 
   linux-example:
     name: Build example (Linux)
