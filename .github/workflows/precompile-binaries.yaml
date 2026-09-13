@@ -65,5 +65,5 @@ jobs:
             --target x86_64-linux-android \
             --android-sdk-location "$ANDROID_HOME" \
             --android-ndk-version 27.0.12077973 \
-            --android-min-sdk-version 19 \
+            --android-min-sdk-version 21 \
             --verbose
