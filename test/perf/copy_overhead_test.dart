@@ -28,33 +28,34 @@ void main() {
     final byteLength = width * height * 4;
     final mb = byteLength / (1024 * 1024);
 
-    test('${entry.key} (${mb.toStringAsFixed(1)} MB): Uint8List.fromList copy',
-        () {
-      // Simulate the arrived-but-not-yet-copied view, same as
-      // ReadBuffer.getUint8List does internally.
-      final source = Uint8List(byteLength);
-      for (var i = 0; i < byteLength; i += 4096) {
-        source[i] = 1; // touch pages so allocation isn't lazy/zero-fill-only
-      }
-
-      const iterations = 10;
-      final stopwatch = Stopwatch()..start();
-      for (var i = 0; i < iterations; i++) {
-        final copy = Uint8List.fromList(source);
-        // Prevent the copy from being optimized away.
-        if (copy.isEmpty) throw StateError('unreachable');
-      }
-      stopwatch.stop();
-      final perCopyUs = stopwatch.elapsedMicroseconds / iterations;
-      // ignore: avoid_print
-      print(
-        '  copy: ${(perCopyUs / 1000).toStringAsFixed(3)} ms '
-        '(${(mb / (perCopyUs / 1e6)).toStringAsFixed(0)} MB/s)',
-      );
-    });
-
     test(
-        '${entry.key} (${mb.toStringAsFixed(1)} MB): '
+      '${entry.key} (${mb.toStringAsFixed(1)} MB): Uint8List.fromList copy',
+      () {
+        // Simulate the arrived-but-not-yet-copied view, same as
+        // ReadBuffer.getUint8List does internally.
+        final source = Uint8List(byteLength);
+        for (var i = 0; i < byteLength; i += 4096) {
+          source[i] = 1; // touch pages so allocation isn't lazy/zero-fill-only
+        }
+
+        const iterations = 10;
+        final stopwatch = Stopwatch()..start();
+        for (var i = 0; i < iterations; i++) {
+          final copy = Uint8List.fromList(source);
+          // Prevent the copy from being optimized away.
+          if (copy.isEmpty) throw StateError('unreachable');
+        }
+        stopwatch.stop();
+        final perCopyUs = stopwatch.elapsedMicroseconds / iterations;
+        // ignore: avoid_print
+        print(
+          '  copy: ${(perCopyUs / 1000).toStringAsFixed(3)} ms '
+          '(${(mb / (perCopyUs / 1e6)).toStringAsFixed(0)} MB/s)',
+        );
+      },
+    );
+
+    test('${entry.key} (${mb.toStringAsFixed(1)} MB): '
         'decodeImageFromPixels (GPU upload)', () async {
       final pixels = Uint8List(byteLength);
       const iterations = 5;

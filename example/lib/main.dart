@@ -113,7 +113,10 @@ class EditorPage extends StatefulWidget {
 }
 
 class _EditorPageState extends State<EditorPage> {
-  late final _controller = TypstEditorController(session: widget.session, text: _initialSource);
+  late final _controller = TypstEditorController(
+    session: widget.session,
+    text: _initialSource,
+  );
   final _viewerController = TypstViewerController();
   TypstCompileResult? _lastResult;
 
@@ -201,12 +204,17 @@ class _EditorPageState extends State<EditorPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Typst source', style: Theme.of(context).textTheme.labelSmall),
+                  Text(
+                    'Typst source',
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
                   const SizedBox(height: 4),
                   Expanded(
                     child: Container(
                       decoration: BoxDecoration(
-                        border: Border.all(color: Theme.of(context).colorScheme.outline),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.outline,
+                        ),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       padding: const EdgeInsets.all(8),
@@ -399,9 +407,9 @@ class _RasterizationPanel extends StatelessWidget {
     final renderPart = render == null
         ? 'no render yet'
         : '${render.isTile ? 'tile' : 'preview'} '
-            '${render.width}×${render.height}px '
-            '(${(render.byteSize / 1024).toStringAsFixed(0)} KB) in '
-            '${render.renderTime.inMilliseconds} ms';
+              '${render.width}×${render.height}px '
+              '(${(render.byteSize / 1024).toStringAsFixed(0)} KB) in '
+              '${render.renderTime.inMilliseconds} ms';
     final cacheMb = viewerController.cacheBytes / (1024 * 1024);
     return 'on screen: ${viewerController.currentRasterDpi.round()} dpi · '
         'last render: $renderPart · '

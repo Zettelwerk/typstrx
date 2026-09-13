@@ -19,16 +19,24 @@ import 'typst_syntax_theme.dart';
 /// [TypstCodeEditor.detailsBuilder] is null unless a caller opts in, so the
 /// panel doesn't appear unbidden next to every completion. Pass
 /// [defaultTypstDetailsBuilder] to opt into a ready-made look.
-typedef TypstDetailsBuilder = Widget Function(BuildContext context, TypstFunctionInfo info);
+typedef TypstDetailsBuilder =
+    Widget Function(BuildContext context, TypstFunctionInfo info);
 
 /// A reasonable default rendering of [TypstFunctionInfo]: the signature in a
 /// monospace heading (colored per token — see [TypstSignatureTokenKind] —
 /// the same way [typstCompletionKindColor] colors the completion list), the
 /// description underneath, and (when present) the example in a syntax-
 /// colored code block, using [TypstSyntaxTheme.defaultTheme].
-Widget defaultTypstDetailsBuilder(BuildContext context, TypstFunctionInfo info) {
+Widget defaultTypstDetailsBuilder(
+  BuildContext context,
+  TypstFunctionInfo info,
+) {
   final colorScheme = Theme.of(context).colorScheme;
-  const signatureStyle = TextStyle(fontFamily: 'monospace', fontWeight: FontWeight.bold, fontSize: 13);
+  const signatureStyle = TextStyle(
+    fontFamily: 'monospace',
+    fontWeight: FontWeight.bold,
+    fontSize: 13,
+  );
   const exampleStyle = TextStyle(fontFamily: 'monospace', fontSize: 11);
   return Material(
     color: colorScheme.surfaceContainerHigh,
@@ -47,7 +55,13 @@ Widget defaultTypstDetailsBuilder(BuildContext context, TypstFunctionInfo info) 
             Text.rich(_signatureSpan(info.signature, signatureStyle)),
             if (info.description case final description?) ...[
               const SizedBox(height: 8),
-              Text(description, style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
+              Text(
+                description,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
             ],
             if (info.example case final example?) ...[
               const SizedBox(height: 8),
@@ -81,15 +95,24 @@ TextSpan _signatureSpan(List<TypstSignatureToken> tokens, TextStyle base) {
     style: base,
     children: [
       for (final token in tokens)
-        TextSpan(text: token.text, style: TextStyle(color: _signatureTokenColor(token.kind))),
+        TextSpan(
+          text: token.text,
+          style: TextStyle(color: _signatureTokenColor(token.kind)),
+        ),
     ],
   );
 }
 
 Color _signatureTokenColor(TypstSignatureTokenKind kind) {
   return switch (kind) {
-    TypstSignatureTokenKind.name => typstCompletionKindColor(TypstCompletionKindTag.func),
-    TypstSignatureTokenKind.param => typstCompletionKindColor(TypstCompletionKindTag.param),
-    TypstSignatureTokenKind.punctuation => typstCompletionKindColor(TypstCompletionKindTag.syntax),
+    TypstSignatureTokenKind.name => typstCompletionKindColor(
+      TypstCompletionKindTag.func,
+    ),
+    TypstSignatureTokenKind.param => typstCompletionKindColor(
+      TypstCompletionKindTag.param,
+    ),
+    TypstSignatureTokenKind.punctuation => typstCompletionKindColor(
+      TypstCompletionKindTag.syntax,
+    ),
   };
 }

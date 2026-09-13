@@ -26,26 +26,46 @@ class TypstCompletionKind {
 
   static TypstCompletionKind fromRust(rust.TypstCompletionKind kind) {
     return switch (kind) {
-      rust.TypstCompletionKind_Syntax() =>
-        const TypstCompletionKind._(TypstCompletionKindTag.syntax, null),
-      rust.TypstCompletionKind_Func() =>
-        const TypstCompletionKind._(TypstCompletionKindTag.func, null),
-      rust.TypstCompletionKind_Type() =>
-        const TypstCompletionKind._(TypstCompletionKindTag.type, null),
-      rust.TypstCompletionKind_Param() =>
-        const TypstCompletionKind._(TypstCompletionKindTag.param, null),
-      rust.TypstCompletionKind_Constant() =>
-        const TypstCompletionKind._(TypstCompletionKindTag.constant, null),
-      rust.TypstCompletionKind_Path() =>
-        const TypstCompletionKind._(TypstCompletionKindTag.path, null),
-      rust.TypstCompletionKind_Package() =>
-        const TypstCompletionKind._(TypstCompletionKindTag.package, null),
-      rust.TypstCompletionKind_Label() =>
-        const TypstCompletionKind._(TypstCompletionKindTag.label, null),
-      rust.TypstCompletionKind_Font() =>
-        const TypstCompletionKind._(TypstCompletionKindTag.font, null),
-      rust.TypstCompletionKind_Symbol(:final notation) =>
-        TypstCompletionKind._(TypstCompletionKindTag.symbol, notation),
+      rust.TypstCompletionKind_Syntax() => const TypstCompletionKind._(
+        TypstCompletionKindTag.syntax,
+        null,
+      ),
+      rust.TypstCompletionKind_Func() => const TypstCompletionKind._(
+        TypstCompletionKindTag.func,
+        null,
+      ),
+      rust.TypstCompletionKind_Type() => const TypstCompletionKind._(
+        TypstCompletionKindTag.type,
+        null,
+      ),
+      rust.TypstCompletionKind_Param() => const TypstCompletionKind._(
+        TypstCompletionKindTag.param,
+        null,
+      ),
+      rust.TypstCompletionKind_Constant() => const TypstCompletionKind._(
+        TypstCompletionKindTag.constant,
+        null,
+      ),
+      rust.TypstCompletionKind_Path() => const TypstCompletionKind._(
+        TypstCompletionKindTag.path,
+        null,
+      ),
+      rust.TypstCompletionKind_Package() => const TypstCompletionKind._(
+        TypstCompletionKindTag.package,
+        null,
+      ),
+      rust.TypstCompletionKind_Label() => const TypstCompletionKind._(
+        TypstCompletionKindTag.label,
+        null,
+      ),
+      rust.TypstCompletionKind_Font() => const TypstCompletionKind._(
+        TypstCompletionKindTag.font,
+        null,
+      ),
+      rust.TypstCompletionKind_Symbol(:final notation) => TypstCompletionKind._(
+        TypstCompletionKindTag.symbol,
+        notation,
+      ),
     };
   }
 }
@@ -115,7 +135,9 @@ class TypstCompletionResult {
     return TypstCompletionResult(
       generation: result.generation.toInt(),
       applyFromUtf16: result.applyFromUtf16,
-      completions: [for (final c in result.completions) TypstCompletion.fromRust(c)],
+      completions: [
+        for (final c in result.completions) TypstCompletion.fromRust(c),
+      ],
     );
   }
 }

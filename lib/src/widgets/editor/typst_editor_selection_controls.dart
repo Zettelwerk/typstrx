@@ -80,7 +80,11 @@ class _TypstEditorMagnifier extends StatelessWidget {
                   borderRadius: BorderRadius.circular(_magnifierBorderRadius),
                 ),
                 shadows: const [
-                  BoxShadow(color: Color(0x42000000), blurRadius: 8, spreadRadius: 2),
+                  BoxShadow(
+                    color: Color(0x42000000),
+                    blurRadius: 8,
+                    spreadRadius: 2,
+                  ),
                 ],
               ),
             ),
@@ -153,12 +157,16 @@ class TypstEditorSelectionControls extends TextSelectionControls
   //    box was made taller. The extra height below is unused, inert space
   //    (a larger hit target, not a visual change).
   @override
-  Size getHandleSize(double textLineHeight) => Size(handleSize, textLineHeight + handleSize);
+  Size getHandleSize(double textLineHeight) =>
+      Size(handleSize, textLineHeight + handleSize);
 
   @override
   Offset getHandleAnchor(TextSelectionHandleType type, double textLineHeight) {
     return switch (type) {
-      TextSelectionHandleType.left => Offset(handleSize, textLineHeight + handleSize),
+      TextSelectionHandleType.left => Offset(
+        handleSize,
+        textLineHeight + handleSize,
+      ),
       TextSelectionHandleType.right => Offset.zero,
       TextSelectionHandleType.collapsed => Offset(handleSize / 2, 0),
     };
@@ -175,11 +183,17 @@ class TypstEditorSelectionControls extends TextSelectionControls
     final flag = switch (type) {
       TextSelectionHandleType.left => CustomPaint(
         size: const Size(handleSize, handleSize),
-        painter: _TriangleHandlePainter(path: _startHandlePath(), color: handleColor),
+        painter: _TriangleHandlePainter(
+          path: _startHandlePath(),
+          color: handleColor,
+        ),
       ),
       TextSelectionHandleType.right => CustomPaint(
         size: const Size(handleSize, handleSize),
-        painter: _TriangleHandlePainter(path: _endHandlePath(), color: handleColor),
+        painter: _TriangleHandlePainter(
+          path: _endHandlePath(),
+          color: handleColor,
+        ),
       ),
       TextSelectionHandleType.collapsed => CustomPaint(
         size: const Size(handleSize, handleSize),
@@ -192,14 +206,20 @@ class TypstEditorSelectionControls extends TextSelectionControls
       child: SizedBox(
         width: handleSize,
         height: textLineHeight + handleSize,
-        child: Column(children: [flag, SizedBox(height: textLineHeight)]),
+        child: Column(
+          children: [
+            flag,
+            SizedBox(height: textLineHeight),
+          ],
+        ),
       ),
     );
     final visible = handlesVisible;
     if (visible == null) return handle;
     return ValueListenableBuilder<bool>(
       valueListenable: visible,
-      builder: (context, isVisible, child) => IgnorePointer(ignoring: !isVisible, child: child),
+      builder: (context, isVisible, child) =>
+          IgnorePointer(ignoring: !isVisible, child: child),
       child: handle,
     );
   }
@@ -258,9 +278,14 @@ class _CollapsedHandlePainter extends CustomPainter {
       4,
       true,
     );
-    canvas.drawCircle(center, radius, Paint()..color = color.withValues(alpha: 0.7));
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()..color = color.withValues(alpha: 0.7),
+    );
   }
 
   @override
-  bool shouldRepaint(covariant _CollapsedHandlePainter oldDelegate) => oldDelegate.color != color;
+  bool shouldRepaint(covariant _CollapsedHandlePainter oldDelegate) =>
+      oldDelegate.color != color;
 }

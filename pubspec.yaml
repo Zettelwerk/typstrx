@@ -1,8 +1,8 @@
 name: typstrx
 description: >-
-  Typst document viewer for Flutter. Compiles Typst source with the native
-  Rust compiler, renders pages with viewport-based high-resolution tiles,
-  and provides viewer widgets with text selection and link support.
+  Typst document viewer for Flutter, backed by the native Rust Typst
+  compiler, with high-resolution viewport rendering, text selection, and
+  link navigation.
 version: 0.1.0
 repository: https://github.com/Zettelwerk/typstrx
 

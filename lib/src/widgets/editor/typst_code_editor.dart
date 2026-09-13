@@ -2,7 +2,12 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart'
-    show AdaptiveTextSelectionToolbar, Material, TextMagnifier, TextSelectionToolbar, Theme;
+    show
+        AdaptiveTextSelectionToolbar,
+        Material,
+        TextMagnifier,
+        TextSelectionToolbar,
+        Theme;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -61,19 +66,31 @@ const _completionDebounceDelay = Duration(milliseconds: 150);
 /// The edit (as a common-prefix/common-suffix diff) that turned [oldText]
 /// into [newText] — used to keep [_TypstCodeEditorState._snippetStops] in
 /// sync as the user types inside an earlier stop, shifting later ones.
-({int start, int deletedLength, int insertedLength}) _diffTextEdit(String oldText, String newText) {
+({int start, int deletedLength, int insertedLength}) _diffTextEdit(
+  String oldText,
+  String newText,
+) {
   var prefix = 0;
-  final minLength = oldText.length < newText.length ? oldText.length : newText.length;
-  while (prefix < minLength && oldText.codeUnitAt(prefix) == newText.codeUnitAt(prefix)) {
+  final minLength = oldText.length < newText.length
+      ? oldText.length
+      : newText.length;
+  while (prefix < minLength &&
+      oldText.codeUnitAt(prefix) == newText.codeUnitAt(prefix)) {
     prefix++;
   }
   var oldEnd = oldText.length;
   var newEnd = newText.length;
-  while (oldEnd > prefix && newEnd > prefix && oldText.codeUnitAt(oldEnd - 1) == newText.codeUnitAt(newEnd - 1)) {
+  while (oldEnd > prefix &&
+      newEnd > prefix &&
+      oldText.codeUnitAt(oldEnd - 1) == newText.codeUnitAt(newEnd - 1)) {
     oldEnd--;
     newEnd--;
   }
-  return (start: prefix, deletedLength: oldEnd - prefix, insertedLength: newEnd - prefix);
+  return (
+    start: prefix,
+    deletedLength: oldEnd - prefix,
+    insertedLength: newEnd - prefix,
+  );
 }
 
 /// Filters [completions] to those matching [prefix] (the text already typed
@@ -90,7 +107,10 @@ const _completionDebounceDelay = Duration(milliseconds: 150);
 /// candidate — the one Enter/Tab applies by default — has to stay a real
 /// prefix match whenever one exists, not whichever fuzzy hit happened to
 /// sort first.
-List<TypstCompletion> _filterCompletions(List<TypstCompletion> completions, String prefix) {
+List<TypstCompletion> _filterCompletions(
+  List<TypstCompletion> completions,
+  String prefix,
+) {
   if (prefix.isEmpty) return completions;
   final prefixLower = prefix.toLowerCase();
   final prefixMatches = <TypstCompletion>[];
@@ -132,7 +152,9 @@ List<int> _linesTouchedBy(String text, int start, int end) {
   }
   return [
     for (var i = 0; i < lineStarts.length; i++)
-      if (start < (i + 1 < lineStarts.length ? lineStarts[i + 1] : text.length) && end > lineStarts[i])
+      if (start <
+              (i + 1 < lineStarts.length ? lineStarts[i + 1] : text.length) &&
+          end > lineStarts[i])
         lineStarts[i],
   ];
 }
@@ -141,7 +163,9 @@ List<int> _linesTouchedBy(String text, int start, int end) {
 /// spaces or tabs — the run a dedent would remove from that line.
 int _leadingWhitespaceLength(String text, int lineStart, int max) {
   var n = 0;
-  while (n < max && lineStart + n < text.length && (text[lineStart + n] == ' ' || text[lineStart + n] == '\t')) {
+  while (n < max &&
+      lineStart + n < text.length &&
+      (text[lineStart + n] == ' ' || text[lineStart + n] == '\t')) {
     n++;
   }
   return n;
@@ -310,9 +334,13 @@ class TypstCodeEditor extends StatefulWidget {
   State<TypstCodeEditor> createState() => _TypstCodeEditorState();
 }
 
-class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelectionGestureDetectorBuilderDelegate {
-  final GlobalKey<EditableTextState> _editableTextKey = GlobalKey<EditableTextState>();
-  late final _gestureDetectorBuilder = TypstEditorGestureDetectorBuilder(delegate: this);
+class _TypstCodeEditorState extends State<TypstCodeEditor>
+    implements TextSelectionGestureDetectorBuilderDelegate {
+  final GlobalKey<EditableTextState> _editableTextKey =
+      GlobalKey<EditableTextState>();
+  late final _gestureDetectorBuilder = TypstEditorGestureDetectorBuilder(
+    delegate: this,
+  );
 
   // What `TextField` works out as its own `_showSelectionHandles` and passes
   // down: `EditableText.showSelectionHandles` defaults to false, and without
@@ -333,12 +361,12 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
   // _shouldShowSelectionHandles. Being a `TextSelectionHandleControls`
   // also keeps [contextMenuBuilder] (and "Toggle Comment") in effect: see
   // `TextSelectionOverlay.showToolbar`.
-  late final TextSelectionControls _typstSelectionControls = TypstEditorSelectionControls(
-    handlesVisible: _showSelectionHandles,
-  );
+  late final TextSelectionControls _typstSelectionControls =
+      TypstEditorSelectionControls(handlesVisible: _showSelectionHandles);
 
   FocusNode? _internalFocusNode;
-  FocusNode get _focusNode => widget.focusNode ?? (_internalFocusNode ??= FocusNode());
+  FocusNode get _focusNode =>
+      widget.focusNode ?? (_internalFocusNode ??= FocusNode());
 
   // `EditableText` creates its own internal `ScrollController` when none is
   // supplied, which the line-number gutter (a separate widget entirely,
@@ -348,7 +376,8 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
   // `_focusNode` above.
   ScrollController? _internalScrollController;
   ScrollController get _scrollController =>
-      widget.scrollController ?? (_internalScrollController ??= ScrollController());
+      widget.scrollController ??
+      (_internalScrollController ??= ScrollController());
 
   @override
   GlobalKey<EditableTextState> get editableTextKey => _editableTextKey;
@@ -496,7 +525,9 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
       // incidentally showing. Traversal resolves on key-down, so handling
       // only that — not the matching key-up — is enough to keep focus from
       // moving to the next widget.
-      if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.tab && _snippetStops.isNotEmpty) {
+      if (event is KeyDownEvent &&
+          event.logicalKey == LogicalKeyboardKey.tab &&
+          _snippetStops.isNotEmpty) {
         if (_tryAdvanceSnippetStop()) {
           _hideCompletionPopup();
           return KeyEventResult.handled;
@@ -508,7 +539,8 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
         // in any editor's completion popup — treated like Escape instead,
         // rather than falling into the `case tab:` below and silently
         // applying a completion the user pressed Shift for.
-        if (event.logicalKey == LogicalKeyboardKey.tab && HardwareKeyboard.instance.isShiftPressed) {
+        if (event.logicalKey == LogicalKeyboardKey.tab &&
+            HardwareKeyboard.instance.isShiftPressed) {
           _hideCompletionPopup();
           return KeyEventResult.handled;
         }
@@ -532,7 +564,9 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
       // A fallback-details-only popup (see _fallbackDetailsOnly) has no
       // items to navigate/apply, so it doesn't hit the switch above at
       // all (`_completions` stays empty for it) — only Escape applies.
-      if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.escape && _fallbackDetailsOnly) {
+      if (event is KeyDownEvent &&
+          event.logicalKey == LogicalKeyboardKey.escape &&
+          _fallbackDetailsOnly) {
         _hideCompletionPopup();
         return KeyEventResult.handled;
       }
@@ -609,14 +643,19 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     // selection starting at column 0 does, and got this wrong before the
     // asymmetry was added here.
     int mapOffset(int x, {required bool isEnd}) {
-      final touching = isEnd ? lineStarts.where((ls) => ls <= x) : lineStarts.where((ls) => ls < x);
+      final touching = isEnd
+          ? lineStarts.where((ls) => ls <= x)
+          : lineStarts.where((ls) => ls < x);
       return x + unit.length * touching.length;
     }
 
     _applyingProgrammaticEdit = true;
     controller.value = TextEditingValue(
       text: buffer.toString(),
-      selection: TextSelection(baseOffset: mapOffset(start, isEnd: false), extentOffset: mapOffset(end, isEnd: true)),
+      selection: TextSelection(
+        baseOffset: mapOffset(start, isEnd: false),
+        extentOffset: mapOffset(end, isEnd: true),
+      ),
     );
     _applyingProgrammaticEdit = false;
   }
@@ -635,7 +674,8 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     // actually has (so a line indented by only one space, say, still loses
     // just that one space instead of eating into its content).
     final removed = <int, int>{
-      for (final lineStart in lineStarts) lineStart: _leadingWhitespaceLength(text, lineStart, unit.length),
+      for (final lineStart in lineStarts)
+        lineStart: _leadingWhitespaceLength(text, lineStart, unit.length),
     };
     if (removed.values.every((n) => n == 0)) return; // nothing to remove
     final buffer = StringBuffer();
@@ -657,7 +697,10 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     _applyingProgrammaticEdit = true;
     controller.value = TextEditingValue(
       text: buffer.toString(),
-      selection: TextSelection(baseOffset: mapOffset(start), extentOffset: mapOffset(end)),
+      selection: TextSelection(
+        baseOffset: mapOffset(start),
+        extentOffset: mapOffset(end),
+      ),
     );
     _applyingProgrammaticEdit = false;
   }
@@ -684,9 +727,15 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     final start = selection.start;
     final end = selection.end;
     final lineStarts = _linesTouchedBy(text, start, end);
-    final contentStarts = {for (final ls in lineStarts) ls: _contentStartOffset(text, ls)};
-    final nonBlank = lineStarts.where((ls) => contentStarts[ls]! < _lineEndOffset(text, ls)).toList();
-    final allCommented = nonBlank.isNotEmpty && nonBlank.every((ls) => text.startsWith('//', contentStarts[ls]!));
+    final contentStarts = {
+      for (final ls in lineStarts) ls: _contentStartOffset(text, ls),
+    };
+    final nonBlank = lineStarts
+        .where((ls) => contentStarts[ls]! < _lineEndOffset(text, ls))
+        .toList();
+    final allCommented =
+        nonBlank.isNotEmpty &&
+        nonBlank.every((ls) => text.startsWith('//', contentStarts[ls]!));
 
     const marker = '// ';
     final buffer = StringBuffer();
@@ -702,7 +751,9 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
       buffer.write(text.substring(cursor, cs));
       if (allCommented) {
         if (text.startsWith('//', cs)) {
-          final removeLen = (cs + 2 < text.length && text[cs + 2] == ' ') ? 3 : 2;
+          final removeLen = (cs + 2 < text.length && text[cs + 2] == ' ')
+              ? 3
+              : 2;
           removedAt[ls] = removeLen;
           cursor = cs + removeLen;
         } else {
@@ -712,7 +763,8 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
         buffer.write(marker);
         cursor = cs;
       } else {
-        cursor = cs; // blank line: leave it alone rather than adding a bare "// "
+        cursor =
+            cs; // blank line: leave it alone rather than adding a bare "// "
       }
     }
     buffer.write(text.substring(cursor));
@@ -741,7 +793,10 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     _applyingProgrammaticEdit = true;
     controller.value = TextEditingValue(
       text: buffer.toString(),
-      selection: TextSelection(baseOffset: mapOffset(start, isEnd: false), extentOffset: mapOffset(end, isEnd: true)),
+      selection: TextSelection(
+        baseOffset: mapOffset(start, isEnd: false),
+        extentOffset: mapOffset(end, isEnd: true),
+      ),
     );
     _applyingProgrammaticEdit = false;
   }
@@ -784,7 +839,9 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     final selection = controller.selection;
     final textChanged = text != _lastControllerText;
     final selectionChanged = selection != _lastControllerSelection;
-    if (textChanged && _snippetStops.isNotEmpty && _lastControllerText != null) {
+    if (textChanged &&
+        _snippetStops.isNotEmpty &&
+        _lastControllerText != null) {
       // Keep remaining stops accurate as the user types inside an earlier
       // one — e.g. typing a 3-character condition at the first `if` stop
       // must push the body's `{ }` stop 3 characters later, or Tab would
@@ -796,7 +853,9 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
         for (final stop in _snippetStops)
           stop <= edit.start
               ? stop
-              : (stop <= editEnd ? edit.start + edit.insertedLength : stop + delta),
+              : (stop <= editEnd
+                    ? edit.start + edit.insertedLength
+                    : stop + delta),
       ];
     }
     _lastControllerText = text;
@@ -836,7 +895,10 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
   // bypassing this: an explicit ask should be immediate.
   void _scheduleCompletions() {
     _completionDebounce?.cancel();
-    _completionDebounce = Timer(_completionDebounceDelay, () => _requestCompletions(explicit: false));
+    _completionDebounce = Timer(
+      _completionDebounceDelay,
+      () => _requestCompletions(explicit: false),
+    );
   }
 
   void _requestCompletions({required bool explicit}) {
@@ -850,7 +912,12 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     final cursor = selection.baseOffset;
     final text = controller.text;
     final requestId = ++_completionRequestId;
-    _runCompletionsRequest(requestId: requestId, text: text, cursor: cursor, explicit: explicit);
+    _runCompletionsRequest(
+      requestId: requestId,
+      text: text,
+      cursor: cursor,
+      explicit: explicit,
+    );
   }
 
   // completions() itself resolves in single-digit milliseconds, but
@@ -875,7 +942,10 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
       await controller.session.compile(text);
       if (!mounted || requestId != _completionRequestId) return;
     }
-    final result = await controller.session.completions(cursor, explicit: explicit);
+    final result = await controller.session.completions(
+      cursor,
+      explicit: explicit,
+    );
     if (!mounted || requestId != _completionRequestId) return;
     // Still guards the buffer or cursor having moved on while the above was
     // in flight — the compile above can take a while on a large document,
@@ -979,24 +1049,37 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
   void _applyCompletion(TypstCompletion item) {
     final controller = widget.controller;
     final selection = controller.selection;
-    if (!selection.isValid || !selection.isCollapsed || selection.baseOffset < _completionApplyFrom) {
+    if (!selection.isValid ||
+        !selection.isCollapsed ||
+        selection.baseOffset < _completionApplyFrom) {
       _hideCompletionPopup();
       return;
     }
     final cursor = selection.baseOffset;
     final stripped = _stripSnippetPlaceholders(item.apply);
     final text = controller.text;
-    final newText = text.replaceRange(_completionApplyFrom, cursor, stripped.text);
-    final firstStop = stripped.stopOffsets.isEmpty ? stripped.text.length : stripped.stopOffsets.first;
+    final newText = text.replaceRange(
+      _completionApplyFrom,
+      cursor,
+      stripped.text,
+    );
+    final firstStop = stripped.stopOffsets.isEmpty
+        ? stripped.text.length
+        : stripped.stopOffsets.first;
     _applyingProgrammaticEdit = true;
     controller.value = TextEditingValue(
       text: newText,
-      selection: TextSelection.collapsed(offset: _completionApplyFrom + firstStop),
+      selection: TextSelection.collapsed(
+        offset: _completionApplyFrom + firstStop,
+      ),
     );
     _applyingProgrammaticEdit = false;
     _hideCompletionPopup();
     _snippetStops = stripped.stopOffsets.length > 1
-        ? [for (final offset in stripped.stopOffsets) _completionApplyFrom + offset]
+        ? [
+            for (final offset in stripped.stopOffsets)
+              _completionApplyFrom + offset,
+          ]
         : const [];
   }
 
@@ -1050,7 +1133,8 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     controller.session.hover(position.offset).then((result) {
       if (!mounted || requestId != _hoverRequestId) return;
       // See _requestCompletions for why lastCompiledSource is the gate.
-      if (controller.session.lastCompiledSource != controller.text || result.tooltip == null) {
+      if (controller.session.lastCompiledSource != controller.text ||
+          result.tooltip == null) {
         _hideHoverPopup();
         return;
       }
@@ -1108,7 +1192,9 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               child: Text(
                 tooltip.content,
-                style: tooltip.kind == TypstTooltipKind.code ? const TextStyle(fontFamily: 'monospace') : null,
+                style: tooltip.kind == TypstTooltipKind.code
+                    ? const TextStyle(fontFamily: 'monospace')
+                    : null,
               ),
             ),
           ),
@@ -1125,16 +1211,25 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     final renderEditable = _editableTextKey.currentState?.renderEditable;
     final selection = widget.controller.selection;
     final hasList = _completions.isNotEmpty;
-    if (renderEditable == null || !selection.isValid || (!hasList && !_fallbackDetailsOnly)) {
+    if (renderEditable == null ||
+        !selection.isValid ||
+        (!hasList && !_fallbackDetailsOnly)) {
       return const SizedBox.shrink();
     }
-    final caretRect = renderEditable.getLocalRectForCaret(TextPosition(offset: selection.baseOffset));
+    final caretRect = renderEditable.getLocalRectForCaret(
+      TextPosition(offset: selection.baseOffset),
+    );
     final caretBottom = renderEditable.localToGlobal(caretRect.bottomLeft);
     final caretTop = renderEditable.localToGlobal(caretRect.topLeft);
     final detailsBuilder = widget.detailsBuilder;
     final details = _details;
     final list = hasList
-        ? widget.completionsBuilder(context, _completions, _selectedCompletionIndex, _applyCompletion)
+        ? widget.completionsBuilder(
+            context,
+            _completions,
+            _selectedCompletionIndex,
+            _applyCompletion,
+          )
         : null;
     // Opens downward (the common case) unless there's genuinely more room
     // above the caret than below it — favoring below on a tie, since that's
@@ -1148,13 +1243,17 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     final opensBelow = spaceBelow >= spaceAbove;
     final content = TextFieldTapRegion(
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: _popupMaxHeight(context, caretTop.dy, caretBottom.dy)),
+        constraints: BoxConstraints(
+          maxHeight: _popupMaxHeight(context, caretTop.dy, caretBottom.dy),
+        ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           // Both panels line up on the edge facing the caret: a details panel
           // taller than the list beside it would otherwise leave the list
           // floating away from the line whenever the popup opens above it.
-          crossAxisAlignment: opensBelow ? CrossAxisAlignment.start : CrossAxisAlignment.end,
+          crossAxisAlignment: opensBelow
+              ? CrossAxisAlignment.start
+              : CrossAxisAlignment.end,
           children: [
             ?list,
             if (detailsBuilder != null && details != null) ...[
@@ -1178,7 +1277,11 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
   // scrolls internally (both the default completions list and details
   // builder already do; a custom builder that doesn't will just render
   // however tall it wants, the same as before this existed).
-  double _popupMaxHeight(BuildContext context, double caretTopY, double caretBottomY) {
+  double _popupMaxHeight(
+    BuildContext context,
+    double caretTopY,
+    double caretBottomY,
+  ) {
     final screenHeight = MediaQuery.sizeOf(context).height;
     final spaceBelow = screenHeight - caretBottomY - _popupEdgeMargin;
     final spaceAbove = caretTopY - _popupEdgeMargin;
@@ -1193,9 +1296,14 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
   /// [SystemContextMenu] (the OS-drawn menu, used on platforms that support
   /// it) is opaque and can't carry custom entries at all — falls back to
   /// the plain, unmodified system menu there, same as before this existed.
-  Widget _buildDefaultContextMenu(BuildContext context, EditableTextState editableTextState) {
+  Widget _buildDefaultContextMenu(
+    BuildContext context,
+    EditableTextState editableTextState,
+  ) {
     if (SystemContextMenu.isSupportedByField(editableTextState)) {
-      return SystemContextMenu.editableText(editableTextState: editableTextState);
+      return SystemContextMenu.editableText(
+        editableTextState: editableTextState,
+      );
     }
     final buttonItems = [
       ContextMenuButtonItem(
@@ -1208,7 +1316,10 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
       ...editableTextState.contextMenuButtonItems,
     ];
     return AdaptiveTextSelectionToolbar.buttonItems(
-      anchors: _anchorsClearOfHandles(context, editableTextState.contextMenuAnchors),
+      anchors: _anchorsClearOfHandles(
+        context,
+        editableTextState.contextMenuAnchors,
+      ),
       buttonItems: buttonItems,
     );
   }
@@ -1222,11 +1333,18 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
   // itself, over the end flag and half the selected text. Moves each anchor
   // past the flag on its side. Left alone when no handles show (a mouse
   // selection) or for caller-supplied controls, whose handles are unknown.
-  TextSelectionToolbarAnchors _anchorsClearOfHandles(BuildContext context, TextSelectionToolbarAnchors anchors) {
-    if (!_showSelectionHandles.value || widget.selectionControls != null) return anchors;
+  TextSelectionToolbarAnchors _anchorsClearOfHandles(
+    BuildContext context,
+    TextSelectionToolbarAnchors anchors,
+  ) {
+    if (!_showSelectionHandles.value || widget.selectionControls != null) {
+      return anchors;
+    }
     final collapsed = widget.controller.selection.isCollapsed;
     final above = collapsed ? 0.0 : TypstEditorSelectionControls.handleSize;
-    final below = collapsed ? TypstEditorSelectionControls.collapsedDiameter : TypstEditorSelectionControls.handleSize;
+    final below = collapsed
+        ? TypstEditorSelectionControls.collapsedDiameter
+        : TypstEditorSelectionControls.handleSize;
     const gap = 8.0;
     final secondary = anchors.secondaryAnchor ?? anchors.primaryAnchor;
     switch (Theme.of(context).platform) {
@@ -1237,7 +1355,16 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
         return TextSelectionToolbarAnchors(
           primaryAnchor: anchors.primaryAnchor - Offset(0, above),
           secondaryAnchor:
-              secondary + Offset(0, math.max(0, below + gap - TextSelectionToolbar.kToolbarContentDistanceBelow)),
+              secondary +
+              Offset(
+                0,
+                math.max(
+                  0,
+                  below +
+                      gap -
+                      TextSelectionToolbar.kToolbarContentDistanceBelow,
+                ),
+              ),
         );
       case TargetPlatform.iOS:
         // CupertinoTextSelectionToolbar: a fixed distance off either anchor.
@@ -1249,7 +1376,9 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
       case TargetPlatform.windows:
       case TargetPlatform.macOS:
         // A dropdown menu, top-left corner on its one anchor.
-        return TextSelectionToolbarAnchors(primaryAnchor: secondary + Offset(0, below + gap));
+        return TextSelectionToolbarAnchors(
+          primaryAnchor: secondary + Offset(0, below + gap),
+        );
     }
   }
 
@@ -1258,18 +1387,25 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
   // records the pointer kind of the gesture behind it), never for keyboard
   // edits, and never for a bare caret in a read-only editor.
   bool _shouldShowSelectionHandles(SelectionChangedCause? cause) {
-    if (!_gestureDetectorBuilder.shouldShowSelectionToolbar || !_gestureDetectorBuilder.shouldShowSelectionHandles) {
+    if (!_gestureDetectorBuilder.shouldShowSelectionToolbar ||
+        !_gestureDetectorBuilder.shouldShowSelectionHandles) {
       return false;
     }
     if (cause == SelectionChangedCause.keyboard) return false;
-    if (widget.readOnly && widget.controller.selection.isCollapsed) return false;
-    if (cause == SelectionChangedCause.longPress || cause == SelectionChangedCause.stylusHandwriting) {
+    if (widget.readOnly && widget.controller.selection.isCollapsed) {
+      return false;
+    }
+    if (cause == SelectionChangedCause.longPress ||
+        cause == SelectionChangedCause.stylusHandwriting) {
       return true;
     }
     return widget.controller.text.isNotEmpty;
   }
 
-  void _handleSelectionChanged(TextSelection selection, SelectionChangedCause? cause) {
+  void _handleSelectionChanged(
+    TextSelection selection,
+    SelectionChangedCause? cause,
+  ) {
     final show = _shouldShowSelectionHandles(cause);
     if (show != _showSelectionHandles.value) {
       setState(() {
@@ -1291,9 +1427,13 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     // untinted. Backfilled here rather than only in the widget's own
     // default so a caller-supplied style that also omits a color doesn't
     // hit the same bug.
-    final rawStyle = widget.style ?? const TextStyle(fontFamily: 'monospace', fontSize: 13);
-    final style = rawStyle.color == null ? rawStyle.copyWith(color: const Color(0xFF000000)) : rawStyle;
-    final cursorColor = widget.cursorColor ?? style.color ?? const Color(0xFF000000);
+    final rawStyle =
+        widget.style ?? const TextStyle(fontFamily: 'monospace', fontSize: 13);
+    final style = rawStyle.color == null
+        ? rawStyle.copyWith(color: const Color(0xFF000000))
+        : rawStyle;
+    final cursorColor =
+        widget.cursorColor ?? style.color ?? const Color(0xFF000000);
     final selectionColor = widget.selectionColor ?? const Color(0x664A90D9);
 
     // AnimatedBuilder rebuilds this whole subtree — including a fresh call
@@ -1325,11 +1465,13 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
                   // Only while focused, matching TextField: otherwise the
                   // highlight visually persists after focus moves elsewhere.
                   selectionColor: focusNode.hasFocus ? selectionColor : null,
-                  selectionControls: widget.selectionControls ?? _typstSelectionControls,
+                  selectionControls:
+                      widget.selectionControls ?? _typstSelectionControls,
                   showSelectionHandles: _showSelectionHandles.value,
                   onSelectionChanged: _handleSelectionChanged,
                   magnifierConfiguration:
-                      widget.magnifierConfiguration ?? typstEditorMagnifierConfiguration,
+                      widget.magnifierConfiguration ??
+                      typstEditorMagnifierConfiguration,
                   maxLines: null,
                   expands: widget.expands,
                   readOnly: widget.readOnly,
@@ -1345,7 +1487,8 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
                   scrollController: scrollController,
                   scrollPhysics: widget.scrollPhysics,
                   inputFormatters: widget.inputFormatters,
-                  contextMenuBuilder: widget.contextMenuBuilder ?? _buildDefaultContextMenu,
+                  contextMenuBuilder:
+                      widget.contextMenuBuilder ?? _buildDefaultContextMenu,
                   // RenderEditable must not also handle pointers itself:
                   // the gesture detector above already does, via
                   // renderEditable's own selection APIs — double-handling
@@ -1366,7 +1509,9 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
     if (!widget.showLineNumbers) return editor;
 
     final lineCount = '\n'.allMatches(widget.controller.text).length + 1;
-    final gutterColor = widget.lineNumberColor ?? (style.color ?? const Color(0xFF000000)).withValues(alpha: 0.4);
+    final gutterColor =
+        widget.lineNumberColor ??
+        (style.color ?? const Color(0xFF000000)).withValues(alpha: 0.4);
     return LayoutBuilder(
       builder: (context, constraints) {
         // `CrossAxisAlignment.stretch` needs a bounded height to stretch
@@ -1386,7 +1531,10 @@ class _TypstCodeEditorState extends State<TypstCodeEditor> implements TextSelect
               text: widget.controller.text,
               style: style,
               scrollController: scrollController,
-              textWidth: (constraints.maxWidth - gutterWidth).clamp(0, double.infinity),
+              textWidth: (constraints.maxWidth - gutterWidth).clamp(
+                0,
+                double.infinity,
+              ),
               width: gutterWidth,
               color: gutterColor,
             ),

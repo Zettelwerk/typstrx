@@ -39,7 +39,11 @@ enum TypstHighlightTag {
 /// this to track UTF-16 offsets (for lining diagnostics up with the right
 /// characters) without any offset ever crossing the bridge.
 class TypstHighlightNode {
-  const TypstHighlightNode({required this.tag, required this.text, required this.children});
+  const TypstHighlightNode({
+    required this.tag,
+    required this.text,
+    required this.children,
+  });
 
   /// The highlighting category, if any. Null for plain/ungrouped nodes.
   final TypstHighlightTag? tag;
@@ -75,7 +79,8 @@ class TypstHighlightNode {
       rust.HighlightTag.listTerm => TypstHighlightTag.listTerm,
       rust.HighlightTag.mathDelimiter => TypstHighlightTag.mathDelimiter,
       rust.HighlightTag.mathOperator => TypstHighlightTag.mathOperator,
-      rust.HighlightTag.mathGroupingParens => TypstHighlightTag.mathGroupingParens,
+      rust.HighlightTag.mathGroupingParens =>
+        TypstHighlightTag.mathGroupingParens,
       rust.HighlightTag.keyword => TypstHighlightTag.keyword,
       rust.HighlightTag.operator_ => TypstHighlightTag.operator_,
       rust.HighlightTag.number => TypstHighlightTag.number,

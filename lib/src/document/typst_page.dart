@@ -129,12 +129,14 @@ class TypstPage {
       fragments: fragments,
     );
     for (final fragment in raw.fragments) {
-      fragments.add(TypstPageTextFragment(
-        pageText: pageText,
-        index: fragment.index,
-        length: fragment.length,
-        bounds: TypstRect.fromRust(fragment.bounds),
-      ));
+      fragments.add(
+        TypstPageTextFragment(
+          pageText: pageText,
+          index: fragment.index,
+          length: fragment.length,
+          bounds: TypstRect.fromRust(fragment.bounds),
+        ),
+      );
     }
     return pageText;
   }
@@ -143,17 +145,17 @@ class TypstPage {
 /// Maps bridge-level link data to the public model.
 extension on rust.PageTextData {
   List<TypstLink> toTypstLinks() => [
-        for (final link in links)
-          TypstLink(
-            rect: TypstRect.fromRust(link.rect),
-            url: link.url != null ? Uri.tryParse(link.url!) : null,
-            dest: link.destPage != null
-                ? TypstDest(
-                    pageNumber: link.destPage!,
-                    x: link.destXPt,
-                    y: link.destYPt,
-                  )
-                : null,
-          ),
-      ];
+    for (final link in links)
+      TypstLink(
+        rect: TypstRect.fromRust(link.rect),
+        url: link.url != null ? Uri.tryParse(link.url!) : null,
+        dest: link.destPage != null
+            ? TypstDest(
+                pageNumber: link.destPage!,
+                x: link.destXPt,
+                y: link.destYPt,
+              )
+            : null,
+      ),
+  ];
 }

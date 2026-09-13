@@ -22,47 +22,55 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() async => await Typstrx.init());
 
-  testWidgets('typing #lo shows a completion popup with a real typing rhythm, no pre-compile', (tester) async {
-    final session = await TypstSession.create(
-      options: const TypstSessionOptions(allowPackageDownload: false),
-    );
-    final controller = TypstEditorController(session: session, text: '');
+  testWidgets(
+    'typing #lo shows a completion popup with a real typing rhythm, no pre-compile',
+    (tester) async {
+      final session = await TypstSession.create(
+        options: const TypstSessionOptions(allowPackageDownload: false),
+      );
+      final controller = TypstEditorController(session: session, text: '');
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Padding(
-            padding: const EdgeInsets.all(16),
-            child: TypstCodeEditor(controller: controller, onChanged: session.updateSource),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Padding(
+              padding: const EdgeInsets.all(16),
+              child: TypstCodeEditor(
+                controller: controller,
+                onChanged: session.updateSource,
+              ),
+            ),
           ),
         ),
-      ),
-    );
-    await tester.pump();
-
-    // Real typing rhythm: one character at a time with real (not
-    // fake-clock) delays between keystrokes — comfortably slower than a
-    // human, so this can't be blamed on typing faster than a 250ms
-    // debounce could ever catch up between keystrokes. Deliberately no
-    // session.compile() call beforehand: that's exactly what a real host
-    // app typing into a fresh editor looks like.
-    for (final ch in '#lo'.split('')) {
-      controller.value = TextEditingValue(
-        text: controller.text + ch,
-        selection: TextSelection.collapsed(offset: controller.text.length + 1),
       );
       await tester.pump();
-      await Future<void>.delayed(const Duration(milliseconds: 400));
+
+      // Real typing rhythm: one character at a time with real (not
+      // fake-clock) delays between keystrokes — comfortably slower than a
+      // human, so this can't be blamed on typing faster than a 250ms
+      // debounce could ever catch up between keystrokes. Deliberately no
+      // session.compile() call beforehand: that's exactly what a real host
+      // app typing into a fresh editor looks like.
+      for (final ch in '#lo'.split('')) {
+        controller.value = TextEditingValue(
+          text: controller.text + ch,
+          selection: TextSelection.collapsed(
+            offset: controller.text.length + 1,
+          ),
+        );
+        await tester.pump();
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+        await tester.pump();
+      }
+
+      expect(find.text('lorem'), findsOneWidget);
+
+      // Real pause so an external screenshot can confirm this visually too.
+      await Future<void>.delayed(const Duration(seconds: 8));
       await tester.pump();
-    }
 
-    expect(find.text('lorem'), findsOneWidget);
-
-    // Real pause so an external screenshot can confirm this visually too.
-    await Future<void>.delayed(const Duration(seconds: 8));
-    await tester.pump();
-
-    controller.dispose();
-    await session.dispose();
-  });
+      controller.dispose();
+      await session.dispose();
+    },
+  );
 }

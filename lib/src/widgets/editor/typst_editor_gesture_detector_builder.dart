@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/widgets.dart';
 
 /// A [TextSelectionGestureDetectorBuilder] that makes long-press-and-drag
@@ -20,7 +21,8 @@ import 'package:flutter/widgets.dart';
 /// own behavior untouched (there, an unmodified long-press-drag already
 /// moves a floating cursor character-by-character rather than snapping to
 /// words, a distinct native convention this doesn't try to replace).
-class TypstEditorGestureDetectorBuilder extends TextSelectionGestureDetectorBuilder {
+class TypstEditorGestureDetectorBuilder
+    extends TextSelectionGestureDetectorBuilder {
   TypstEditorGestureDetectorBuilder({required super.delegate});
 
   // The word selected by the long-press this drag started from, captured
@@ -39,7 +41,8 @@ class TypstEditorGestureDetectorBuilder extends TextSelectionGestureDetectorBuil
   TextPosition? _fixedEdge;
 
   bool get _overridesGranularity =>
-      defaultTargetPlatform != TargetPlatform.iOS && defaultTargetPlatform != TargetPlatform.macOS;
+      defaultTargetPlatform != TargetPlatform.iOS &&
+      defaultTargetPlatform != TargetPlatform.macOS;
 
   @override
   void onSingleLongTapStart(LongPressStartDetails details) {
@@ -66,7 +69,8 @@ class TypstEditorGestureDetectorBuilder extends TextSelectionGestureDetectorBuil
       return;
     }
 
-    final fixedEdge = _fixedEdge ?? _pickFixedEdge(wordSelection, details.globalPosition);
+    final fixedEdge =
+        _fixedEdge ?? _pickFixedEdge(wordSelection, details.globalPosition);
     _fixedEdge = fixedEdge;
     renderEditable.selectPositionAt(
       from: _globalPositionOf(fixedEdge),
@@ -97,14 +101,19 @@ class TypstEditorGestureDetectorBuilder extends TextSelectionGestureDetectorBuil
   // Whichever edge of the originally-selected word is farther from where
   // the finger has dragged to stays put; the nearer edge is what the finger
   // is actually extending away from.
-  TextPosition _pickFixedEdge(TextSelection wordSelection, Offset dragGlobalPosition) {
+  TextPosition _pickFixedEdge(
+    TextSelection wordSelection,
+    Offset dragGlobalPosition,
+  ) {
     final base = TextPosition(offset: wordSelection.baseOffset);
     final extent = TextPosition(offset: wordSelection.extentOffset);
-    final baseDistance = (dragGlobalPosition - _globalPositionOf(base)).distanceSquared;
-    final extentDistance = (dragGlobalPosition - _globalPositionOf(extent)).distanceSquared;
+    final baseDistance =
+        (dragGlobalPosition - _globalPositionOf(base)).distanceSquared;
+    final extentDistance =
+        (dragGlobalPosition - _globalPositionOf(extent)).distanceSquared;
     return baseDistance >= extentDistance ? base : extent;
   }
 
-  Offset _globalPositionOf(TextPosition position) =>
-      renderEditable.localToGlobal(renderEditable.getLocalRectForCaret(position).center);
+  Offset _globalPositionOf(TextPosition position) => renderEditable
+      .localToGlobal(renderEditable.getLocalRectForCaret(position).center);
 }

@@ -530,42 +530,43 @@ void main() {
       expect(
         controller.currentZoom,
         lessThan(zoomBefore),
-        reason: 'a larger margin should have triggered a re-fit to a smaller zoom',
+        reason:
+            'a larger margin should have triggered a re-fit to a smaller zoom',
       );
     },
   );
 
-  testWidgets(
-    'changing rasterBackgroundColor clears the cache and re-renders',
-    (tester) async {
-      final (session, fake) = await makeSession();
-      final controller = TypstViewerController();
+  testWidgets('changing rasterBackgroundColor clears the cache and re-renders', (
+    tester,
+  ) async {
+    final (session, fake) = await makeSession();
+    final controller = TypstViewerController();
 
-      Widget build(Color color) => MaterialApp(
-        home: TypstViewer(
-          session: session,
-          controller: controller,
-          params: TypstViewerParams(
-            renderDelay: const Duration(milliseconds: 1),
-            rasterBackgroundColor: color,
-          ),
+    Widget build(Color color) => MaterialApp(
+      home: TypstViewer(
+        session: session,
+        controller: controller,
+        params: TypstViewerParams(
+          renderDelay: const Duration(milliseconds: 1),
+          rasterBackgroundColor: color,
         ),
-      );
+      ),
+    );
 
-      await tester.pumpWidget(build(const Color(0xffffffff)));
-      await settle(tester);
-      final renderedBefore = fake.renderedPages.length;
-      expect(renderedBefore, greaterThan(0));
+    await tester.pumpWidget(build(const Color(0xffffffff)));
+    await settle(tester);
+    final renderedBefore = fake.renderedPages.length;
+    expect(renderedBefore, greaterThan(0));
 
-      await tester.pumpWidget(build(const Color(0xff000000)));
-      await settle(tester);
-      expect(
-        fake.renderedPages.length,
-        greaterThan(renderedBefore),
-        reason: 'the stale-background cache entries should have been cleared and re-rendered',
-      );
-    },
-  );
+    await tester.pumpWidget(build(const Color(0xff000000)));
+    await settle(tester);
+    expect(
+      fake.renderedPages.length,
+      greaterThan(renderedBefore),
+      reason:
+          'the stale-background cache entries should have been cleared and re-rendered',
+    );
+  });
 
   testWidgets('goToPage scrolls and triggers renders for that page', (
     tester,
@@ -1025,7 +1026,9 @@ void main() {
           home: TypstViewer(
             session: session,
             controller: controller,
-            params: TypstViewerParams(onSelectionChanged: (_) => notifications++),
+            params: TypstViewerParams(
+              onSelectionChanged: (_) => notifications++,
+            ),
           ),
         ),
       );
@@ -1036,23 +1039,34 @@ void main() {
       // "HELLO" (chars 0..5), with "WORLD" free to its right — room for
       // the end handle to actually move into a new character.
       final wordPoint = docToView(const Offset(8 + 60, 8 + 110));
-      final press = await tester.startGesture(wordPoint, kind: PointerDeviceKind.touch);
+      final press = await tester.startGesture(
+        wordPoint,
+        kind: PointerDeviceKind.touch,
+      );
       await tester.pump(const Duration(milliseconds: 600));
       await press.up();
       await tester.pump();
       expect(controller.selectedText, 'HELLO');
 
-      bool isHandle(Widget w) => w is GestureDetector && w.onPanStart != null && w.onPanUpdate != null;
+      bool isHandle(Widget w) =>
+          w is GestureDetector && w.onPanStart != null && w.onPanUpdate != null;
       final handles = find.byWidgetPredicate(isHandle);
       final endHandleCenter = tester.getCenter(handles.last);
 
-      final drag = await tester.startGesture(endHandleCenter, kind: PointerDeviceKind.touch);
+      final drag = await tester.startGesture(
+        endHandleCenter,
+        kind: PointerDeviceKind.touch,
+      );
       await tester.pump(const Duration(milliseconds: 20));
       // One real move, extending the selection into "WORLD".
       final target = endHandleCenter + const Offset(60, 0);
       await drag.moveTo(target);
       await tester.pump(const Duration(milliseconds: 10));
-      expect(notifications, greaterThan(0), reason: 'an actual selection change should notify');
+      expect(
+        notifications,
+        greaterThan(0),
+        reason: 'an actual selection change should notify',
+      );
       final afterRealMove = notifications;
 
       // Several more frames landing on that exact same point (e.g. a
@@ -1066,7 +1080,8 @@ void main() {
       expect(
         notifications,
         afterRealMove,
-        reason: 'repeating the same resolved position should not fire redundant selection notifications',
+        reason:
+            'repeating the same resolved position should not fire redundant selection notifications',
       );
 
       await drag.up();

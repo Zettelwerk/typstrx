@@ -80,11 +80,19 @@ Widget defaultTypstCompletionsBuilder(
   int selectedIndex,
   ValueChanged<TypstCompletion> onSelected,
 ) {
-  return _CompletionsList(completions: completions, selectedIndex: selectedIndex, onSelected: onSelected);
+  return _CompletionsList(
+    completions: completions,
+    selectedIndex: selectedIndex,
+    onSelected: onSelected,
+  );
 }
 
 class _CompletionsList extends StatefulWidget {
-  const _CompletionsList({required this.completions, required this.selectedIndex, required this.onSelected});
+  const _CompletionsList({
+    required this.completions,
+    required this.selectedIndex,
+    required this.onSelected,
+  });
 
   final List<TypstCompletion> completions;
   final int selectedIndex;
@@ -108,11 +116,14 @@ class _CompletionsListState extends State<_CompletionsList> {
   void didUpdateWidget(_CompletionsList oldWidget) {
     super.didUpdateWidget(oldWidget);
     _syncItemKeys();
-    if (widget.selectedIndex != oldWidget.selectedIndex || !identical(widget.completions, oldWidget.completions)) {
+    if (widget.selectedIndex != oldWidget.selectedIndex ||
+        !identical(widget.completions, oldWidget.completions)) {
       // Deferred a frame: the selected row is taller than the others (it
       // grows a detail line — see the class doc comment), so scrolling
       // against this frame's *old* layout would target the wrong offset.
-      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollSelectedIntoView());
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _scrollSelectedIntoView(),
+      );
     }
   }
 
@@ -126,17 +137,27 @@ class _CompletionsListState extends State<_CompletionsList> {
   // [attempt] bounds a possible retry (see below) at 1 — never grows
   // without a terminating jump between calls, so this can't loop forever.
   void _scrollSelectedIntoView([int attempt = 0]) {
-    if (!mounted || !_scrollController.hasClients || widget.completions.isEmpty) return;
+    if (!mounted ||
+        !_scrollController.hasClients ||
+        widget.completions.isEmpty) {
+      return;
+    }
     final index = widget.selectedIndex;
     final itemContext = _itemKeys[index].currentContext;
     if (itemContext != null) {
       // The precise case: the target row is already built, so its real
       // height — taller than the others once it's the selected one, see
       // the class doc comment — is already known and reflected in layout.
-      Scrollable.ensureVisible(itemContext, alignment: 0.5, duration: const Duration(milliseconds: 100));
+      Scrollable.ensureVisible(
+        itemContext,
+        alignment: 0.5,
+        duration: const Duration(milliseconds: 100),
+      );
       return;
     }
-    if (attempt > 0) return; // already retried once; the row still won't build — give up rather than loop
+    if (attempt > 0) {
+      return; // already retried once; the row still won't build — give up rather than loop
+    }
     // No context: this row was never built (lazily-built ListView), which
     // is exactly what _moveCompletionSelection's wraparound reaches — the
     // opposite end from wherever the selection just was. The two ends have
@@ -154,7 +175,9 @@ class _CompletionsListState extends State<_CompletionsList> {
     } else {
       return;
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollSelectedIntoView(attempt + 1));
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _scrollSelectedIntoView(attempt + 1),
+    );
   }
 
   @override
@@ -194,11 +217,16 @@ class _CompletionsListState extends State<_CompletionsList> {
               final selected = index == widget.selectedIndex;
               return Material(
                 key: _itemKeys[index],
-                color: selected ? colorScheme.primaryContainer : Colors.transparent,
+                color: selected
+                    ? colorScheme.primaryContainer
+                    : Colors.transparent,
                 child: InkWell(
                   onTap: () => widget.onSelected(item),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 6,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
@@ -216,7 +244,10 @@ class _CompletionsListState extends State<_CompletionsList> {
                                 item.label,
                                 overflow: TextOverflow.ellipsis,
                                 maxLines: 1,
-                                style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+                                style: const TextStyle(
+                                  fontFamily: 'monospace',
+                                  fontSize: 13,
+                                ),
                               ),
                             ),
                           ],
@@ -228,7 +259,10 @@ class _CompletionsListState extends State<_CompletionsList> {
                               item.detail!,
                               overflow: TextOverflow.ellipsis,
                               maxLines: 3,
-                              style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
                             ),
                           ),
                       ],

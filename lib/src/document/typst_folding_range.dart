@@ -13,7 +13,11 @@ enum TypstFoldingKind { codeBlock, contentBlock, args, array, dict, comment }
 /// call [TypstSession.foldingRanges] again with the current buffer and the
 /// result is already current for it.
 class TypstFoldingRange {
-  const TypstFoldingRange({required this.startUtf16, required this.endUtf16, required this.kind});
+  const TypstFoldingRange({
+    required this.startUtf16,
+    required this.endUtf16,
+    required this.kind,
+  });
 
   /// Start of the region, in UTF-16 code units — inclusive of the opening
   /// delimiter (e.g. the `{` of a code block).

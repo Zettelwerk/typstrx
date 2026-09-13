@@ -102,7 +102,9 @@ class _TypstLineNumberGutterState extends State<TypstLineNumberGutter> {
 
   @override
   Widget build(BuildContext context) {
-    final scrollOffset = widget.scrollController.hasClients ? widget.scrollController.offset : 0.0;
+    final scrollOffset = widget.scrollController.hasClients
+        ? widget.scrollController.offset
+        : 0.0;
     return SizedBox(
       width: widget.width,
       child: ClipRect(

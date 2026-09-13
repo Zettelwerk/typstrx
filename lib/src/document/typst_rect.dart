@@ -25,11 +25,11 @@ class TypstRect {
   /// As a [Rect] in document coordinates given the page's rect in the
   /// document layout.
   Rect toRectInDocument(Rect pageRect) => Rect.fromLTRB(
-        pageRect.left + left,
-        pageRect.top + top,
-        pageRect.left + right,
-        pageRect.top + bottom,
-      );
+    pageRect.left + left,
+    pageRect.top + top,
+    pageRect.left + right,
+    pageRect.top + bottom,
+  );
 
   bool containsPoint(Offset point, {double margin = 0}) =>
       point.dx >= left - margin &&
@@ -38,11 +38,11 @@ class TypstRect {
       point.dy <= bottom + margin;
 
   TypstRect merge(TypstRect other) => TypstRect(
-        left < other.left ? left : other.left,
-        top < other.top ? top : other.top,
-        right > other.right ? right : other.right,
-        bottom > other.bottom ? bottom : other.bottom,
-      );
+    left < other.left ? left : other.left,
+    top < other.top ? top : other.top,
+    right > other.right ? right : other.right,
+    bottom > other.bottom ? bottom : other.bottom,
+  );
 
   @override
   String toString() => 'TypstRect($left, $top, $right, $bottom)';

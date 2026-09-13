@@ -30,7 +30,8 @@ class TypstSignatureToken {
       kind: switch (token.kind) {
         rust.TypstSignatureTokenKind.name => TypstSignatureTokenKind.name,
         rust.TypstSignatureTokenKind.param => TypstSignatureTokenKind.param,
-        rust.TypstSignatureTokenKind.punctuation => TypstSignatureTokenKind.punctuation,
+        rust.TypstSignatureTokenKind.punctuation =>
+          TypstSignatureTokenKind.punctuation,
       },
     );
   }
@@ -77,11 +78,14 @@ class TypstFunctionInfo {
   static TypstFunctionInfo fromRust(rust.TypstFunctionInfo info) {
     return TypstFunctionInfo(
       name: info.name,
-      signature: [for (final token in info.signature) TypstSignatureToken.fromRust(token)],
+      signature: [
+        for (final token in info.signature) TypstSignatureToken.fromRust(token),
+      ],
       description: info.description,
       example: info.example,
-      exampleHighlight:
-          info.exampleHighlight != null ? TypstHighlightNode.fromRust(info.exampleHighlight!) : null,
+      exampleHighlight: info.exampleHighlight != null
+          ? TypstHighlightNode.fromRust(info.exampleHighlight!)
+          : null,
     );
   }
 }
@@ -99,7 +103,9 @@ class TypstFunctionInfoResult {
   static TypstFunctionInfoResult fromRust(rust.FunctionInfoResult result) {
     return TypstFunctionInfoResult(
       generation: result.generation.toInt(),
-      info: result.info != null ? TypstFunctionInfo.fromRust(result.info!) : null,
+      info: result.info != null
+          ? TypstFunctionInfo.fromRust(result.info!)
+          : null,
     );
   }
 }

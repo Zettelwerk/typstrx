@@ -1,6 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/cupertino.dart' show CupertinoTextSelectionToolbarButton;
+import 'package:flutter/cupertino.dart'
+    show CupertinoTextSelectionToolbarButton;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -52,15 +53,22 @@ class FakeRustSession implements rust.TypstSession {
   final functionInfoCalls = <String>[];
 
   @override
-  Future<rust.FunctionInfoResult> functionInfo({required int cursorUtf16, required String label}) async {
+  Future<rust.FunctionInfoResult> functionInfo({
+    required int cursorUtf16,
+    required String label,
+  }) async {
     functionInfoCalls.add(label);
     if (functionInfoGate != null) await functionInfoGate!.future;
-    final info = functionInfoByLabel.containsKey(label) ? functionInfoByLabel[label] : functionInfoToReturn;
+    final info = functionInfoByLabel.containsKey(label)
+        ? functionInfoByLabel[label]
+        : functionInfoToReturn;
     return rust.FunctionInfoResult(generation: BigInt.zero, info: info);
   }
 
   @override
-  Future<List<rust.TypstFoldingRange>> foldingRanges({required String source}) async => const [];
+  Future<List<rust.TypstFoldingRange>> foldingRanges({
+    required String source,
+  }) async => const [];
 
   @override
   Future<rust.HighlightNode> highlight({required String source}) async {
@@ -68,7 +76,10 @@ class FakeRustSession implements rust.TypstSession {
   }
 
   @override
-  Future<rust.CompletionResult> completions({required int cursorUtf16, required bool explicit}) async {
+  Future<rust.CompletionResult> completions({
+    required int cursorUtf16,
+    required bool explicit,
+  }) async {
     if (completionsGate != null) await completionsGate!.future;
     return rust.CompletionResult(
       generation: BigInt.zero,
@@ -110,7 +121,10 @@ class FakeRustSession implements rust.TypstSession {
   }
 
   @override
-  Future<rust.PageTextData> pageText({required BigInt generation, required int pageIndex}) async {
+  Future<rust.PageTextData> pageText({
+    required BigInt generation,
+    required int pageIndex,
+  }) async {
     throw UnimplementedError();
   }
 
@@ -141,12 +155,15 @@ class FakeRustSession implements rust.TypstSession {
 /// the joined display text, not per-token coloring (that's exercised at the
 /// Rust/`describe_func` level, not here).
 List<rust.TypstSignatureToken> _sig(String text) {
-  return [rust.TypstSignatureToken(text: text, kind: rust.TypstSignatureTokenKind.name)];
+  return [
+    rust.TypstSignatureToken(
+      text: text,
+      kind: rust.TypstSignatureTokenKind.name,
+    ),
+  ];
 }
 
 void main() {
-
-
   // Neither test below awaits a bare `Future<void>.delayed(...)` (unlike
   // typst_editor_controller_test.dart's plain test() bodies, where that's
   // fine). testWidgets runs inside flutter_test's FakeAsync zone, and a
@@ -158,7 +175,9 @@ void main() {
   // `expect()` prints nothing, so "hung after the real work already
   // succeeded" and "hung during the real work" were indistinguishable from
   // the test output alone.
-  testWidgets('typing text updates the controller and calls onChanged', (tester) async {
+  testWidgets('typing text updates the controller and calls onChanged', (
+    tester,
+  ) async {
     final fake = FakeRustSession();
     final session = TypstSession.forTesting(fake, const TypstSessionOptions());
     final controller = TypstEditorController(session: session, text: 'hello');
@@ -167,7 +186,10 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: TypstCodeEditor(controller: controller, onChanged: (text) => changed = text),
+          body: TypstCodeEditor(
+            controller: controller,
+            onChanged: (text) => changed = text,
+          ),
         ),
       ),
     );
@@ -186,12 +208,19 @@ void main() {
     'defaults to pdfrx-style triangle handles, one instance across rebuilds',
     (tester) async {
       final fake = FakeRustSession();
-      final session = TypstSession.forTesting(fake, const TypstSessionOptions());
+      final session = TypstSession.forTesting(
+        fake,
+        const TypstSessionOptions(),
+      );
       final controller = TypstEditorController(session: session, text: 'hello');
-      TextSelectionControls? controls() => tester.widget<EditableText>(find.byType(EditableText)).selectionControls;
+      TextSelectionControls? controls() => tester
+          .widget<EditableText>(find.byType(EditableText))
+          .selectionControls;
 
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: TypstCodeEditor(controller: controller))),
+        MaterialApp(
+          home: Scaffold(body: TypstCodeEditor(controller: controller)),
+        ),
       );
       await tester.pump();
       final first = controls();
@@ -203,7 +232,10 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: TypstCodeEditor(controller: controller, cursorColor: const Color(0xFF123456)),
+            body: TypstCodeEditor(
+              controller: controller,
+              cursorColor: const Color(0xFF123456),
+            ),
           ),
         ),
       );
@@ -213,7 +245,10 @@ void main() {
       controller.dispose();
       await session.dispose();
     },
-    variant: TargetPlatformVariant({TargetPlatform.android, TargetPlatform.linux}),
+    variant: TargetPlatformVariant({
+      TargetPlatform.android,
+      TargetPlatform.linux,
+    }),
   );
 
   // EditableText's own `showSelectionHandles` defaults to false — TextField
@@ -221,43 +256,73 @@ void main() {
   // builds EditableText directly) has to do the same, or handles never show
   // at all on any platform.
   group('selection handles', () {
-    final platforms = TargetPlatformVariant({TargetPlatform.android, TargetPlatform.linux});
+    final platforms = TargetPlatformVariant({
+      TargetPlatform.android,
+      TargetPlatform.linux,
+    });
 
-    Future<(TypstSession, TypstEditorController)> mountEditor(WidgetTester tester, String text) async {
+    Future<(TypstSession, TypstEditorController)> mountEditor(
+      WidgetTester tester,
+      String text,
+    ) async {
       final fake = FakeRustSession();
-      final session = TypstSession.forTesting(fake, const TypstSessionOptions());
+      final session = TypstSession.forTesting(
+        fake,
+        const TypstSessionOptions(),
+      );
       final controller = TypstEditorController(session: session, text: text);
-      await tester.pumpWidget(MaterialApp(home: Scaffold(body: TypstCodeEditor(controller: controller))));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: TypstCodeEditor(controller: controller)),
+        ),
+      );
       await tester.pump();
       return (session, controller);
     }
 
-    bool handlesShown(WidgetTester tester) =>
-        tester.widget<EditableText>(find.byType(EditableText)).showSelectionHandles;
+    bool handlesShown(WidgetTester tester) => tester
+        .widget<EditableText>(find.byType(EditableText))
+        .showSelectionHandles;
 
     Offset caretCenter(WidgetTester tester, int offset) {
-      final render = tester.state<EditableTextState>(find.byType(EditableText)).renderEditable;
-      return render.localToGlobal(render.getLocalRectForCaret(TextPosition(offset: offset)).center);
+      final render = tester
+          .state<EditableTextState>(find.byType(EditableText))
+          .renderEditable;
+      return render.localToGlobal(
+        render.getLocalRectForCaret(TextPosition(offset: offset)).center,
+      );
     }
 
     final triangleFlags = find.byWidgetPredicate(
-      (w) => w is CustomPaint && w.painter.runtimeType.toString() == '_TriangleHandlePainter',
+      (w) =>
+          w is CustomPaint &&
+          w.painter.runtimeType.toString() == '_TriangleHandlePainter',
     );
 
-    testWidgets('a touch long-press shows both triangle handles', (tester) async {
+    testWidgets('a touch long-press shows both triangle handles', (
+      tester,
+    ) async {
       final (session, controller) = await mountEditor(tester, 'hello world');
 
       await tester.longPressAt(caretCenter(tester, 2));
       await tester.pumpAndSettle();
 
-      expect(controller.selection, const TextSelection(baseOffset: 0, extentOffset: 5));
+      expect(
+        controller.selection,
+        const TextSelection(baseOffset: 0, extentOffset: 5),
+      );
       expect(handlesShown(tester), isTrue);
       // Rendered, not just requested: hidden handles stay in the overlay,
       // faded to zero opacity rather than removed.
       expect(triangleFlags, findsNWidgets(2));
       for (var i = 0; i < 2; i++) {
         final fade = tester.widget<FadeTransition>(
-          find.ancestor(of: triangleFlags.at(i), matching: find.byType(FadeTransition)).first,
+          find
+              .ancestor(
+                of: triangleFlags.at(i),
+                matching: find.byType(FadeTransition),
+              )
+              .first,
         );
         expect(fade.opacity.value, 1.0);
       }
@@ -272,12 +337,16 @@ void main() {
       await tester.pumpAndSettle();
       // Out of the way of the handle, whatever the platform puts where
       // (`false`: keep the handles themselves).
-      tester.state<EditableTextState>(find.byType(EditableText)).hideToolbar(false);
+      tester
+          .state<EditableTextState>(find.byType(EditableText))
+          .hideToolbar(false);
       await tester.pumpAndSettle();
 
       // The end handle's flag hangs down-right from the selection's bottom
       // right corner.
-      final gesture = await tester.startGesture(caretCenter(tester, 5) + const Offset(6, 12));
+      final gesture = await tester.startGesture(
+        caretCenter(tester, 5) + const Offset(6, 12),
+      );
       for (var i = 0; i < 6; i++) {
         await gesture.moveBy(const Offset(13, 0));
         await tester.pump();
@@ -285,55 +354,77 @@ void main() {
       await gesture.up();
       await tester.pumpAndSettle();
 
-      expect(controller.selection, const TextSelection(baseOffset: 0, extentOffset: 11));
+      expect(
+        controller.selection,
+        const TextSelection(baseOffset: 0, extentOffset: 11),
+      );
 
       controller.dispose();
       await session.dispose();
     }, variant: platforms);
 
-    testWidgets('the selection toolbar keeps clear of both handles', (tester) async {
-      final text = List.generate(12, (i) => 'line$i words here').join('\n');
-      final (session, controller) = await mountEditor(tester, text);
-      final toolbarButtons = find.byWidgetPredicate(
-        (w) =>
-            w is TextSelectionToolbarTextButton ||
-            w is CupertinoTextSelectionToolbarButton ||
-            w is DesktopTextSelectionToolbarButton,
-      );
-      Rect rectOf(Finder finder) => List.generate(
-        finder.evaluate().length,
-        (i) => tester.getRect(finder.at(i)),
-      ).reduce((a, b) => a.expandToInclude(b));
+    testWidgets(
+      'the selection toolbar keeps clear of both handles',
+      (tester) async {
+        final text = List.generate(12, (i) => 'line$i words here').join('\n');
+        final (session, controller) = await mountEditor(tester, text);
+        final toolbarButtons = find.byWidgetPredicate(
+          (w) =>
+              w is TextSelectionToolbarTextButton ||
+              w is CupertinoTextSelectionToolbarButton ||
+              w is DesktopTextSelectionToolbarButton,
+        );
+        Rect rectOf(Finder finder) => List.generate(
+          finder.evaluate().length,
+          (i) => tester.getRect(finder.at(i)),
+        ).reduce((a, b) => a.expandToInclude(b));
 
-      // Line 0 has no room above it, so a mobile toolbar flips below the
-      // selection there; line 10 does, so it stays above.
-      for (final line in [0, 10]) {
-        await tester.longPressAt(caretCenter(tester, text.indexOf('line$line ') + 8));
-        await tester.pumpAndSettle();
-        expect(controller.selection.textInside(text), 'words');
+        // Line 0 has no room above it, so a mobile toolbar flips below the
+        // selection there; line 10 does, so it stays above.
+        for (final line in [0, 10]) {
+          await tester.longPressAt(
+            caretCenter(tester, text.indexOf('line$line ') + 8),
+          );
+          await tester.pumpAndSettle();
+          expect(controller.selection.textInside(text), 'words');
 
-        final toolbar = rectOf(toolbarButtons);
-        expect(triangleFlags, findsNWidgets(2));
-        for (var i = 0; i < 2; i++) {
-          final flag = tester.getRect(triangleFlags.at(i));
-          expect(toolbar.overlaps(flag), isFalse, reason: 'line $line: toolbar $toolbar covers handle $flag');
+          final toolbar = rectOf(toolbarButtons);
+          expect(triangleFlags, findsNWidgets(2));
+          for (var i = 0; i < 2; i++) {
+            final flag = tester.getRect(triangleFlags.at(i));
+            expect(
+              toolbar.overlaps(flag),
+              isFalse,
+              reason: 'line $line: toolbar $toolbar covers handle $flag',
+            );
+          }
+
+          tester
+              .state<EditableTextState>(find.byType(EditableText))
+              .hideToolbar();
+          // iOS only selects a word on long-press while unfocused (focused, it
+          // moves the caret instead).
+          FocusManager.instance.primaryFocus?.unfocus();
+          await tester.pumpAndSettle();
         }
 
-        tester.state<EditableTextState>(find.byType(EditableText)).hideToolbar();
-        // iOS only selects a word on long-press while unfocused (focused, it
-        // moves the caret instead).
-        FocusManager.instance.primaryFocus?.unfocus();
-        await tester.pumpAndSettle();
-      }
-
-      controller.dispose();
-      await session.dispose();
-    }, variant: TargetPlatformVariant({TargetPlatform.android, TargetPlatform.linux, TargetPlatform.iOS}));
+        controller.dispose();
+        await session.dispose();
+      },
+      variant: TargetPlatformVariant({
+        TargetPlatform.android,
+        TargetPlatform.linux,
+        TargetPlatform.iOS,
+      }),
+    );
 
     testWidgets('a mouse drag-select keeps the handles hidden', (tester) async {
       final (session, controller) = await mountEditor(tester, 'hello world');
 
-      final gesture = await tester.startGesture(caretCenter(tester, 0), kind: PointerDeviceKind.mouse);
+      final gesture = await tester.startGesture(
+        caretCenter(tester, 0),
+        kind: PointerDeviceKind.mouse,
+      );
       await tester.pump();
       await gesture.moveTo(caretCenter(tester, 5));
       await tester.pump();
@@ -347,7 +438,9 @@ void main() {
       await session.dispose();
     }, variant: platforms);
 
-    testWidgets('a mouse right-click opens the menu without handles', (tester) async {
+    testWidgets('a mouse right-click opens the menu without handles', (
+      tester,
+    ) async {
       final (session, controller) = await mountEditor(tester, 'hello world');
 
       final gesture = await tester.startGesture(
@@ -365,22 +458,35 @@ void main() {
       await session.dispose();
     }, variant: platforms);
 
-    testWidgets('a hidden handle does not swallow a mouse click on the text under it', (tester) async {
-      final (session, controller) = await mountEditor(tester, 'aaaa\nbbbb\ncccc');
+    testWidgets(
+      'a hidden handle does not swallow a mouse click on the text under it',
+      (tester) async {
+        final (session, controller) = await mountEditor(
+          tester,
+          'aaaa\nbbbb\ncccc',
+        );
 
-      // Placing the caret also inserts the (hidden) handles into the overlay.
-      await tester.tapAt(caretCenter(tester, 2), kind: PointerDeviceKind.mouse);
-      await tester.pump(kDoubleTapTimeout);
-      expect(controller.selection, const TextSelection.collapsed(offset: 2));
+        // Placing the caret also inserts the (hidden) handles into the overlay.
+        await tester.tapAt(
+          caretCenter(tester, 2),
+          kind: PointerDeviceKind.mouse,
+        );
+        await tester.pump(kDoubleTapTimeout);
+        expect(controller.selection, const TextSelection.collapsed(offset: 2));
 
-      // Straight below the caret: where the hidden collapsed handle sits.
-      await tester.tapAt(caretCenter(tester, 7), kind: PointerDeviceKind.mouse);
-      await tester.pump(kDoubleTapTimeout);
-      expect(controller.selection, const TextSelection.collapsed(offset: 7));
+        // Straight below the caret: where the hidden collapsed handle sits.
+        await tester.tapAt(
+          caretCenter(tester, 7),
+          kind: PointerDeviceKind.mouse,
+        );
+        await tester.pump(kDoubleTapTimeout);
+        expect(controller.selection, const TextSelection.collapsed(offset: 7));
 
-      controller.dispose();
-      await session.dispose();
-    }, variant: platforms);
+        controller.dispose();
+        await session.dispose();
+      },
+      variant: platforms,
+    );
   });
 
   group('magnifier', () {
@@ -418,7 +524,9 @@ void main() {
       await tester.pump();
     }
 
-    testWidgets('centers its view exactly on the gesture position', (tester) async {
+    testWidgets('centers its view exactly on the gesture position', (
+      tester,
+    ) async {
       const focal = Offset(300, 500);
       await pumpMagnifier(
         tester,
@@ -466,13 +574,18 @@ void main() {
           ),
         );
 
-        final magnifier = tester.widget<RawMagnifier>(find.byType(RawMagnifier));
-        final magnifierCenter = tester.getRect(find.byType(RawMagnifier)).center;
+        final magnifier = tester.widget<RawMagnifier>(
+          find.byType(RawMagnifier),
+        );
+        final magnifierCenter = tester
+            .getRect(find.byType(RawMagnifier))
+            .center;
         final shown = magnifierCenter + magnifier.focalPointOffset;
         expect(
           shown.dy,
           moreOrLessEquals(line.center.dy, epsilon: 0.5),
-          reason: 'should show the line the handle points to, not wherever on the handle the finger is',
+          reason:
+              'should show the line the handle points to, not wherever on the handle the finger is',
         );
         expect(shown.dx, moreOrLessEquals(gesturePosition.dx, epsilon: 0.5));
       },
@@ -487,22 +600,44 @@ void main() {
     // the way prose does, and dragging a handle after releasing already
     // gives character precision. TypstEditorGestureDetectorBuilder makes
     // the initial drag (before release) match that.
-    final platforms = TargetPlatformVariant({TargetPlatform.android, TargetPlatform.linux});
+    final platforms = TargetPlatformVariant({
+      TargetPlatform.android,
+      TargetPlatform.linux,
+    });
 
     Offset caretCenter(WidgetTester tester, int offset) {
-      final render = tester.state<EditableTextState>(find.byType(EditableText)).renderEditable;
-      return render.localToGlobal(render.getLocalRectForCaret(TextPosition(offset: offset)).center);
+      final render = tester
+          .state<EditableTextState>(find.byType(EditableText))
+          .renderEditable;
+      return render.localToGlobal(
+        render.getLocalRectForCaret(TextPosition(offset: offset)).center,
+      );
     }
 
-    testWidgets('extends one character at a time, not by whole words', (tester) async {
+    testWidgets('extends one character at a time, not by whole words', (
+      tester,
+    ) async {
       final fake = FakeRustSession();
-      final session = TypstSession.forTesting(fake, const TypstSessionOptions());
-      final controller = TypstEditorController(session: session, text: 'some words here to select carefully');
-      await tester.pumpWidget(MaterialApp(home: Scaffold(body: TypstCodeEditor(controller: controller))));
+      final session = TypstSession.forTesting(
+        fake,
+        const TypstSessionOptions(),
+      );
+      final controller = TypstEditorController(
+        session: session,
+        text: 'some words here to select carefully',
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: TypstCodeEditor(controller: controller)),
+        ),
+      );
       await tester.pump();
 
       // Long-press "to" (offsets 16..18) — a standard word-grab start.
-      final press = await tester.startGesture(caretCenter(tester, 17), kind: PointerDeviceKind.touch);
+      final press = await tester.startGesture(
+        caretCenter(tester, 17),
+        kind: PointerDeviceKind.touch,
+      );
       await tester.pump(const Duration(milliseconds: 600));
       expect(controller.selection.textInside(controller.text), 'to');
 
@@ -517,67 +652,108 @@ void main() {
       await session.dispose();
     }, variant: platforms);
 
-    testWidgets('dragging back past the original word keeps a valid, shrinking selection', (tester) async {
-      final fake = FakeRustSession();
-      final session = TypstSession.forTesting(fake, const TypstSessionOptions());
-      final controller = TypstEditorController(session: session, text: 'some words here to select carefully');
-      await tester.pumpWidget(MaterialApp(home: Scaffold(body: TypstCodeEditor(controller: controller))));
-      await tester.pump();
+    testWidgets(
+      'dragging back past the original word keeps a valid, shrinking selection',
+      (tester) async {
+        final fake = FakeRustSession();
+        final session = TypstSession.forTesting(
+          fake,
+          const TypstSessionOptions(),
+        );
+        final controller = TypstEditorController(
+          session: session,
+          text: 'some words here to select carefully',
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(body: TypstCodeEditor(controller: controller)),
+          ),
+        );
+        await tester.pump();
 
-      final press = await tester.startGesture(caretCenter(tester, 17), kind: PointerDeviceKind.touch);
-      await tester.pump(const Duration(milliseconds: 600));
-      // Establish the fixed edge by first dragging right...
-      await press.moveTo(caretCenter(tester, 22));
-      await tester.pump(const Duration(milliseconds: 20));
-      // ...then drag left, back across the original word and past it.
-      await press.moveTo(caretCenter(tester, 12));
-      await tester.pump(const Duration(milliseconds: 20));
-      expect(controller.selection.isCollapsed, isFalse);
-      expect(controller.selection.textInside(controller.text), 'ere ');
+        final press = await tester.startGesture(
+          caretCenter(tester, 17),
+          kind: PointerDeviceKind.touch,
+        );
+        await tester.pump(const Duration(milliseconds: 600));
+        // Establish the fixed edge by first dragging right...
+        await press.moveTo(caretCenter(tester, 22));
+        await tester.pump(const Duration(milliseconds: 20));
+        // ...then drag left, back across the original word and past it.
+        await press.moveTo(caretCenter(tester, 12));
+        await tester.pump(const Duration(milliseconds: 20));
+        expect(controller.selection.isCollapsed, isFalse);
+        expect(controller.selection.textInside(controller.text), 'ere ');
 
-      await press.up();
-      controller.dispose();
-      await session.dispose();
-    }, variant: platforms);
+        await press.up();
+        controller.dispose();
+        await session.dispose();
+      },
+      variant: platforms,
+    );
   });
 
-  testWidgets('shows a line-number gutter by default, hidden via showLineNumbers: false', (tester) async {
-    final fake = FakeRustSession();
-    final session = TypstSession.forTesting(fake, const TypstSessionOptions());
-    final controller = TypstEditorController(session: session, text: 'one\ntwo\nthree');
+  testWidgets(
+    'shows a line-number gutter by default, hidden via showLineNumbers: false',
+    (tester) async {
+      final fake = FakeRustSession();
+      final session = TypstSession.forTesting(
+        fake,
+        const TypstSessionOptions(),
+      );
+      final controller = TypstEditorController(
+        session: session,
+        text: 'one\ntwo\nthree',
+      );
 
-    await tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: SizedBox(height: 300, child: TypstCodeEditor(controller: controller)))),
-    );
-    await tester.pump();
-
-    expect(find.text('1'), findsOneWidget);
-    expect(find.text('2'), findsOneWidget);
-    expect(find.text('3'), findsOneWidget);
-    expect(find.byType(TypstLineNumberGutter), findsOneWidget);
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            height: 300,
-            child: TypstCodeEditor(controller: controller, showLineNumbers: false),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              height: 300,
+              child: TypstCodeEditor(controller: controller),
+            ),
           ),
         ),
-      ),
-    );
-    await tester.pump();
+      );
+      await tester.pump();
 
-    expect(find.byType(TypstLineNumberGutter), findsNothing);
+      expect(find.text('1'), findsOneWidget);
+      expect(find.text('2'), findsOneWidget);
+      expect(find.text('3'), findsOneWidget);
+      expect(find.byType(TypstLineNumberGutter), findsOneWidget);
 
-    controller.dispose();
-    await session.dispose();
-  });
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              height: 300,
+              child: TypstCodeEditor(
+                controller: controller,
+                showLineNumbers: false,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
 
-  testWidgets('tapping the editor requests focus (gesture wiring is live)', (tester) async {
+      expect(find.byType(TypstLineNumberGutter), findsNothing);
+
+      controller.dispose();
+      await session.dispose();
+    },
+  );
+
+  testWidgets('tapping the editor requests focus (gesture wiring is live)', (
+    tester,
+  ) async {
     final fake = FakeRustSession();
     final session = TypstSession.forTesting(fake, const TypstSessionOptions());
-    final controller = TypstEditorController(session: session, text: 'hello world');
+    final controller = TypstEditorController(
+      session: session,
+      text: 'hello world',
+    );
     final focusNode = FocusNode();
 
     await tester.pumpWidget(
@@ -614,7 +790,8 @@ void main() {
     // "the buffer moved on, hide whatever was offered", a tap issued after
     // the popup is already showing dismisses it before a subsequent key
     // event reaches it.
-    Future<(FakeRustSession, TypstSession, TypstEditorController)> triggerCompletions(
+    Future<(FakeRustSession, TypstSession, TypstEditorController)>
+    triggerCompletions(
       WidgetTester tester, {
       required String text,
       required int cursor,
@@ -628,14 +805,21 @@ void main() {
       theFake
         ..completionsToReturn = completions
         ..applyFromUtf16ToReturn = applyFromUtf16;
-      final session = TypstSession.forTesting(theFake, const TypstSessionOptions());
+      final session = TypstSession.forTesting(
+        theFake,
+        const TypstSessionOptions(),
+      );
       await session.compile(text);
       final controller = TypstEditorController(session: session, text: '');
 
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: TypstCodeEditor(controller: controller, focusNode: focusNode, detailsBuilder: detailsBuilder),
+            body: TypstCodeEditor(
+              controller: controller,
+              focusNode: focusNode,
+              detailsBuilder: detailsBuilder,
+            ),
           ),
         ),
       );
@@ -646,7 +830,10 @@ void main() {
         await tester.pump();
       }
 
-      controller.value = TextEditingValue(text: text, selection: TextSelection.collapsed(offset: cursor));
+      controller.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: cursor),
+      );
       // Past _completionDebounceDelay (150ms): the implicit trigger no
       // longer fires immediately, see typst_code_editor.dart's
       // _scheduleCompletions. session.compile(text) above already matches
@@ -656,59 +843,87 @@ void main() {
       return (theFake, session, controller);
     }
 
-    const lorem = rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'lorem', apply: 'lorem(\${})');
+    const lorem = rust.TypstCompletion(
+      kind: rust.TypstCompletionKind.func(),
+      label: 'lorem',
+      apply: 'lorem(\${})',
+    );
     const letBinding = rust.TypstCompletion(
       kind: rust.TypstCompletionKind.syntax(),
       label: 'let binding',
       apply: 'let',
     );
 
-    testWidgets('a trigger shows a popup filtered to completions matching the typed prefix', (tester) async {
-      final (_, session, controller) = await triggerCompletions(
-        tester,
-        text: '#lo',
-        cursor: 3,
-        completions: const [lorem, letBinding],
-      );
+    testWidgets(
+      'a trigger shows a popup filtered to completions matching the typed prefix',
+      (tester) async {
+        final (_, session, controller) = await triggerCompletions(
+          tester,
+          text: '#lo',
+          cursor: 3,
+          completions: const [lorem, letBinding],
+        );
 
-      expect(find.text('lorem'), findsOneWidget);
-      expect(find.text('let binding'), findsNothing, reason: "'let' does not start with the typed 'lo'");
+        expect(find.text('lorem'), findsOneWidget);
+        expect(
+          find.text('let binding'),
+          findsNothing,
+          reason: "'let' does not start with the typed 'lo'",
+        );
 
-      controller.dispose();
-      await session.dispose();
-    });
+        controller.dispose();
+        await session.dispose();
+      },
+    );
 
-    testWidgets('an implicit trigger compiles first when the World has not caught up to this text', (
+    testWidgets(
+      'an implicit trigger compiles first when the World has not caught up to this text',
+      (tester) async {
+        // Unlike the triggerCompletions helper (which pre-compiles to isolate
+        // other behavior), this deliberately does NOT call session.compile()
+        // before the edit — reproducing the actual reported bug: a host
+        // app's own page-render compile is debounced and, in real typing,
+        // essentially never catches up before a naive freshness check would
+        // run. lastCompiledSource is null here at request time; the fix is
+        // that _runCompletionsRequest compiles itself when it doesn't match.
+        final fake = FakeRustSession()
+          ..completionsToReturn = const [lorem]
+          ..applyFromUtf16ToReturn = 1;
+        final session = TypstSession.forTesting(
+          fake,
+          const TypstSessionOptions(),
+        );
+        final controller = TypstEditorController(session: session, text: '');
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(body: TypstCodeEditor(controller: controller)),
+          ),
+        );
+        await tester.pump();
+        expect(
+          session.lastCompiledSource,
+          isNull,
+          reason: 'nothing has compiled yet — this is the point',
+        );
+
+        controller.value = const TextEditingValue(
+          text: '#lo',
+          selection: TextSelection.collapsed(offset: 3),
+        );
+        await tester.pump(const Duration(milliseconds: 160));
+
+        expect(find.text('lorem'), findsOneWidget);
+        expect(session.lastCompiledSource, '#lo');
+
+        controller.dispose();
+        await session.dispose();
+      },
+    );
+
+    testWidgets('a long detail string does not overflow the popup row', (
       tester,
     ) async {
-      // Unlike the triggerCompletions helper (which pre-compiles to isolate
-      // other behavior), this deliberately does NOT call session.compile()
-      // before the edit — reproducing the actual reported bug: a host
-      // app's own page-render compile is debounced and, in real typing,
-      // essentially never catches up before a naive freshness check would
-      // run. lastCompiledSource is null here at request time; the fix is
-      // that _runCompletionsRequest compiles itself when it doesn't match.
-      final fake = FakeRustSession()
-        ..completionsToReturn = const [lorem]
-        ..applyFromUtf16ToReturn = 1;
-      final session = TypstSession.forTesting(fake, const TypstSessionOptions());
-      final controller = TypstEditorController(session: session, text: '');
-
-      await tester.pumpWidget(MaterialApp(home: Scaffold(body: TypstCodeEditor(controller: controller))));
-      await tester.pump();
-      expect(session.lastCompiledSource, isNull, reason: 'nothing has compiled yet — this is the point');
-
-      controller.value = const TextEditingValue(text: '#lo', selection: TextSelection.collapsed(offset: 3));
-      await tester.pump(const Duration(milliseconds: 160));
-
-      expect(find.text('lorem'), findsOneWidget);
-      expect(session.lastCompiledSource, '#lo');
-
-      controller.dispose();
-      await session.dispose();
-    });
-
-    testWidgets('a long detail string does not overflow the popup row', (tester) async {
       // The detail text in a completion row must be a bounded-width widget;
       // a bare Text(detail) isn't, and a long one-sentence description used
       // to trip the old ListTile-based row's own layout assertion (reported
@@ -718,7 +933,8 @@ void main() {
         kind: rust.TypstCompletionKind.func(),
         label: 'lorem',
         apply: 'lorem(\${})',
-        detail: 'Generates a given amount of placeholder Lorem Ipsum text, for filling in layouts.',
+        detail:
+            'Generates a given amount of placeholder Lorem Ipsum text, for filling in layouts.',
       );
       final (_, session, controller) = await triggerCompletions(
         tester,
@@ -734,7 +950,9 @@ void main() {
       await session.dispose();
     });
 
-    testWidgets('the selected row shows its full detail; other rows do not', (tester) async {
+    testWidgets('the selected row shows its full detail; other rows do not', (
+      tester,
+    ) async {
       const alpha = rust.TypstCompletion(
         kind: rust.TypstCompletionKind.func(),
         label: 'alpha',
@@ -757,71 +975,94 @@ void main() {
         focusNode: focusNode,
       );
 
-      expect(find.text('Alpha description'), findsOneWidget, reason: 'alpha is selected by default (index 0)');
+      expect(
+        find.text('Alpha description'),
+        findsOneWidget,
+        reason: 'alpha is selected by default (index 0)',
+      );
       expect(find.text('Beta description'), findsNothing);
 
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.pump();
 
-      expect(find.text('Alpha description'), findsNothing, reason: 'selection moved away from alpha');
-      expect(find.text('Beta description'), findsOneWidget, reason: 'selection moved to beta');
+      expect(
+        find.text('Alpha description'),
+        findsNothing,
+        reason: 'selection moved away from alpha',
+      );
+      expect(
+        find.text('Beta description'),
+        findsOneWidget,
+        reason: 'selection moved to beta',
+      );
 
       focusNode.dispose();
       controller.dispose();
       await session.dispose();
     });
 
-    testWidgets('the popup and details panel stay within a short window instead of being cropped', (tester) async {
-      // A window this short can't fit the popup's own un-clamped preferred
-      // height (200) below a caret sitting near the top of it — pre-fix,
-      // Positioned(top: anchor.dy + 4) let it render past the window's
-      // bottom edge, and the Overlay's own Stack hard-clipped whatever
-      // didn't fit, cropping rows (and the details panel) rather than
-      // scrolling them into a shorter, still fully visible popup.
-      tester.view.physicalSize = const Size(500, 120);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
+    testWidgets(
+      'the popup and details panel stay within a short window instead of being cropped',
+      (tester) async {
+        // A window this short can't fit the popup's own un-clamped preferred
+        // height (200) below a caret sitting near the top of it — pre-fix,
+        // Positioned(top: anchor.dy + 4) let it render past the window's
+        // bottom edge, and the Overlay's own Stack hard-clipped whatever
+        // didn't fit, cropping rows (and the details panel) rather than
+        // scrolling them into a shorter, still fully visible popup.
+        tester.view.physicalSize = const Size(500, 120);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
 
-      final items = [
-        for (var i = 0; i < 8; i++)
-          rust.TypstCompletion(
-            kind: rust.TypstCompletionKind.func(),
-            label: 'item$i',
-            apply: 'item$i',
-            detail: 'a reasonably long description for item$i',
-          ),
-      ];
-      final focusNode = FocusNode();
-      final fake = FakeRustSession()..functionInfoToReturn = rust.TypstFunctionInfo(name: 'item0', signature: _sig('item0(x)'));
-      final (_, session, controller) = await triggerCompletions(
-        tester,
-        text: '#',
-        cursor: 1,
-        completions: items,
-        focusNode: focusNode,
-        fake: fake,
-        detailsBuilder: (context, info) => Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
-      );
-      await tester.pump(const Duration(milliseconds: 1)); // let the details fetch land
+        final items = [
+          for (var i = 0; i < 8; i++)
+            rust.TypstCompletion(
+              kind: rust.TypstCompletionKind.func(),
+              label: 'item$i',
+              apply: 'item$i',
+              detail: 'a reasonably long description for item$i',
+            ),
+        ];
+        final focusNode = FocusNode();
+        final fake = FakeRustSession()
+          ..functionInfoToReturn = rust.TypstFunctionInfo(
+            name: 'item0',
+            signature: _sig('item0(x)'),
+          );
+        final (_, session, controller) = await triggerCompletions(
+          tester,
+          text: '#',
+          cursor: 1,
+          completions: items,
+          focusNode: focusNode,
+          fake: fake,
+          detailsBuilder: (context, info) =>
+              Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
+        );
+        await tester.pump(
+          const Duration(milliseconds: 1),
+        ); // let the details fetch land
 
-      final windowBottom = 120.0;
-      final popupRect = tester.getRect(find.byType(Scrollbar));
-      expect(
-        popupRect.bottom,
-        lessThanOrEqualTo(windowBottom + 0.5),
-        reason: 'the completions list must fit (and scroll internally), not render past the window',
-      );
-      final detailsRect = tester.getRect(find.text('DETAILS:item0(x)'));
-      expect(
-        detailsRect.bottom,
-        lessThanOrEqualTo(windowBottom + 0.5),
-        reason: 'the details panel must also fit within the window',
-      );
+        final windowBottom = 120.0;
+        final popupRect = tester.getRect(find.byType(Scrollbar));
+        expect(
+          popupRect.bottom,
+          lessThanOrEqualTo(windowBottom + 0.5),
+          reason:
+              'the completions list must fit (and scroll internally), not render past the window',
+        );
+        final detailsRect = tester.getRect(find.text('DETAILS:item0(x)'));
+        expect(
+          detailsRect.bottom,
+          lessThanOrEqualTo(windowBottom + 0.5),
+          reason: 'the details panel must also fit within the window',
+        );
 
-      focusNode.dispose();
-      controller.dispose();
-      await session.dispose();
-    });
+        focusNode.dispose();
+        controller.dispose();
+        await session.dispose();
+      },
+    );
 
     // The details panel is often taller than the list beside it. Below the
     // caret, both hang from their top edges; above it, both must rest on
@@ -844,148 +1085,242 @@ void main() {
       final fake = FakeRustSession()
         ..completionsToReturn = items
         ..applyFromUtf16ToReturn = text.length
-        ..functionInfoToReturn = rust.TypstFunctionInfo(name: 'item0', signature: _sig('item0(x)'));
-      final session = TypstSession.forTesting(fake, const TypstSessionOptions());
+        ..functionInfoToReturn = rust.TypstFunctionInfo(
+          name: 'item0',
+          signature: _sig('item0(x)'),
+        );
+      final session = TypstSession.forTesting(
+        fake,
+        const TypstSessionOptions(),
+      );
       await session.compile(text);
       // The lines are laid out before `#` is typed, as when typing for real.
       // (Swapping all of them in at once, like `triggerCompletions` does,
       // lands in the frame that first builds the popup, which then opened
       // as if the caret were still on line 0.)
-      final controller = TypstEditorController(session: session, text: '\n' * line);
+      final controller = TypstEditorController(
+        session: session,
+        text: '\n' * line,
+      );
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: TypstCodeEditor(
               controller: controller,
-              detailsBuilder: (context, info) => const SizedBox(key: ValueKey('details'), width: 100, height: 300),
+              detailsBuilder: (context, info) => const SizedBox(
+                key: ValueKey('details'),
+                width: 100,
+                height: 300,
+              ),
             ),
           ),
         ),
       );
       await tester.pump();
-      controller.value = TextEditingValue(text: text, selection: TextSelection.collapsed(offset: text.length));
-      await tester.pump(const Duration(milliseconds: 160)); // completion debounce
-      await tester.pump(const Duration(milliseconds: 1)); // let the details fetch land
+      controller.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      );
+      await tester.pump(
+        const Duration(milliseconds: 160),
+      ); // completion debounce
+      await tester.pump(
+        const Duration(milliseconds: 1),
+      ); // let the details fetch land
 
-      final render = tester.state<EditableTextState>(find.byType(EditableText)).renderEditable;
-      final caret = render.getLocalRectForCaret(TextPosition(offset: text.length));
+      final render = tester
+          .state<EditableTextState>(find.byType(EditableText))
+          .renderEditable;
+      final caret = render.getLocalRectForCaret(
+        TextPosition(offset: text.length),
+      );
       final rects = (
         tester.getRect(find.byType(Scrollbar)),
         tester.getRect(find.byKey(const ValueKey('details'))),
-        Rect.fromPoints(render.localToGlobal(caret.topLeft), render.localToGlobal(caret.bottomRight)),
+        Rect.fromPoints(
+          render.localToGlobal(caret.topLeft),
+          render.localToGlobal(caret.bottomRight),
+        ),
       );
       controller.dispose();
       await session.dispose();
       return rects;
     }
 
-    testWidgets('opening below the caret, the list and a taller details panel align at the top', (tester) async {
-      final (list, details, caret) = await popupBesideTallDetails(tester, line: 0);
+    testWidgets(
+      'opening below the caret, the list and a taller details panel align at the top',
+      (tester) async {
+        final (list, details, caret) = await popupBesideTallDetails(
+          tester,
+          line: 0,
+        );
 
-      expect(details.top, moreOrLessEquals(caret.bottom + 4, epsilon: 0.5));
-      expect(list.top, moreOrLessEquals(details.top, epsilon: 0.5));
-    });
+        expect(details.top, moreOrLessEquals(caret.bottom + 4, epsilon: 0.5));
+        expect(list.top, moreOrLessEquals(details.top, epsilon: 0.5));
+      },
+    );
 
-    testWidgets('opening above the caret, the list and a taller details panel align at the bottom', (tester) async {
-      final (list, details, caret) = await popupBesideTallDetails(tester, line: 38);
-      final where = 'list $list, details $details, caret $caret';
+    testWidgets(
+      'opening above the caret, the list and a taller details panel align at the bottom',
+      (tester) async {
+        final (list, details, caret) = await popupBesideTallDetails(
+          tester,
+          line: 38,
+        );
+        final where = 'list $list, details $details, caret $caret';
 
-      expect(details.bottom, moreOrLessEquals(caret.top - 4, epsilon: 0.5), reason: where);
-      expect(list.bottom, moreOrLessEquals(details.bottom, epsilon: 0.5), reason: where);
-    });
+        expect(
+          details.bottom,
+          moreOrLessEquals(caret.top - 4, epsilon: 0.5),
+          reason: where,
+        );
+        expect(
+          list.bottom,
+          moreOrLessEquals(details.bottom, epsilon: 0.5),
+          reason: where,
+        );
+      },
+    );
 
-    testWidgets('arrow-up from the first item wraps to the last, scrolling the whole (now-taller) row into view', (
+    testWidgets(
+      'arrow-up from the first item wraps to the last, scrolling the whole (now-taller) row into view',
+      (tester) async {
+        // Each item carries a detail string so the wrapped-to row grows a
+        // second (description) line once selected — a plain jumpTo(the
+        // pre-selection maxScrollExtent estimate) lands short of that growth,
+        // cropping the description even though the label is visible. See
+        // _scrollSelectedIntoView's doc comment.
+        final items = [
+          for (var i = 0; i < 15; i++)
+            rust.TypstCompletion(
+              kind: rust.TypstCompletionKind.func(),
+              label: 'item$i',
+              apply: 'item$i',
+              detail:
+                  'This is a considerably long description string that should force multiple wrapped lines item$i',
+            ),
+        ];
+        final focusNode = FocusNode();
+        final (_, session, controller) = await triggerCompletions(
+          tester,
+          text: '#',
+          cursor: 1,
+          completions: items,
+          focusNode: focusNode,
+        );
+
+        final scrollbarRect = tester.getRect(find.byType(Scrollbar));
+        expect(
+          find.text('item14'),
+          findsNothing,
+          reason:
+              'ListView.builder never built the last row — it starts well below the visible popup',
+        );
+
+        // _moveCompletionSelection wraps (0 - 1) around to the last index —
+        // exactly the case a plain Scrollable.ensureVisible can't handle on
+        // its own, since that row was never built to begin with (just shown
+        // above) and so has no context to scroll to.
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+        await tester.pumpAndSettle();
+
+        expect(
+          tester.getRect(find.text('item14')).bottom,
+          lessThanOrEqualTo(scrollbarRect.bottom + 1.0),
+          reason:
+              'wrapping selection to the last item scrolled its label into view',
+        );
+        expect(
+          tester
+              .getRect(
+                find.text(
+                  'This is a considerably long description string that should force multiple wrapped lines item14',
+                ),
+              )
+              .bottom,
+          lessThanOrEqualTo(scrollbarRect.bottom + 1.0),
+          reason:
+              'the wrapped-to row grew a detail line once selected — that must be in view too, not just the label',
+        );
+
+        focusNode.dispose();
+        controller.dispose();
+        await session.dispose();
+      },
+    );
+
+    testWidgets(
+      'arrow-down from the last item wraps to the first, scrolling the whole (now-taller) row into view',
+      (tester) async {
+        final items = [
+          for (var i = 0; i < 15; i++)
+            rust.TypstCompletion(
+              kind: rust.TypstCompletionKind.func(),
+              label: 'item$i',
+              apply: 'item$i',
+              detail:
+                  'This is a considerably long description string that should force multiple wrapped lines item$i',
+            ),
+        ];
+        final focusNode = FocusNode();
+        final (_, session, controller) = await triggerCompletions(
+          tester,
+          text: '#',
+          cursor: 1,
+          completions: items,
+          focusNode: focusNode,
+        );
+
+        // Get to the last item first (same mechanism as the up-wrap case),
+        // then wrap forward off the end back to the first.
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+        await tester.pumpAndSettle();
+        final scrollbarRect = tester.getRect(find.byType(Scrollbar));
+        expect(
+          find.text('item0'),
+          findsNothing,
+          reason: 'scrolled to the bottom, item0 is no longer built',
+        );
+
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        await tester.pumpAndSettle();
+
+        expect(
+          tester.getRect(find.text('item0')).top,
+          greaterThanOrEqualTo(scrollbarRect.top - 1.0),
+        );
+        expect(
+          tester
+              .getRect(
+                find.text(
+                  'This is a considerably long description string that should force multiple wrapped lines item0',
+                ),
+              )
+              .bottom,
+          lessThanOrEqualTo(scrollbarRect.bottom + 1.0),
+          reason:
+              'the wrapped-to row grew a detail line once selected — that must be in view too, not just the label',
+        );
+
+        focusNode.dispose();
+        controller.dispose();
+        await session.dispose();
+      },
+    );
+
+    testWidgets('arrow keys move the popup selection, not the text caret', (
       tester,
     ) async {
-      // Each item carries a detail string so the wrapped-to row grows a
-      // second (description) line once selected — a plain jumpTo(the
-      // pre-selection maxScrollExtent estimate) lands short of that growth,
-      // cropping the description even though the label is visible. See
-      // _scrollSelectedIntoView's doc comment.
-      final items = [
-        for (var i = 0; i < 15; i++)
-          rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'item$i', apply: 'item$i', detail: 'This is a considerably long description string that should force multiple wrapped lines item$i'),
-      ];
-      final focusNode = FocusNode();
-      final (_, session, controller) = await triggerCompletions(
-        tester,
-        text: '#',
-        cursor: 1,
-        completions: items,
-        focusNode: focusNode,
+      const alpha = rust.TypstCompletion(
+        kind: rust.TypstCompletionKind.func(),
+        label: 'alpha',
+        apply: 'alpha',
       );
-
-      final scrollbarRect = tester.getRect(find.byType(Scrollbar));
-      expect(
-        find.text('item14'),
-        findsNothing,
-        reason: 'ListView.builder never built the last row — it starts well below the visible popup',
+      const beta = rust.TypstCompletion(
+        kind: rust.TypstCompletionKind.func(),
+        label: 'beta',
+        apply: 'beta',
       );
-
-      // _moveCompletionSelection wraps (0 - 1) around to the last index —
-      // exactly the case a plain Scrollable.ensureVisible can't handle on
-      // its own, since that row was never built to begin with (just shown
-      // above) and so has no context to scroll to.
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
-      await tester.pumpAndSettle();
-
-      expect(
-        tester.getRect(find.text('item14')).bottom,
-        lessThanOrEqualTo(scrollbarRect.bottom + 1.0),
-        reason: 'wrapping selection to the last item scrolled its label into view',
-      );
-      expect(
-        tester.getRect(find.text('This is a considerably long description string that should force multiple wrapped lines item14')).bottom,
-        lessThanOrEqualTo(scrollbarRect.bottom + 1.0),
-        reason: 'the wrapped-to row grew a detail line once selected — that must be in view too, not just the label',
-      );
-
-      focusNode.dispose();
-      controller.dispose();
-      await session.dispose();
-    });
-
-    testWidgets('arrow-down from the last item wraps to the first, scrolling the whole (now-taller) row into view', (
-      tester,
-    ) async {
-      final items = [
-        for (var i = 0; i < 15; i++)
-          rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'item$i', apply: 'item$i', detail: 'This is a considerably long description string that should force multiple wrapped lines item$i'),
-      ];
-      final focusNode = FocusNode();
-      final (_, session, controller) = await triggerCompletions(
-        tester,
-        text: '#',
-        cursor: 1,
-        completions: items,
-        focusNode: focusNode,
-      );
-
-      // Get to the last item first (same mechanism as the up-wrap case),
-      // then wrap forward off the end back to the first.
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
-      await tester.pumpAndSettle();
-      final scrollbarRect = tester.getRect(find.byType(Scrollbar));
-      expect(find.text('item0'), findsNothing, reason: 'scrolled to the bottom, item0 is no longer built');
-
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-      await tester.pumpAndSettle();
-
-      expect(tester.getRect(find.text('item0')).top, greaterThanOrEqualTo(scrollbarRect.top - 1.0));
-      expect(
-        tester.getRect(find.text('This is a considerably long description string that should force multiple wrapped lines item0')).bottom,
-        lessThanOrEqualTo(scrollbarRect.bottom + 1.0),
-        reason: 'the wrapped-to row grew a detail line once selected — that must be in view too, not just the label',
-      );
-
-      focusNode.dispose();
-      controller.dispose();
-      await session.dispose();
-    });
-
-    testWidgets('arrow keys move the popup selection, not the text caret', (tester) async {
-      const alpha = rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'alpha', apply: 'alpha');
-      const beta = rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'beta', apply: 'beta');
       final focusNode = FocusNode();
       final (_, session, controller) = await triggerCompletions(
         tester,
@@ -1001,13 +1336,21 @@ void main() {
 
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.pump();
-      expect(controller.selection.baseOffset, caretBefore, reason: 'arrow-down navigates the popup, not the caret');
+      expect(
+        controller.selection.baseOffset,
+        caretBefore,
+        reason: 'arrow-down navigates the popup, not the caret',
+      );
 
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.pump();
       // applyFromUtf16 (2) equals the cursor (2): an empty replace range, so
       // 'beta' is inserted right there rather than replacing anything.
-      expect(controller.text, '#lbeta', reason: 'arrow-down moved the popup selection to the second item');
+      expect(
+        controller.text,
+        '#lbeta',
+        reason: 'arrow-down moved the popup selection to the second item',
+      );
 
       focusNode.dispose();
       controller.dispose();
@@ -1035,108 +1378,125 @@ void main() {
       await session.dispose();
     });
 
-    testWidgets('enter applies the completion with its snippet stripped and the caret at the placeholder', (
-      tester,
-    ) async {
-      final focusNode = FocusNode();
-      final (_, session, controller) = await triggerCompletions(
-        tester,
-        text: '#l',
-        cursor: 2,
-        completions: const [lorem],
-        focusNode: focusNode,
-      );
-      expect(find.text('lorem'), findsOneWidget);
+    testWidgets(
+      'enter applies the completion with its snippet stripped and the caret at the placeholder',
+      (tester) async {
+        final focusNode = FocusNode();
+        final (_, session, controller) = await triggerCompletions(
+          tester,
+          text: '#l',
+          cursor: 2,
+          completions: const [lorem],
+          focusNode: focusNode,
+        );
+        expect(find.text('lorem'), findsOneWidget);
 
-      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-      await tester.pump();
+        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+        await tester.pump();
 
-      // applyFromUtf16 (1, right after '#') to the cursor (2) is replaced by
-      // 'lorem(${})' with its placeholder stripped: 'lorem()', caret
-      // between the parens.
-      expect(controller.text, '#lorem()');
-      expect(controller.selection, const TextSelection.collapsed(offset: 7));
+        // applyFromUtf16 (1, right after '#') to the cursor (2) is replaced by
+        // 'lorem(${})' with its placeholder stripped: 'lorem()', caret
+        // between the parens.
+        expect(controller.text, '#lorem()');
+        expect(controller.selection, const TextSelection.collapsed(offset: 7));
 
-      focusNode.dispose();
-      controller.dispose();
-      await session.dispose();
-    });
+        focusNode.dispose();
+        controller.dispose();
+        await session.dispose();
+      },
+    );
 
-    testWidgets('tab cycles to the next snippet stop without losing focus, even after typing at the first', (
-      tester,
-    ) async {
-      // Two placeholders — the condition slot, then between the braces —
-      // mirrors the reported case (an if/else snippet): apply it, type a
-      // condition into the first stop, then Tab to the second.
-      const ifSnippet = rust.TypstCompletion(kind: rust.TypstCompletionKind.syntax(), label: 'if', apply: 'if\${} {\${}}');
-      final fake = FakeRustSession()
-        ..completionsToReturn = const [ifSnippet]
-        ..applyFromUtf16ToReturn = 1;
-      final session = TypstSession.forTesting(fake, const TypstSessionOptions());
-      await session.compile('#i');
-      final controller = TypstEditorController(session: session, text: '');
-      final focusNode = FocusNode();
+    testWidgets(
+      'tab cycles to the next snippet stop without losing focus, even after typing at the first',
+      (tester) async {
+        // Two placeholders — the condition slot, then between the braces —
+        // mirrors the reported case (an if/else snippet): apply it, type a
+        // condition into the first stop, then Tab to the second.
+        const ifSnippet = rust.TypstCompletion(
+          kind: rust.TypstCompletionKind.syntax(),
+          label: 'if',
+          apply: 'if\${} {\${}}',
+        );
+        final fake = FakeRustSession()
+          ..completionsToReturn = const [ifSnippet]
+          ..applyFromUtf16ToReturn = 1;
+        final session = TypstSession.forTesting(
+          fake,
+          const TypstSessionOptions(),
+        );
+        await session.compile('#i');
+        final controller = TypstEditorController(session: session, text: '');
+        final focusNode = FocusNode();
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Column(
-              children: [
-                TypstCodeEditor(controller: controller, focusNode: focusNode),
-                // A second focusable widget: without one, Tab has nowhere
-                // else to go, so focusNode.hasFocus would stay true
-                // regardless of whether the key event was actually
-                // consumed — masking exactly the reported bug, where a
-                // *real* app has other controls (there, a toggle button)
-                // Tab lands on once Flutter's own focus traversal steals it.
-                TextButton(onPressed: () {}, child: const Text('elsewhere')),
-              ],
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Column(
+                children: [
+                  TypstCodeEditor(controller: controller, focusNode: focusNode),
+                  // A second focusable widget: without one, Tab has nowhere
+                  // else to go, so focusNode.hasFocus would stay true
+                  // regardless of whether the key event was actually
+                  // consumed — masking exactly the reported bug, where a
+                  // *real* app has other controls (there, a toggle button)
+                  // Tab lands on once Flutter's own focus traversal steals it.
+                  TextButton(onPressed: () {}, child: const Text('elsewhere')),
+                ],
+              ),
             ),
           ),
-        ),
-      );
-      await tester.pump();
-      focusNode.requestFocus();
-      await tester.pump();
+        );
+        await tester.pump();
+        focusNode.requestFocus();
+        await tester.pump();
 
-      controller.value = const TextEditingValue(text: '#i', selection: TextSelection.collapsed(offset: 2));
-      await tester.pump(const Duration(milliseconds: 160));
-      expect(find.text('if'), findsOneWidget);
+        controller.value = const TextEditingValue(
+          text: '#i',
+          selection: TextSelection.collapsed(offset: 2),
+        );
+        await tester.pump(const Duration(milliseconds: 160));
+        expect(find.text('if'), findsOneWidget);
 
-      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-      await tester.pump();
-      expect(controller.text, '#if {}');
-      expect(
-        controller.selection,
-        const TextSelection.collapsed(offset: 3),
-        reason: 'caret on the first stop, right after "if"',
-      );
+        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+        await tester.pump();
+        expect(controller.text, '#if {}');
+        expect(
+          controller.selection,
+          const TextSelection.collapsed(offset: 3),
+          reason: 'caret on the first stop, right after "if"',
+        );
 
-      // Type at the first stop, as filling in the condition would — this is
-      // exactly what makes a naive "match the remembered offset" design
-      // fail: the second stop must shift by however much was typed.
-      const typed = 'cond';
-      controller.value = TextEditingValue(
-        text: controller.text.replaceRange(3, 3, typed),
-        selection: const TextSelection.collapsed(offset: 3 + typed.length),
-      );
-      await tester.pump();
-      expect(controller.text, '#ifcond {}');
+        // Type at the first stop, as filling in the condition would — this is
+        // exactly what makes a naive "match the remembered offset" design
+        // fail: the second stop must shift by however much was typed.
+        const typed = 'cond';
+        controller.value = TextEditingValue(
+          text: controller.text.replaceRange(3, 3, typed),
+          selection: const TextSelection.collapsed(offset: 3 + typed.length),
+        );
+        await tester.pump();
+        expect(controller.text, '#ifcond {}');
 
-      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
-      await tester.pump();
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
 
-      expect(focusNode.hasFocus, isTrue, reason: 'Tab must not fall through to focus traversal here');
-      expect(
-        controller.selection,
-        const TextSelection.collapsed(offset: 9),
-        reason: 'second stop, between the curly braces, shifted by the 4 typed characters',
-      );
+        expect(
+          focusNode.hasFocus,
+          isTrue,
+          reason: 'Tab must not fall through to focus traversal here',
+        );
+        expect(
+          controller.selection,
+          const TextSelection.collapsed(offset: 9),
+          reason:
+              'second stop, between the curly braces, shifted by the 4 typed characters',
+        );
 
-      focusNode.dispose();
-      controller.dispose();
-      await session.dispose();
-    });
+        focusNode.dispose();
+        controller.dispose();
+        await session.dispose();
+      },
+    );
 
     testWidgets(
       'an implicit completions popup opening mid-snippet does not steal tab from advancing the snippet',
@@ -1149,12 +1509,23 @@ void main() {
         // completions debounce below, unlike the previous test (which
         // never advanced the fake clock far enough to give the debounce a
         // chance to fire).
-        const ifSnippet = rust.TypstCompletion(kind: rust.TypstCompletionKind.syntax(), label: 'if', apply: 'if\${} {\${}}');
-        const trivialMatch = rust.TypstCompletion(kind: rust.TypstCompletionKind.syntax(), label: 'cond', apply: 'cond');
+        const ifSnippet = rust.TypstCompletion(
+          kind: rust.TypstCompletionKind.syntax(),
+          label: 'if',
+          apply: 'if\${} {\${}}',
+        );
+        const trivialMatch = rust.TypstCompletion(
+          kind: rust.TypstCompletionKind.syntax(),
+          label: 'cond',
+          apply: 'cond',
+        );
         final fake = FakeRustSession()
           ..completionsToReturn = const [ifSnippet]
           ..applyFromUtf16ToReturn = 1;
-        final session = TypstSession.forTesting(fake, const TypstSessionOptions());
+        final session = TypstSession.forTesting(
+          fake,
+          const TypstSessionOptions(),
+        );
         await session.compile('#i');
         final controller = TypstEditorController(session: session, text: '');
         final focusNode = FocusNode();
@@ -1175,7 +1546,10 @@ void main() {
         focusNode.requestFocus();
         await tester.pump();
 
-        controller.value = const TextEditingValue(text: '#i', selection: TextSelection.collapsed(offset: 2));
+        controller.value = const TextEditingValue(
+          text: '#i',
+          selection: TextSelection.collapsed(offset: 2),
+        );
         await tester.pump(const Duration(milliseconds: 160));
         expect(find.text('if'), findsOneWidget);
 
@@ -1184,14 +1558,19 @@ void main() {
         expect(controller.selection, const TextSelection.collapsed(offset: 3));
 
         fake.completionsToReturn = const [trivialMatch];
-        fake.applyFromUtf16ToReturn = 3; // right after "if", where "cond" is being typed
+        fake.applyFromUtf16ToReturn =
+            3; // right after "if", where "cond" is being typed
         const typed = 'cond';
         controller.value = TextEditingValue(
           text: controller.text.replaceRange(3, 3, typed),
           selection: const TextSelection.collapsed(offset: 3 + typed.length),
         );
         await tester.pump(const Duration(milliseconds: 160));
-        expect(find.text('cond'), findsWidgets, reason: 'the implicit popup is genuinely open at this point');
+        expect(
+          find.text('cond'),
+          findsWidgets,
+          reason: 'the implicit popup is genuinely open at this point',
+        );
 
         await tester.sendKeyEvent(LogicalKeyboardKey.tab);
         await tester.pump();
@@ -1200,9 +1579,15 @@ void main() {
         expect(
           controller.selection,
           const TextSelection.collapsed(offset: 9),
-          reason: 'tab must advance the snippet, not apply whatever completion incidentally popped up',
+          reason:
+              'tab must advance the snippet, not apply whatever completion incidentally popped up',
         );
-        expect(controller.text, '#ifcond {}', reason: 'the incidental completion must not have been applied instead');
+        expect(
+          controller.text,
+          '#ifcond {}',
+          reason:
+              'the incidental completion must not have been applied instead',
+        );
 
         focusNode.dispose();
         controller.dispose();
@@ -1210,91 +1595,137 @@ void main() {
       },
     );
 
-    testWidgets('a completion result that arrives after the buffer moved on is not shown', (tester) async {
-      final fake = FakeRustSession()
-        ..completionsToReturn = const [lorem]
-        ..applyFromUtf16ToReturn = 1
-        ..completionsGate = Completer<void>();
-      final session = TypstSession.forTesting(fake, const TypstSessionOptions());
-      await session.compile('#l');
-      final controller = TypstEditorController(session: session, text: '');
+    testWidgets(
+      'a completion result that arrives after the buffer moved on is not shown',
+      (tester) async {
+        final fake = FakeRustSession()
+          ..completionsToReturn = const [lorem]
+          ..applyFromUtf16ToReturn = 1
+          ..completionsGate = Completer<void>();
+        final session = TypstSession.forTesting(
+          fake,
+          const TypstSessionOptions(),
+        );
+        await session.compile('#l');
+        final controller = TypstEditorController(session: session, text: '');
 
-      await tester.pumpWidget(MaterialApp(home: Scaffold(body: TypstCodeEditor(controller: controller))));
-      await tester.pump();
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(body: TypstCodeEditor(controller: controller)),
+          ),
+        );
+        await tester.pump();
 
-      controller.value = const TextEditingValue(text: '#l', selection: TextSelection.collapsed(offset: 2));
-      // Past _completionDebounceDelay: dispatches the request, which
-      // reaches completions() (gated, held open) since lastCompiledSource
-      // already matches '#l' from the compile() above — the "compile if
-      // stale" step is a no-op here too.
-      await tester.pump(const Duration(milliseconds: 160));
+        controller.value = const TextEditingValue(
+          text: '#l',
+          selection: TextSelection.collapsed(offset: 2),
+        );
+        // Past _completionDebounceDelay: dispatches the request, which
+        // reaches completions() (gated, held open) since lastCompiledSource
+        // already matches '#l' from the compile() above — the "compile if
+        // stale" step is a no-op here too.
+        await tester.pump(const Duration(milliseconds: 160));
 
-      // The buffer moves on (represented here by the native side's own
-      // registered source changing, exactly the case
-      // TypstSession.lastCompiledSource exists to detect) while the
-      // completions() call above is still gated/in flight.
-      await session.compile('#x');
+        // The buffer moves on (represented here by the native side's own
+        // registered source changing, exactly the case
+        // TypstSession.lastCompiledSource exists to detect) while the
+        // completions() call above is still gated/in flight.
+        await session.compile('#x');
 
-      fake.completionsGate!.complete();
-      await tester.pump(const Duration(milliseconds: 1));
+        fake.completionsGate!.complete();
+        await tester.pump(const Duration(milliseconds: 1));
 
-      expect(find.text('lorem'), findsNothing, reason: 'stale result must not be shown');
+        expect(
+          find.text('lorem'),
+          findsNothing,
+          reason: 'stale result must not be shown',
+        );
 
-      controller.dispose();
-      await session.dispose();
-    });
+        controller.dispose();
+        await session.dispose();
+      },
+    );
 
-    testWidgets('typing a fuzzy (non-contiguous) match still finds the completion', (tester) async {
-      const setStyle = rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'set-style', apply: 'set-style(\${})');
-      // 's','e','t','s','t','y' is a subsequence of 'set-style' (skipping
-      // the '-') but not a prefix of it — exercises the fuzzy fallback, not
-      // the ordinary prefix filter.
-      final (_, session, controller) = await triggerCompletions(
-        tester,
-        text: '#setsty',
-        cursor: 7,
-        completions: const [setStyle],
-        applyFromUtf16: 1,
+    testWidgets(
+      'typing a fuzzy (non-contiguous) match still finds the completion',
+      (tester) async {
+        const setStyle = rust.TypstCompletion(
+          kind: rust.TypstCompletionKind.func(),
+          label: 'set-style',
+          apply: 'set-style(\${})',
+        );
+        // 's','e','t','s','t','y' is a subsequence of 'set-style' (skipping
+        // the '-') but not a prefix of it — exercises the fuzzy fallback, not
+        // the ordinary prefix filter.
+        final (_, session, controller) = await triggerCompletions(
+          tester,
+          text: '#setsty',
+          cursor: 7,
+          completions: const [setStyle],
+          applyFromUtf16: 1,
+        );
+
+        expect(find.text('set-style'), findsOneWidget);
+
+        controller.dispose();
+        await session.dispose();
+      },
+    );
+
+    testWidgets(
+      'a fuzzy match never outranks a real prefix match for the default selection',
+      (tester) async {
+        const prefixHit = rust.TypstCompletion(
+          kind: rust.TypstCompletionKind.func(),
+          label: 'style',
+          apply: 'style',
+        );
+        // Both 'style' (a real prefix match for 'sty') and 'set-style' (only a
+        // fuzzy match for 'sty' — s,t,y found in order, skipping 'e','-','l',
+        // 'e') are candidates; the prefix match must still be first/selected.
+        const setStyle = rust.TypstCompletion(
+          kind: rust.TypstCompletionKind.func(),
+          label: 'set-style',
+          apply: 'set-style(\${})',
+        );
+        final focusNode = FocusNode();
+        final (_, session, controller) = await triggerCompletions(
+          tester,
+          text: '#sty',
+          cursor: 4,
+          completions: const [setStyle, prefixHit],
+          applyFromUtf16: 1,
+          focusNode: focusNode,
+        );
+
+        expect(find.text('style'), findsOneWidget);
+        expect(find.text('set-style'), findsOneWidget);
+        // The default (index 0) selection shows its detail underneath — see
+        // defaultTypstCompletionsBuilder — so which one is selected is
+        // observable without reaching into private state.
+        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+        await tester.pump();
+        expect(
+          controller.text,
+          '#style',
+          reason:
+              'the real prefix match, not the fuzzy one, is applied by default',
+        );
+        focusNode.dispose();
+
+        controller.dispose();
+        await session.dispose();
+      },
+    );
+
+    testWidgets('a label that is not even a fuzzy match is excluded', (
+      tester,
+    ) async {
+      const unrelated = rust.TypstCompletion(
+        kind: rust.TypstCompletionKind.func(),
+        label: 'rect',
+        apply: 'rect(\${})',
       );
-
-      expect(find.text('set-style'), findsOneWidget);
-
-      controller.dispose();
-      await session.dispose();
-    });
-
-    testWidgets('a fuzzy match never outranks a real prefix match for the default selection', (tester) async {
-      const prefixHit = rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'style', apply: 'style');
-      // Both 'style' (a real prefix match for 'sty') and 'set-style' (only a
-      // fuzzy match for 'sty' — s,t,y found in order, skipping 'e','-','l',
-      // 'e') are candidates; the prefix match must still be first/selected.
-      const setStyle = rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'set-style', apply: 'set-style(\${})');
-      final focusNode = FocusNode();
-      final (_, session, controller) = await triggerCompletions(
-        tester,
-        text: '#sty',
-        cursor: 4,
-        completions: const [setStyle, prefixHit],
-        applyFromUtf16: 1,
-        focusNode: focusNode,
-      );
-
-      expect(find.text('style'), findsOneWidget);
-      expect(find.text('set-style'), findsOneWidget);
-      // The default (index 0) selection shows its detail underneath — see
-      // defaultTypstCompletionsBuilder — so which one is selected is
-      // observable without reaching into private state.
-      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-      await tester.pump();
-      expect(controller.text, '#style', reason: 'the real prefix match, not the fuzzy one, is applied by default');
-      focusNode.dispose();
-
-      controller.dispose();
-      await session.dispose();
-    });
-
-    testWidgets('a label that is not even a fuzzy match is excluded', (tester) async {
-      const unrelated = rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'rect', apply: 'rect(\${})');
       final (_, session, controller) = await triggerCompletions(
         tester,
         text: '#setsty',
@@ -1311,8 +1742,16 @@ void main() {
   });
 
   group('completion details panel', () {
-    const lorem = rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'lorem', apply: 'lorem(\${})');
-    const rectFunc = rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'rect', apply: 'rect(\${})');
+    const lorem = rust.TypstCompletion(
+      kind: rust.TypstCompletionKind.func(),
+      label: 'lorem',
+      apply: 'lorem(\${})',
+    );
+    const rectFunc = rust.TypstCompletion(
+      kind: rust.TypstCompletionKind.func(),
+      label: 'rect',
+      apply: 'rect(\${})',
+    );
     const letBinding = rust.TypstCompletion(
       kind: rust.TypstCompletionKind.syntax(),
       label: 'let binding',
@@ -1322,7 +1761,8 @@ void main() {
     // Reuses the same `triggerCompletions` helper from the 'completion
     // popup' group above (defined in this same `main()`), which pre-compiles
     // and drives the implicit trigger through its debounce.
-    Future<(FakeRustSession, TypstSession, TypstEditorController)> triggerCompletions(
+    Future<(FakeRustSession, TypstSession, TypstEditorController)>
+    triggerCompletions(
       WidgetTester tester, {
       required String text,
       required int cursor,
@@ -1336,14 +1776,21 @@ void main() {
       theFake
         ..completionsToReturn = completions
         ..applyFromUtf16ToReturn = applyFromUtf16;
-      final session = TypstSession.forTesting(theFake, const TypstSessionOptions());
+      final session = TypstSession.forTesting(
+        theFake,
+        const TypstSessionOptions(),
+      );
       await session.compile(text);
       final controller = TypstEditorController(session: session, text: '');
 
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: TypstCodeEditor(controller: controller, focusNode: focusNode, detailsBuilder: detailsBuilder),
+            body: TypstCodeEditor(
+              controller: controller,
+              focusNode: focusNode,
+              detailsBuilder: detailsBuilder,
+            ),
           ),
         ),
       );
@@ -1354,164 +1801,222 @@ void main() {
         await tester.pump();
       }
 
-      controller.value = TextEditingValue(text: text, selection: TextSelection.collapsed(offset: cursor));
+      controller.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: cursor),
+      );
       await tester.pump(const Duration(milliseconds: 160));
       return (theFake, session, controller);
     }
 
-    testWidgets('a function item is fetched and its details shown via detailsBuilder', (tester) async {
-      final fake = FakeRustSession()
-        ..functionInfoToReturn = rust.TypstFunctionInfo(name: 'lorem', signature: _sig('lorem(count)'));
-      final (_, session, controller) = await triggerCompletions(
-        tester,
-        text: '#l',
-        cursor: 2,
-        completions: const [lorem],
-        applyFromUtf16: 2,
-        fake: fake,
-        detailsBuilder: (context, info) => Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
-      );
+    testWidgets(
+      'a function item is fetched and its details shown via detailsBuilder',
+      (tester) async {
+        final fake = FakeRustSession()
+          ..functionInfoToReturn = rust.TypstFunctionInfo(
+            name: 'lorem',
+            signature: _sig('lorem(count)'),
+          );
+        final (_, session, controller) = await triggerCompletions(
+          tester,
+          text: '#l',
+          cursor: 2,
+          completions: const [lorem],
+          applyFromUtf16: 2,
+          fake: fake,
+          detailsBuilder: (context, info) =>
+              Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
+        );
 
-      expect(fake.functionInfoCalls, ['lorem']);
-      expect(find.text('DETAILS:lorem(count)'), findsOneWidget);
+        expect(fake.functionInfoCalls, ['lorem']);
+        expect(find.text('DETAILS:lorem(count)'), findsOneWidget);
 
-      controller.dispose();
-      await session.dispose();
-    });
+        controller.dispose();
+        await session.dispose();
+      },
+    );
 
-    testWidgets('a non-function completion is never fetched and shows no details panel', (tester) async {
-      final fake = FakeRustSession()
-        ..functionInfoToReturn = rust.TypstFunctionInfo(name: 'lorem', signature: _sig('lorem(count)'));
-      final (_, session, controller) = await triggerCompletions(
-        tester,
-        text: '#le',
-        cursor: 3,
-        completions: const [letBinding],
-        applyFromUtf16: 3,
-        fake: fake,
-        detailsBuilder: (context, info) => Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
-      );
+    testWidgets(
+      'a non-function completion is never fetched and shows no details panel',
+      (tester) async {
+        final fake = FakeRustSession()
+          ..functionInfoToReturn = rust.TypstFunctionInfo(
+            name: 'lorem',
+            signature: _sig('lorem(count)'),
+          );
+        final (_, session, controller) = await triggerCompletions(
+          tester,
+          text: '#le',
+          cursor: 3,
+          completions: const [letBinding],
+          applyFromUtf16: 3,
+          fake: fake,
+          detailsBuilder: (context, info) =>
+              Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
+        );
 
-      expect(fake.functionInfoCalls, isEmpty);
-      expect(find.textContaining('DETAILS:'), findsNothing);
+        expect(fake.functionInfoCalls, isEmpty);
+        expect(find.textContaining('DETAILS:'), findsNothing);
 
-      controller.dispose();
-      await session.dispose();
-    });
+        controller.dispose();
+        await session.dispose();
+      },
+    );
 
-    testWidgets('with no detailsBuilder, nothing is ever fetched', (tester) async {
-      final fake = FakeRustSession()
-        ..functionInfoToReturn = rust.TypstFunctionInfo(name: 'lorem', signature: _sig('lorem(count)'));
-      final (_, session, controller) = await triggerCompletions(
-        tester,
-        text: '#l',
-        cursor: 2,
-        completions: const [lorem],
-        applyFromUtf16: 2,
-        fake: fake,
-      );
-
-      expect(fake.functionInfoCalls, isEmpty, reason: 'a caller who never opted in should pay no fetch cost');
-
-      controller.dispose();
-      await session.dispose();
-    });
-
-    testWidgets('functionInfo resolving to null leaves the completions popup showing normally', (tester) async {
-      final fake = FakeRustSession(); // functionInfoToReturn defaults to null
-      final (_, session, controller) = await triggerCompletions(
-        tester,
-        text: '#l',
-        cursor: 2,
-        completions: const [lorem],
-        applyFromUtf16: 2,
-        fake: fake,
-        detailsBuilder: (context, info) => Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
-      );
-
-      expect(find.text('lorem'), findsOneWidget, reason: 'the completion list itself must not depend on this');
-      expect(find.textContaining('DETAILS:'), findsNothing);
-
-      controller.dispose();
-      await session.dispose();
-    });
-
-    testWidgets('arrowing through items faster than fetches return shows only the last selection\'s details', (
+    testWidgets('with no detailsBuilder, nothing is ever fetched', (
       tester,
     ) async {
       final fake = FakeRustSession()
-        ..functionInfoByLabel['lorem'] = rust.TypstFunctionInfo(name: 'lorem', signature: _sig('lorem(count)'))
-        ..functionInfoByLabel['rect'] = rust.TypstFunctionInfo(name: 'rect', signature: _sig('rect(width)'))
-        ..functionInfoGate = Completer<void>();
-      final focusNode = FocusNode();
-      final (_, session, controller) = await triggerCompletions(
-        tester,
-        text: '#',
-        cursor: 1,
-        completions: const [lorem, rectFunc],
-        focusNode: focusNode,
-        fake: fake,
-        detailsBuilder: (context, info) => Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
-      );
-      // The initial-selection fetch for 'lorem' is in flight, gated.
-      expect(fake.functionInfoCalls, ['lorem']);
-
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-      await tester.pump();
-      // Moving selection dispatches a second fetch, for 'rect' — also gated,
-      // and now the *current* one (_detailsRequestId has advanced).
-      expect(fake.functionInfoCalls, ['lorem', 'rect']);
-
-      // Both requests resolve now, in the order they were made (lorem's
-      // first) — only rect's result, the current selection's, should render.
-      fake.functionInfoGate!.complete();
-      await tester.pump(const Duration(milliseconds: 1));
-
-      expect(find.text('DETAILS:rect(width)'), findsOneWidget);
-      expect(
-        find.text('DETAILS:lorem(count)'),
-        findsNothing,
-        reason: 'the stale first fetch must not overwrite the later selection',
-      );
-
-      focusNode.dispose();
-      controller.dispose();
-      await session.dispose();
-    });
-
-    testWidgets('dismissing the popup mid-fetch does not reinsert it once the fetch resolves', (tester) async {
-      final fake = FakeRustSession()
-        ..functionInfoToReturn = rust.TypstFunctionInfo(name: 'lorem', signature: _sig('lorem(count)'))
-        ..functionInfoGate = Completer<void>();
-      final focusNode = FocusNode();
+        ..functionInfoToReturn = rust.TypstFunctionInfo(
+          name: 'lorem',
+          signature: _sig('lorem(count)'),
+        );
       final (_, session, controller) = await triggerCompletions(
         tester,
         text: '#l',
         cursor: 2,
         completions: const [lorem],
         applyFromUtf16: 2,
-        focusNode: focusNode,
         fake: fake,
-        detailsBuilder: (context, info) => Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
       );
-      expect(find.text('lorem'), findsOneWidget);
 
-      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-      await tester.pump();
-      expect(find.text('lorem'), findsNothing, reason: 'escape must have dismissed the popup');
+      expect(
+        fake.functionInfoCalls,
+        isEmpty,
+        reason: 'a caller who never opted in should pay no fetch cost',
+      );
 
-      // The in-flight functionInfo() call from before the dismissal resolves
-      // only now.
-      fake.functionInfoGate!.complete();
-      await tester.pump(const Duration(milliseconds: 1));
-
-      expect(find.text('lorem'), findsNothing, reason: 'a stale resolve must not reopen the popup');
-      expect(find.textContaining('DETAILS:'), findsNothing);
-
-      focusNode.dispose();
       controller.dispose();
       await session.dispose();
     });
+
+    testWidgets(
+      'functionInfo resolving to null leaves the completions popup showing normally',
+      (tester) async {
+        final fake = FakeRustSession(); // functionInfoToReturn defaults to null
+        final (_, session, controller) = await triggerCompletions(
+          tester,
+          text: '#l',
+          cursor: 2,
+          completions: const [lorem],
+          applyFromUtf16: 2,
+          fake: fake,
+          detailsBuilder: (context, info) =>
+              Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
+        );
+
+        expect(
+          find.text('lorem'),
+          findsOneWidget,
+          reason: 'the completion list itself must not depend on this',
+        );
+        expect(find.textContaining('DETAILS:'), findsNothing);
+
+        controller.dispose();
+        await session.dispose();
+      },
+    );
+
+    testWidgets(
+      'arrowing through items faster than fetches return shows only the last selection\'s details',
+      (tester) async {
+        final fake = FakeRustSession()
+          ..functionInfoByLabel['lorem'] = rust.TypstFunctionInfo(
+            name: 'lorem',
+            signature: _sig('lorem(count)'),
+          )
+          ..functionInfoByLabel['rect'] = rust.TypstFunctionInfo(
+            name: 'rect',
+            signature: _sig('rect(width)'),
+          )
+          ..functionInfoGate = Completer<void>();
+        final focusNode = FocusNode();
+        final (_, session, controller) = await triggerCompletions(
+          tester,
+          text: '#',
+          cursor: 1,
+          completions: const [lorem, rectFunc],
+          focusNode: focusNode,
+          fake: fake,
+          detailsBuilder: (context, info) =>
+              Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
+        );
+        // The initial-selection fetch for 'lorem' is in flight, gated.
+        expect(fake.functionInfoCalls, ['lorem']);
+
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        await tester.pump();
+        // Moving selection dispatches a second fetch, for 'rect' — also gated,
+        // and now the *current* one (_detailsRequestId has advanced).
+        expect(fake.functionInfoCalls, ['lorem', 'rect']);
+
+        // Both requests resolve now, in the order they were made (lorem's
+        // first) — only rect's result, the current selection's, should render.
+        fake.functionInfoGate!.complete();
+        await tester.pump(const Duration(milliseconds: 1));
+
+        expect(find.text('DETAILS:rect(width)'), findsOneWidget);
+        expect(
+          find.text('DETAILS:lorem(count)'),
+          findsNothing,
+          reason:
+              'the stale first fetch must not overwrite the later selection',
+        );
+
+        focusNode.dispose();
+        controller.dispose();
+        await session.dispose();
+      },
+    );
+
+    testWidgets(
+      'dismissing the popup mid-fetch does not reinsert it once the fetch resolves',
+      (tester) async {
+        final fake = FakeRustSession()
+          ..functionInfoToReturn = rust.TypstFunctionInfo(
+            name: 'lorem',
+            signature: _sig('lorem(count)'),
+          )
+          ..functionInfoGate = Completer<void>();
+        final focusNode = FocusNode();
+        final (_, session, controller) = await triggerCompletions(
+          tester,
+          text: '#l',
+          cursor: 2,
+          completions: const [lorem],
+          applyFromUtf16: 2,
+          focusNode: focusNode,
+          fake: fake,
+          detailsBuilder: (context, info) =>
+              Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
+        );
+        expect(find.text('lorem'), findsOneWidget);
+
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        await tester.pump();
+        expect(
+          find.text('lorem'),
+          findsNothing,
+          reason: 'escape must have dismissed the popup',
+        );
+
+        // The in-flight functionInfo() call from before the dismissal resolves
+        // only now.
+        fake.functionInfoGate!.complete();
+        await tester.pump(const Duration(milliseconds: 1));
+
+        expect(
+          find.text('lorem'),
+          findsNothing,
+          reason: 'a stale resolve must not reopen the popup',
+        );
+        expect(find.textContaining('DETAILS:'), findsNothing);
+
+        focusNode.dispose();
+        controller.dispose();
+        await session.dispose();
+      },
+    );
 
     group('fallback to function details when typst-ide offers nothing', () {
       // Simulates a function whose only parameter is a variadic sink (e.g.
@@ -1519,26 +2024,35 @@ void main() {
       // param names to offer there, so `completions` comes back genuinely
       // empty (not narrowed-to-empty by prefix/fuzzy filtering).
 
-      testWidgets('shows the enclosing function\'s details instead of a silent empty popup', (tester) async {
-        final fake = FakeRustSession()
-          ..functionInfoToReturn = rust.TypstFunctionInfo(name: 'set-style', signature: _sig('set-style(..style)'));
-        final (_, session, controller) = await triggerCompletions(
-          tester,
-          text: '#set-style(',
-          cursor: 11,
-          completions: const [], // typst-ide offers nothing at all
-          applyFromUtf16: 11,
-          fake: fake,
-          detailsBuilder: (context, info) => Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
-        );
+      testWidgets(
+        'shows the enclosing function\'s details instead of a silent empty popup',
+        (tester) async {
+          final fake = FakeRustSession()
+            ..functionInfoToReturn = rust.TypstFunctionInfo(
+              name: 'set-style',
+              signature: _sig('set-style(..style)'),
+            );
+          final (_, session, controller) = await triggerCompletions(
+            tester,
+            text: '#set-style(',
+            cursor: 11,
+            completions: const [], // typst-ide offers nothing at all
+            applyFromUtf16: 11,
+            fake: fake,
+            detailsBuilder: (context, info) =>
+                Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
+          );
 
-        expect(find.text('DETAILS:set-style(..style)'), findsOneWidget);
+          expect(find.text('DETAILS:set-style(..style)'), findsOneWidget);
 
-        controller.dispose();
-        await session.dispose();
-      });
+          controller.dispose();
+          await session.dispose();
+        },
+      );
 
-      testWidgets('shows nothing when nothing resolves at the cursor either', (tester) async {
+      testWidgets('shows nothing when nothing resolves at the cursor either', (
+        tester,
+      ) async {
         final fake = FakeRustSession(); // functionInfoToReturn defaults to null
         final (_, session, controller) = await triggerCompletions(
           tester,
@@ -1547,7 +2061,8 @@ void main() {
           completions: const [],
           applyFromUtf16: 15,
           fake: fake,
-          detailsBuilder: (context, info) => Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
+          detailsBuilder: (context, info) =>
+              Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
         );
 
         expect(find.textContaining('DETAILS:'), findsNothing);
@@ -1556,9 +2071,14 @@ void main() {
         await session.dispose();
       });
 
-      testWidgets('never fetched at all without a detailsBuilder', (tester) async {
+      testWidgets('never fetched at all without a detailsBuilder', (
+        tester,
+      ) async {
         final fake = FakeRustSession()
-          ..functionInfoToReturn = rust.TypstFunctionInfo(name: 'set-style', signature: _sig('set-style(..style)'));
+          ..functionInfoToReturn = rust.TypstFunctionInfo(
+            name: 'set-style',
+            signature: _sig('set-style(..style)'),
+          );
         final (_, session, controller) = await triggerCompletions(
           tester,
           text: '#set-style(',
@@ -1574,33 +2094,51 @@ void main() {
         await session.dispose();
       });
 
-      testWidgets('does not trigger when a real (non-empty) list is just filtered down to empty', (tester) async {
-        // completions is NOT empty here — typst-ide offered a real
-        // candidate, it just doesn't match what's been typed. This must
-        // not be confused with "typst-ide offered nothing at all".
-        const unrelated = rust.TypstCompletion(kind: rust.TypstCompletionKind.func(), label: 'rect', apply: 'rect(\${})');
-        final fake = FakeRustSession()
-          ..functionInfoToReturn = rust.TypstFunctionInfo(name: 'set-style', signature: _sig('set-style(..style)'));
-        final (_, session, controller) = await triggerCompletions(
-          tester,
-          text: '#zzz',
-          cursor: 4,
-          completions: const [unrelated],
-          applyFromUtf16: 1,
-          fake: fake,
-          detailsBuilder: (context, info) => Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
-        );
+      testWidgets(
+        'does not trigger when a real (non-empty) list is just filtered down to empty',
+        (tester) async {
+          // completions is NOT empty here — typst-ide offered a real
+          // candidate, it just doesn't match what's been typed. This must
+          // not be confused with "typst-ide offered nothing at all".
+          const unrelated = rust.TypstCompletion(
+            kind: rust.TypstCompletionKind.func(),
+            label: 'rect',
+            apply: 'rect(\${})',
+          );
+          final fake = FakeRustSession()
+            ..functionInfoToReturn = rust.TypstFunctionInfo(
+              name: 'set-style',
+              signature: _sig('set-style(..style)'),
+            );
+          final (_, session, controller) = await triggerCompletions(
+            tester,
+            text: '#zzz',
+            cursor: 4,
+            completions: const [unrelated],
+            applyFromUtf16: 1,
+            fake: fake,
+            detailsBuilder: (context, info) =>
+                Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
+          );
 
-        expect(fake.functionInfoCalls, isEmpty, reason: 'the fallback must not fire for a merely-filtered-out list');
-        expect(find.textContaining('DETAILS:'), findsNothing);
+          expect(
+            fake.functionInfoCalls,
+            isEmpty,
+            reason: 'the fallback must not fire for a merely-filtered-out list',
+          );
+          expect(find.textContaining('DETAILS:'), findsNothing);
 
-        controller.dispose();
-        await session.dispose();
-      });
+          controller.dispose();
+          await session.dispose();
+        },
+      );
 
       testWidgets('escape dismisses the fallback-only popup', (tester) async {
         final fake = FakeRustSession()
-          ..functionInfoToReturn = rust.TypstFunctionInfo(name: 'set-style', signature: _sig('set-style(..style)'));
+          ..functionInfoToReturn = rust.TypstFunctionInfo(
+            name: 'set-style',
+            signature: _sig('set-style(..style)'),
+          );
         final focusNode = FocusNode();
         final (_, session, controller) = await triggerCompletions(
           tester,
@@ -1610,7 +2148,8 @@ void main() {
           applyFromUtf16: 11,
           fake: fake,
           focusNode: focusNode,
-          detailsBuilder: (context, info) => Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
+          detailsBuilder: (context, info) =>
+              Text('DETAILS:${info.signature.map((t) => t.text).join()}'),
         );
         expect(find.text('DETAILS:set-style(..style)'), findsOneWidget);
 
@@ -1632,11 +2171,18 @@ void main() {
       required TextSelection selection,
     }) async {
       final fake = FakeRustSession();
-      final session = TypstSession.forTesting(fake, const TypstSessionOptions());
+      final session = TypstSession.forTesting(
+        fake,
+        const TypstSessionOptions(),
+      );
       final controller = TypstEditorController(session: session, text: text);
       final focusNode = FocusNode();
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: TypstCodeEditor(controller: controller, focusNode: focusNode))),
+        MaterialApp(
+          home: Scaffold(
+            body: TypstCodeEditor(controller: controller, focusNode: focusNode),
+          ),
+        ),
       );
       await tester.pump();
       focusNode.requestFocus();
@@ -1652,7 +2198,9 @@ void main() {
       await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
     }
 
-    testWidgets('Tab with no selection inserts one indent unit at the caret', (tester) async {
+    testWidgets('Tab with no selection inserts one indent unit at the caret', (
+      tester,
+    ) async {
       final (session, controller, focusNode) = await mount(
         tester,
         text: 'abcdef',
@@ -1670,33 +2218,37 @@ void main() {
       await session.dispose();
     });
 
-    testWidgets('Tab with a multi-line selection indents every touched line and keeps them selected', (
+    testWidgets(
+      'Tab with a multi-line selection indents every touched line and keeps them selected',
+      (tester) async {
+        final (session, controller, focusNode) = await mount(
+          tester,
+          text: 'one\ntwo\nthree',
+          // Selects from inside "one" through inside "two" — "three" is
+          // untouched.
+          selection: const TextSelection(baseOffset: 1, extentOffset: 5),
+        );
+
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+
+        expect(controller.text, '  one\n  two\nthree');
+        expect(
+          controller.selection,
+          const TextSelection(baseOffset: 3, extentOffset: 9),
+          reason:
+              'both indented lines stay selected, shifted by the inserted indent',
+        );
+
+        focusNode.dispose();
+        controller.dispose();
+        await session.dispose();
+      },
+    );
+
+    testWidgets('Shift+Tab dedents the current line even with no selection', (
       tester,
     ) async {
-      final (session, controller, focusNode) = await mount(
-        tester,
-        text: 'one\ntwo\nthree',
-        // Selects from inside "one" through inside "two" — "three" is
-        // untouched.
-        selection: const TextSelection(baseOffset: 1, extentOffset: 5),
-      );
-
-      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
-      await tester.pump();
-
-      expect(controller.text, '  one\n  two\nthree');
-      expect(
-        controller.selection,
-        const TextSelection(baseOffset: 3, extentOffset: 9),
-        reason: 'both indented lines stay selected, shifted by the inserted indent',
-      );
-
-      focusNode.dispose();
-      controller.dispose();
-      await session.dispose();
-    });
-
-    testWidgets('Shift+Tab dedents the current line even with no selection', (tester) async {
       final (session, controller, focusNode) = await mount(
         tester,
         text: '    foo',
@@ -1706,7 +2258,11 @@ void main() {
       await sendShiftTab(tester);
       await tester.pump();
 
-      expect(controller.text, '  foo', reason: 'one indent unit (2 spaces) removed');
+      expect(
+        controller.text,
+        '  foo',
+        reason: 'one indent unit (2 spaces) removed',
+      );
       expect(controller.selection, const TextSelection.collapsed(offset: 5));
 
       focusNode.dispose();
@@ -1714,23 +2270,29 @@ void main() {
       await session.dispose();
     });
 
-    testWidgets('Shift+Tab dedents every touched line for a selection, keeping it selected', (tester) async {
-      final (session, controller, focusNode) = await mount(
-        tester,
-        text: '  one\n  two\nthree',
-        selection: const TextSelection(baseOffset: 3, extentOffset: 9),
-      );
+    testWidgets(
+      'Shift+Tab dedents every touched line for a selection, keeping it selected',
+      (tester) async {
+        final (session, controller, focusNode) = await mount(
+          tester,
+          text: '  one\n  two\nthree',
+          selection: const TextSelection(baseOffset: 3, extentOffset: 9),
+        );
 
-      await sendShiftTab(tester);
-      await tester.pump();
+        await sendShiftTab(tester);
+        await tester.pump();
 
-      expect(controller.text, 'one\ntwo\nthree');
-      expect(controller.selection, const TextSelection(baseOffset: 1, extentOffset: 5));
+        expect(controller.text, 'one\ntwo\nthree');
+        expect(
+          controller.selection,
+          const TextSelection(baseOffset: 1, extentOffset: 5),
+        );
 
-      focusNode.dispose();
-      controller.dispose();
-      await session.dispose();
-    });
+        focusNode.dispose();
+        controller.dispose();
+        await session.dispose();
+      },
+    );
 
     testWidgets('Shift+Tab on an unindented line does nothing', (tester) async {
       final (session, controller, focusNode) = await mount(
@@ -1758,11 +2320,18 @@ void main() {
       required TextSelection selection,
     }) async {
       final fake = FakeRustSession();
-      final session = TypstSession.forTesting(fake, const TypstSessionOptions());
+      final session = TypstSession.forTesting(
+        fake,
+        const TypstSessionOptions(),
+      );
       final controller = TypstEditorController(session: session, text: text);
       final focusNode = FocusNode();
       await tester.pumpWidget(
-        MaterialApp(home: Scaffold(body: TypstCodeEditor(controller: controller, focusNode: focusNode))),
+        MaterialApp(
+          home: Scaffold(
+            body: TypstCodeEditor(controller: controller, focusNode: focusNode),
+          ),
+        ),
       );
       await tester.pump();
       focusNode.requestFocus();
@@ -1778,7 +2347,9 @@ void main() {
       await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     }
 
-    testWidgets('the context menu shows a Toggle Comment entry', (tester) async {
+    testWidgets('the context menu shows a Toggle Comment entry', (
+      tester,
+    ) async {
       final (session, controller, focusNode) = await mount(
         tester,
         text: 'foo',
@@ -1799,7 +2370,9 @@ void main() {
       session.dispose();
     });
 
-    testWidgets('comments the current line for a collapsed caret', (tester) async {
+    testWidgets('comments the current line for a collapsed caret', (
+      tester,
+    ) async {
       final (session, controller, focusNode) = await mount(
         tester,
         text: 'foo',
@@ -1817,103 +2390,121 @@ void main() {
       await session.dispose();
     });
 
-    testWidgets('uncomments the current line, dropping exactly one trailing space', (tester) async {
-      final (session, controller, focusNode) = await mount(
-        tester,
-        text: '// foo',
-        selection: const TextSelection.collapsed(offset: 6),
-      );
+    testWidgets(
+      'uncomments the current line, dropping exactly one trailing space',
+      (tester) async {
+        final (session, controller, focusNode) = await mount(
+          tester,
+          text: '// foo',
+          selection: const TextSelection.collapsed(offset: 6),
+        );
 
-      await sendCtrlSlash(tester);
-      await tester.pump();
+        await sendCtrlSlash(tester);
+        await tester.pump();
 
-      expect(controller.text, 'foo');
-      expect(controller.selection, const TextSelection.collapsed(offset: 3));
+        expect(controller.text, 'foo');
+        expect(controller.selection, const TextSelection.collapsed(offset: 3));
 
-      focusNode.dispose();
-      controller.dispose();
-      await session.dispose();
-    });
+        focusNode.dispose();
+        controller.dispose();
+        await session.dispose();
+      },
+    );
 
-    testWidgets('preserves indentation: the marker lands after leading whitespace', (tester) async {
-      final (session, controller, focusNode) = await mount(
-        tester,
-        text: '  foo',
-        selection: const TextSelection.collapsed(offset: 5),
-      );
+    testWidgets(
+      'preserves indentation: the marker lands after leading whitespace',
+      (tester) async {
+        final (session, controller, focusNode) = await mount(
+          tester,
+          text: '  foo',
+          selection: const TextSelection.collapsed(offset: 5),
+        );
 
-      await sendCtrlSlash(tester);
-      await tester.pump();
+        await sendCtrlSlash(tester);
+        await tester.pump();
 
-      expect(controller.text, '  // foo');
+        expect(controller.text, '  // foo');
 
-      await sendCtrlSlash(tester);
-      await tester.pump();
+        await sendCtrlSlash(tester);
+        await tester.pump();
 
-      expect(controller.text, '  foo', reason: 'toggling twice is a no-op');
+        expect(controller.text, '  foo', reason: 'toggling twice is a no-op');
 
-      focusNode.dispose();
-      controller.dispose();
-      await session.dispose();
-    });
+        focusNode.dispose();
+        controller.dispose();
+        await session.dispose();
+      },
+    );
 
-    testWidgets('comments every line a multi-line selection touches, blank lines left alone', (tester) async {
-      final (session, controller, focusNode) = await mount(
-        tester,
-        text: 'one\n\ntwo',
-        selection: const TextSelection(baseOffset: 0, extentOffset: 8),
-      );
+    testWidgets(
+      'comments every line a multi-line selection touches, blank lines left alone',
+      (tester) async {
+        final (session, controller, focusNode) = await mount(
+          tester,
+          text: 'one\n\ntwo',
+          selection: const TextSelection(baseOffset: 0, extentOffset: 8),
+        );
 
-      await sendCtrlSlash(tester);
-      await tester.pump();
+        await sendCtrlSlash(tester);
+        await tester.pump();
 
-      expect(controller.text, '// one\n\n// two');
-      expect(
-        controller.selection,
-        const TextSelection(baseOffset: 0, extentOffset: 14),
-        reason: 'selection expands to cover the now-longer commented text',
-      );
+        expect(controller.text, '// one\n\n// two');
+        expect(
+          controller.selection,
+          const TextSelection(baseOffset: 0, extentOffset: 14),
+          reason: 'selection expands to cover the now-longer commented text',
+        );
 
-      focusNode.dispose();
-      controller.dispose();
-      await session.dispose();
-    });
+        focusNode.dispose();
+        controller.dispose();
+        await session.dispose();
+      },
+    );
 
-    testWidgets('uncomments every line when all non-blank touched lines are already commented', (tester) async {
-      final (session, controller, focusNode) = await mount(
-        tester,
-        text: '// one\n\n// two',
-        selection: const TextSelection(baseOffset: 0, extentOffset: 14),
-      );
+    testWidgets(
+      'uncomments every line when all non-blank touched lines are already commented',
+      (tester) async {
+        final (session, controller, focusNode) = await mount(
+          tester,
+          text: '// one\n\n// two',
+          selection: const TextSelection(baseOffset: 0, extentOffset: 14),
+        );
 
-      await sendCtrlSlash(tester);
-      await tester.pump();
+        await sendCtrlSlash(tester);
+        await tester.pump();
 
-      expect(controller.text, 'one\n\ntwo');
+        expect(controller.text, 'one\n\ntwo');
 
-      focusNode.dispose();
-      controller.dispose();
-      await session.dispose();
-    });
+        focusNode.dispose();
+        controller.dispose();
+        await session.dispose();
+      },
+    );
 
-    testWidgets('a mixed selection (only some lines commented) comments the rest instead of uncommenting', (
-      tester,
-    ) async {
-      final (session, controller, focusNode) = await mount(
-        tester,
-        text: '// one\ntwo',
-        selection: const TextSelection(baseOffset: 0, extentOffset: 10),
-      );
+    testWidgets(
+      'a mixed selection (only some lines commented) comments the rest instead of uncommenting',
+      (tester) async {
+        final (session, controller, focusNode) = await mount(
+          tester,
+          text: '// one\ntwo',
+          selection: const TextSelection(baseOffset: 0, extentOffset: 10),
+        );
 
-      await sendCtrlSlash(tester);
-      await tester.pump();
+        await sendCtrlSlash(tester);
+        await tester.pump();
 
-      expect(controller.text, '// // one\n// two', reason: 'not every line was commented, so this comments, not uncomments');
+        expect(
+          controller.text,
+          '// // one\n// two',
+          reason:
+              'not every line was commented, so this comments, not uncomments',
+        );
 
-      focusNode.dispose();
-      controller.dispose();
-      await session.dispose();
-    });
+        focusNode.dispose();
+        controller.dispose();
+        await session.dispose();
+      },
+    );
   });
 
   group('hover tooltip', () {
@@ -1928,13 +2519,26 @@ void main() {
       await gesture.moveTo(target);
     }
 
-    testWidgets('hovering over the source shows the tooltip content', (tester) async {
-      final fake = FakeRustSession()..tooltipToReturn = const rust.TypstTooltip.text(content: 'a heading');
-      final session = TypstSession.forTesting(fake, const TypstSessionOptions());
+    testWidgets('hovering over the source shows the tooltip content', (
+      tester,
+    ) async {
+      final fake = FakeRustSession()
+        ..tooltipToReturn = const rust.TypstTooltip.text(content: 'a heading');
+      final session = TypstSession.forTesting(
+        fake,
+        const TypstSessionOptions(),
+      );
       await session.compile('= Heading');
-      final controller = TypstEditorController(session: session, text: '= Heading');
+      final controller = TypstEditorController(
+        session: session,
+        text: '= Heading',
+      );
 
-      await tester.pumpWidget(MaterialApp(home: Scaffold(body: TypstCodeEditor(controller: controller))));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: TypstCodeEditor(controller: controller)),
+        ),
+      );
       await tester.pump();
 
       // A few pixels into the editor's top-left corner, where the first
@@ -1942,7 +2546,10 @@ void main() {
       // why a point that isn't actually on a line (e.g. the center of an
       // expands:true editor much taller than one line) must not trigger a
       // request in the first place.
-      await hoverTo(tester, tester.getTopLeft(find.byType(EditableText)) + const Offset(4, 4));
+      await hoverTo(
+        tester,
+        tester.getTopLeft(find.byType(EditableText)) + const Offset(4, 4),
+      );
       await tester.pump(const Duration(milliseconds: 350));
 
       expect(find.text('a heading'), findsOneWidget);
@@ -1951,32 +2558,52 @@ void main() {
       await session.dispose();
     });
 
-    testWidgets('a hover result that arrives after the buffer moved on is not shown', (tester) async {
-      final fake = FakeRustSession()
-        ..tooltipToReturn = const rust.TypstTooltip.text(content: 'a heading')
-        ..hoverGate = Completer<void>();
-      final session = TypstSession.forTesting(fake, const TypstSessionOptions());
-      await session.compile('= Heading');
-      final controller = TypstEditorController(session: session, text: '= Heading');
+    testWidgets(
+      'a hover result that arrives after the buffer moved on is not shown',
+      (tester) async {
+        final fake = FakeRustSession()
+          ..tooltipToReturn = const rust.TypstTooltip.text(content: 'a heading')
+          ..hoverGate = Completer<void>();
+        final session = TypstSession.forTesting(
+          fake,
+          const TypstSessionOptions(),
+        );
+        await session.compile('= Heading');
+        final controller = TypstEditorController(
+          session: session,
+          text: '= Heading',
+        );
 
-      await tester.pumpWidget(MaterialApp(home: Scaffold(body: TypstCodeEditor(controller: controller))));
-      await tester.pump();
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(body: TypstCodeEditor(controller: controller)),
+          ),
+        );
+        await tester.pump();
 
-      await hoverTo(tester, tester.getTopLeft(find.byType(EditableText)) + const Offset(4, 4));
-      await tester.pump(const Duration(milliseconds: 350));
+        await hoverTo(
+          tester,
+          tester.getTopLeft(find.byType(EditableText)) + const Offset(4, 4),
+        );
+        await tester.pump(const Duration(milliseconds: 350));
 
-      // The buffer moves on (represented here by the native side's own
-      // registered source changing) while the hover() call above is still
-      // gated/in flight.
-      await session.compile('= Other');
+        // The buffer moves on (represented here by the native side's own
+        // registered source changing) while the hover() call above is still
+        // gated/in flight.
+        await session.compile('= Other');
 
-      fake.hoverGate!.complete();
-      await tester.pump(const Duration(milliseconds: 1));
+        fake.hoverGate!.complete();
+        await tester.pump(const Duration(milliseconds: 1));
 
-      expect(find.text('a heading'), findsNothing, reason: 'stale hover result must not be shown');
+        expect(
+          find.text('a heading'),
+          findsNothing,
+          reason: 'stale hover result must not be shown',
+        );
 
-      controller.dispose();
-      await session.dispose();
-    });
+        controller.dispose();
+        await session.dispose();
+      },
+    );
   });
 }

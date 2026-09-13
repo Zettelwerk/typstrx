@@ -57,7 +57,11 @@ Path _endHandlePath() => Path()
 /// a drop shadow (state-gated) under a flat fill, alpha/shadow chosen by
 /// [state].
 class _TriangleHandlePainter extends CustomPainter {
-  _TriangleHandlePainter({required this.path, required this.color, required this.state});
+  _TriangleHandlePainter({
+    required this.path,
+    required this.color,
+    required this.state,
+  });
 
   final Path path;
   final Color color;
@@ -75,7 +79,9 @@ class _TriangleHandlePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _TriangleHandlePainter oldDelegate) =>
-      oldDelegate.path != path || oldDelegate.color != color || oldDelegate.state != state;
+      oldDelegate.path != path ||
+      oldDelegate.color != color ||
+      oldDelegate.state != state;
 }
 
 /// A position in the document's text: a character on a page.
@@ -161,7 +167,9 @@ extension _TypstViewerSelection on _TypstViewerState {
     int length,
   ) {
     final from = pageIndex == start.pageIndex ? start.charIndex : 0;
-    final to = pageIndex == end.pageIndex ? end.charIndex.clamp(0, length) : length;
+    final to = pageIndex == end.pageIndex
+        ? end.charIndex.clamp(0, length)
+        : length;
     return (from: from, to: to);
   }
 
@@ -170,17 +178,26 @@ extension _TypstViewerSelection on _TypstViewerState {
     if (selection == null) return null;
     final (start, end) = selection;
     final rects = <TypstTextSelectionRect>[];
-    for (var pageIndex = start.pageIndex;
-        pageIndex <= end.pageIndex;
-        pageIndex++) {
+    for (
+      var pageIndex = start.pageIndex;
+      pageIndex <= end.pageIndex;
+      pageIndex++
+    ) {
       final text = _pageTexts[pageIndex + 1];
       if (text == null) continue;
-      final (:from, :to) = _selectionRangeForPage(pageIndex, start, end, text.charRects.length);
+      final (:from, :to) = _selectionRangeForPage(
+        pageIndex,
+        start,
+        end,
+        text.charRects.length,
+      );
       for (final rect in text.rectsForRange(from, to)) {
-        rects.add(TypstTextSelectionRect(
-          pageNumber: pageIndex + 1,
-          rect: rect.toRect(),
-        ));
+        rects.add(
+          TypstTextSelectionRect(
+            pageNumber: pageIndex + 1,
+            rect: rect.toRect(),
+          ),
+        );
       }
     }
     return TypstTextSelection(
@@ -223,12 +240,19 @@ extension _TypstViewerSelection on _TypstViewerState {
     if (selection == null) return '';
     final (start, end) = selection;
     final parts = <String>[];
-    for (var pageIndex = start.pageIndex;
-        pageIndex <= end.pageIndex;
-        pageIndex++) {
+    for (
+      var pageIndex = start.pageIndex;
+      pageIndex <= end.pageIndex;
+      pageIndex++
+    ) {
       final text = _pageTexts[pageIndex + 1];
       if (text == null) continue;
-      final (:from, :to) = _selectionRangeForPage(pageIndex, start, end, text.fullText.length);
+      final (:from, :to) = _selectionRangeForPage(
+        pageIndex,
+        start,
+        end,
+        text.fullText.length,
+      );
       if (from < to) parts.add(text.fullText.substring(from, to));
     }
     return parts.join('\n');
@@ -252,7 +276,12 @@ extension _TypstViewerSelection on _TypstViewerState {
     }
     final text = _pageTexts[pageIndex + 1];
     if (text == null) return const [];
-    final (:from, :to) = _selectionRangeForPage(pageIndex, start, end, text.charRects.length);
+    final (:from, :to) = _selectionRangeForPage(
+      pageIndex,
+      start,
+      end,
+      text.charRects.length,
+    );
     return [
       for (final rect in text.rectsForRange(from, to))
         rect.toRectInDocument(pageRect),
@@ -343,8 +372,8 @@ extension _TypstViewerSelection on _TypstViewerState {
   void _goToDest(TypstDest dest) {
     final layout = _layout;
     if (layout == null || layout.pageRects.isEmpty) return;
-    final pageRect = layout.pageRects[
-        (dest.pageNumber - 1).clamp(0, layout.pageRects.length - 1)];
+    final pageRect = layout
+        .pageRects[(dest.pageNumber - 1).clamp(0, layout.pageRects.length - 1)];
     final y = pageRect.top + (dest.y ?? 0);
     _goTo(Offset(_visibleRect.left, y - widget.params.margin));
   }
@@ -383,8 +412,10 @@ extension _TypstViewerSelection on _TypstViewerState {
 
   void _onSelectionDragUpdate(DragUpdateDetails details) {
     if (_selAnchor == null) return;
-    final point =
-        _charPointAt(_viewToDoc(details.localPosition), tolerance: 40);
+    final point = _charPointAt(
+      _viewToDoc(details.localPosition),
+      tolerance: 40,
+    );
     if (point != null && point != _selFocus) {
       // Selecting past a character means including it: extend forward by one
       // when the focus is after the anchor.
@@ -429,9 +460,9 @@ extension _TypstViewerSelection on _TypstViewerState {
   // matching the Transform applied to the painted content.
 
   Offset _viewToDoc(Offset viewPoint) => MatrixUtils.transformPoint(
-        Matrix4.inverted(_txController.value),
-        viewPoint,
-      );
+    Matrix4.inverted(_txController.value),
+    viewPoint,
+  );
 
   Offset _docToView(Offset docPoint) =>
       MatrixUtils.transformPoint(_txController.value, docPoint);
@@ -471,34 +502,41 @@ extension _TypstViewerSelection on _TypstViewerState {
       // when that handle's box would otherwise reach into it — 48 is a
       // rough estimate of the toolbar's own height, since its real size
       // isn't known until after it's laid out.
-      final startRect = _lastInputWasTouch ? _charRectInDocument(selection.$1, isStart: true) : null;
+      final startRect = _lastInputWasTouch
+          ? _charRectInDocument(selection.$1, isStart: true)
+          : null;
       final defaultTop = view.dy - 56;
       final top = startRect == null
           ? defaultTop
-          : math.min(defaultTop, _docToView(startRect.topLeft).dy - _handleSize - 48 - 8);
-      widgets.add(Positioned(
-        key: const ValueKey('selection-toolbar'),
-        left: math.max(view.dx - 40, 8),
-        top: math.max(top, 8),
-        child: Material(
-          elevation: 4,
-          borderRadius: BorderRadius.circular(8),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextButton(
-                  onPressed: _copySelection,
-                  child: Text(
-                    MaterialLocalizations.of(context).copyButtonLabel,
+          : math.min(
+              defaultTop,
+              _docToView(startRect.topLeft).dy - _handleSize - 48 - 8,
+            );
+      widgets.add(
+        Positioned(
+          key: const ValueKey('selection-toolbar'),
+          left: math.max(view.dx - 40, 8),
+          top: math.max(top, 8),
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextButton(
+                    onPressed: _copySelection,
+                    child: Text(
+                      MaterialLocalizations.of(context).copyButtonLabel,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
-      ));
+      );
     }
 
     if (selection != null && _lastInputWasTouch) {
@@ -521,52 +559,57 @@ extension _TypstViewerSelection on _TypstViewerState {
             ? anchor - const Offset(_handleSize, _handleSize)
             : anchor;
         final isDragging = _handleDragMovingPoint == point;
-        widgets.add(Positioned(
-          key: ValueKey(isStart ? 'start-handle' : 'end-handle'),
-          left: view.dx,
-          top: view.dy,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onPanStart: (details) {
-              _draggingHandleIsStart = isStart;
-              _handleDragFixedEnd = isStart ? selection.$2 : selection.$1;
-              _handleDragMovingPoint = point;
-              // The row's center, not the box edge `anchor` itself — see
-              // the matching comment in _onHandleDrag for why.
-              _handleDragPoint = _docToView(rect.center);
-              // A human finger rarely lands exactly on the anchor pixel —
-              // it lands somewhere on the visible 30x30 flag, which for the
-              // start handle hangs up-left of the text edge and for the end
-              // handle hangs down-right of it (see the flag placement
-              // comment above). Capturing that initial offset and re-adding
-              // it every frame (_onHandleDrag) keeps hit-testing pinned to
-              // "anchor + how far the finger has moved" instead of
-              // "wherever the finger literally is" — without it, the
-              // vertical component of that grab offset alone (up to a full
-              // flag height) was enough to make the drag pick the wrong
-              // character/row.
-              _handleDragGrabOffset = anchor - (details.globalPosition - _viewOrigin());
-              _repaint();
-            },
-            onPanUpdate: _onHandleDrag,
-            onPanEnd: (_) {
-              _draggingHandleIsStart = null;
-              _handleDragPoint = null;
-              _handleDragFixedEnd = null;
-              _handleDragMovingPoint = null;
-              _handleDragGrabOffset = null;
-              _repaint();
-            },
-            child: CustomPaint(
-              size: const Size(_handleSize, _handleSize),
-              painter: _TriangleHandlePainter(
-                path: isStart ? _startHandlePath() : _endHandlePath(),
-                color: widget.params.selectionColor.withAlpha(0xff),
-                state: isDragging ? _HandleState.dragging : _HandleState.normal,
+        widgets.add(
+          Positioned(
+            key: ValueKey(isStart ? 'start-handle' : 'end-handle'),
+            left: view.dx,
+            top: view.dy,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onPanStart: (details) {
+                _draggingHandleIsStart = isStart;
+                _handleDragFixedEnd = isStart ? selection.$2 : selection.$1;
+                _handleDragMovingPoint = point;
+                // The row's center, not the box edge `anchor` itself — see
+                // the matching comment in _onHandleDrag for why.
+                _handleDragPoint = _docToView(rect.center);
+                // A human finger rarely lands exactly on the anchor pixel —
+                // it lands somewhere on the visible 30x30 flag, which for the
+                // start handle hangs up-left of the text edge and for the end
+                // handle hangs down-right of it (see the flag placement
+                // comment above). Capturing that initial offset and re-adding
+                // it every frame (_onHandleDrag) keeps hit-testing pinned to
+                // "anchor + how far the finger has moved" instead of
+                // "wherever the finger literally is" — without it, the
+                // vertical component of that grab offset alone (up to a full
+                // flag height) was enough to make the drag pick the wrong
+                // character/row.
+                _handleDragGrabOffset =
+                    anchor - (details.globalPosition - _viewOrigin());
+                _repaint();
+              },
+              onPanUpdate: _onHandleDrag,
+              onPanEnd: (_) {
+                _draggingHandleIsStart = null;
+                _handleDragPoint = null;
+                _handleDragFixedEnd = null;
+                _handleDragMovingPoint = null;
+                _handleDragGrabOffset = null;
+                _repaint();
+              },
+              child: CustomPaint(
+                size: const Size(_handleSize, _handleSize),
+                painter: _TriangleHandlePainter(
+                  path: isStart ? _startHandlePath() : _endHandlePath(),
+                  color: widget.params.selectionColor.withAlpha(0xff),
+                  state: isDragging
+                      ? _HandleState.dragging
+                      : _HandleState.normal,
+                ),
               ),
             ),
           ),
-        ));
+        );
       }
     }
 
@@ -589,7 +632,8 @@ extension _TypstViewerSelection on _TypstViewerState {
     return Positioned(
       key: const ValueKey('selection-magnifier'),
       left: focalPoint.dx - _magnifierSize.width / 2,
-      top: focalPoint.dy - _magnifierAboveFocalPoint - _magnifierSize.height / 2,
+      top:
+          focalPoint.dy - _magnifierAboveFocalPoint - _magnifierSize.height / 2,
       child: IgnorePointer(
         child: RawMagnifier(
           size: _magnifierSize,
@@ -616,7 +660,11 @@ extension _TypstViewerSelection on _TypstViewerState {
               borderRadius: BorderRadius.circular(_magnifierBorderRadius),
             ),
             shadows: const [
-              BoxShadow(color: Color(0x42000000), blurRadius: 8, spreadRadius: 2),
+              BoxShadow(
+                color: Color(0x42000000),
+                blurRadius: 8,
+                spreadRadius: 2,
+              ),
             ],
           ),
         ),
@@ -628,11 +676,13 @@ extension _TypstViewerSelection on _TypstViewerState {
     final layout = _layout;
     final text = _pageTexts[point.pageIndex + 1];
     if (layout == null || text == null || text.charRects.isEmpty) return null;
-    final index =
-        (isStart ? point.charIndex : point.charIndex - 1)
-            .clamp(0, text.charRects.length - 1);
-    return text.charRects[index]
-        .toRectInDocument(layout.pageRects[point.pageIndex]);
+    final index = (isStart ? point.charIndex : point.charIndex - 1).clamp(
+      0,
+      text.charRects.length - 1,
+    );
+    return text.charRects[index].toRectInDocument(
+      layout.pageRects[point.pageIndex],
+    );
   }
 
   // Keeps the *other* handle's position stable across the whole drag by
@@ -653,8 +703,12 @@ extension _TypstViewerSelection on _TypstViewerState {
     // than the raw finger position — see that handler's comment.
     final rawViewPoint = details.globalPosition - _viewOrigin();
     final viewPoint = rawViewPoint + (_handleDragGrabOffset ?? Offset.zero);
-    _handleDragPoint = viewPoint; // fallback while nothing's hit yet; refined below once a char is
-    final docPoint = MatrixUtils.transformPoint(Matrix4.inverted(_txController.value), viewPoint);
+    _handleDragPoint =
+        viewPoint; // fallback while nothing's hit yet; refined below once a char is
+    final docPoint = MatrixUtils.transformPoint(
+      Matrix4.inverted(_txController.value),
+      viewPoint,
+    );
     final char = _charPointAt(docPoint, tolerance: 40);
     if (char == null) {
       _repaint(); // still need to redraw the magnifier at its new position
@@ -691,7 +745,9 @@ extension _TypstViewerSelection on _TypstViewerState {
     // strictly less) — self-consistent with how _normalizedSelection sorts
     // and renders start/end either way, so which handle is physically
     // being dragged no longer needs to be threaded through this function.
-    final moving = char.compareTo(fixed) >= 0 ? _SelPoint(char.pageIndex, char.charIndex + 1) : char;
+    final moving = char.compareTo(fixed) >= 0
+        ? _SelPoint(char.pageIndex, char.charIndex + 1)
+        : char;
     // Matches selection.$1/$2's own convention (the render loop's `point`,
     // used for the isDragging comparison there) rather than the raw
     // hit-tested character — those two can differ by the +1 above.

@@ -17,10 +17,14 @@ class TypstTooltip {
 
   static TypstTooltip fromRust(rust.TypstTooltip tooltip) {
     return switch (tooltip) {
-      rust.TypstTooltip_Text(:final content) =>
-        TypstTooltip(kind: TypstTooltipKind.text, content: content),
-      rust.TypstTooltip_Code(:final content) =>
-        TypstTooltip(kind: TypstTooltipKind.code, content: content),
+      rust.TypstTooltip_Text(:final content) => TypstTooltip(
+        kind: TypstTooltipKind.text,
+        content: content,
+      ),
+      rust.TypstTooltip_Code(:final content) => TypstTooltip(
+        kind: TypstTooltipKind.code,
+        content: content,
+      ),
     };
   }
 }
@@ -38,7 +42,9 @@ class TypstHoverResult {
   static TypstHoverResult fromRust(rust.HoverResult result) {
     return TypstHoverResult(
       generation: result.generation.toInt(),
-      tooltip: result.tooltip != null ? TypstTooltip.fromRust(result.tooltip!) : null,
+      tooltip: result.tooltip != null
+          ? TypstTooltip.fromRust(result.tooltip!)
+          : null,
     );
   }
 }

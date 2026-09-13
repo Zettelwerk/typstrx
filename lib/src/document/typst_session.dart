@@ -402,7 +402,10 @@ class TypstSession {
   @internal
   Future<Uint8List> exportPdf({required int generation, required bool tagged}) {
     _checkDisposed();
-    return _native.exportPdf(generation: BigInt.from(generation), tagged: tagged);
+    return _native.exportPdf(
+      generation: BigInt.from(generation),
+      tagged: tagged,
+    );
   }
 
   /// Releases the native session. Streams close and further calls throw.

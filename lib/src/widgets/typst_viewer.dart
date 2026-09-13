@@ -172,7 +172,8 @@ class _TypstViewerState extends State<TypstViewer>
         _scheduleRender();
       });
     }
-    if (oldWidget.params.rasterBackgroundColor != widget.params.rasterBackgroundColor) {
+    if (oldWidget.params.rasterBackgroundColor !=
+        widget.params.rasterBackgroundColor) {
       // Already-cached previews/tiles have the old color baked into their
       // pixels (see TypstPageImageCache.renderPreview/renderTile) — merely
       // pointing the cache at the new color wouldn't touch them.

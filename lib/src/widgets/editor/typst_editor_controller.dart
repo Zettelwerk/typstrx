@@ -128,7 +128,9 @@ class TypstEditorController extends TextEditingController {
 
   @override
   set value(TextEditingValue newValue) {
-    final adjusted = autoClosePairs.isEmpty ? newValue : _applyAutoClose(value, newValue);
+    final adjusted = autoClosePairs.isEmpty
+        ? newValue
+        : _applyAutoClose(value, newValue);
     final textChanged = adjusted.text != text;
     super.value = adjusted;
     if (textChanged) _requestHighlight();
@@ -168,7 +170,10 @@ class TypstEditorController extends TextEditingController {
   /// that moved in an unknown way. A non-collapsed [TextEditingValue.composing]
   /// range (an IME composition in progress) is likewise left alone —
   /// inserting a closer next to a live composing range would land inside it.
-  TextEditingValue _applyAutoClose(TextEditingValue oldValue, TextEditingValue newValue) {
+  TextEditingValue _applyAutoClose(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
     if (newValue.text == oldValue.text) return newValue;
     if (!newValue.composing.isCollapsed) {
       _pendingAutoClose.clear();
@@ -223,7 +228,8 @@ class TypstEditorController extends TextEditingController {
       if (oldValue.selection.baseOffset == q + 1 &&
           q >= 0 &&
           q < oldValue.text.length &&
-          newValue.text == oldValue.text.substring(0, q) + oldValue.text.substring(q + 1)) {
+          newValue.text ==
+              oldValue.text.substring(0, q) + oldValue.text.substring(q + 1)) {
         return _afterBackspace(oldValue, newValue, q);
       }
     }
@@ -234,10 +240,17 @@ class TypstEditorController extends TextEditingController {
 
   /// Handles a single character [typed] inserted at offset [p] (its
   /// position in [oldValue].text, before insertion).
-  TextEditingValue _afterInsert(TextEditingValue oldValue, TextEditingValue newValue, int p, String typed) {
+  TextEditingValue _afterInsert(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+    int p,
+    String typed,
+  ) {
     if (_pendingAutoClose.contains(p) && oldValue.text[p] == typed) {
       _pendingAutoClose.remove(p);
-      return oldValue.copyWith(selection: TextSelection.collapsed(offset: p + 1));
+      return oldValue.copyWith(
+        selection: TextSelection.collapsed(offset: p + 1),
+      );
     }
 
     final closer = autoClosePairs[typed];
@@ -247,14 +260,22 @@ class TypstEditorController extends TextEditingController {
     _shiftPending(from: p, delta: shouldPair ? 2 : 1);
     if (!shouldPair) return newValue;
 
-    final text = '${oldValue.text.substring(0, p)}$typed$closer${oldValue.text.substring(p)}';
+    final text =
+        '${oldValue.text.substring(0, p)}$typed$closer${oldValue.text.substring(p)}';
     _pendingAutoClose.add(p + 1);
-    return newValue.copyWith(text: text, selection: TextSelection.collapsed(offset: p + 1));
+    return newValue.copyWith(
+      text: text,
+      selection: TextSelection.collapsed(offset: p + 1),
+    );
   }
 
   /// Handles a backspace deleting the character at offset [q] (its position
   /// in [oldValue].text).
-  TextEditingValue _afterBackspace(TextEditingValue oldValue, TextEditingValue newValue, int q) {
+  TextEditingValue _afterBackspace(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+    int q,
+  ) {
     final deletesPair =
         _pendingAutoClose.contains(q + 1) &&
         q + 1 < oldValue.text.length &&
@@ -268,7 +289,10 @@ class TypstEditorController extends TextEditingController {
     _pendingAutoClose.remove(q + 1);
     _shiftPending(from: q + 2, delta: -2);
     final text = oldValue.text.substring(0, q) + oldValue.text.substring(q + 2);
-    return newValue.copyWith(text: text, selection: TextSelection.collapsed(offset: q));
+    return newValue.copyWith(
+      text: text,
+      selection: TextSelection.collapsed(offset: q),
+    );
   }
 
   /// Handles [typed] (a recognized opener) replacing the selection
@@ -280,11 +304,21 @@ class TypstEditorController extends TextEditingController {
   /// immediately before a closer this controller just inserted", which
   /// doesn't apply here — the caret isn't adjacent to [closer] afterward,
   /// the far end of the (re-established) selection is.
-  TextEditingValue _afterWrap(TextEditingValue oldValue, int s, int e, String typed, String closer) {
-    final text = '${oldValue.text.substring(0, s)}$typed${oldValue.text.substring(s, e)}$closer${oldValue.text.substring(e)}';
+  TextEditingValue _afterWrap(
+    TextEditingValue oldValue,
+    int s,
+    int e,
+    String typed,
+    String closer,
+  ) {
+    final text =
+        '${oldValue.text.substring(0, s)}$typed${oldValue.text.substring(s, e)}$closer${oldValue.text.substring(e)}';
     _shiftPending(from: s, delta: 1);
     _shiftPending(from: e + 1, delta: 1);
-    return TextEditingValue(text: text, selection: TextSelection(baseOffset: s + 1, extentOffset: e + 1));
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection(baseOffset: s + 1, extentOffset: e + 1),
+    );
   }
 
   /// Handles a single `\n` inserted at offset [p] (its position in
@@ -305,10 +339,16 @@ class TypstEditorController extends TextEditingController {
   /// implemented here as the same mechanism with one fewer inserted line,
   /// since skipping it would make the bracket case look like a special rule
   /// rather than the natural extension it is.
-  TextEditingValue _afterNewline(TextEditingValue oldValue, TextEditingValue newValue, int p) {
+  TextEditingValue _afterNewline(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+    int p,
+  ) {
     final text = oldValue.text;
     final searchFrom = p - 1;
-    final lineStart = searchFrom < 0 ? 0 : text.lastIndexOf('\n', searchFrom) + 1;
+    final lineStart = searchFrom < 0
+        ? 0
+        : text.lastIndexOf('\n', searchFrom) + 1;
     final indent = _leadingIndent(text, lineStart);
 
     final prevChar = p > 0 ? text[p - 1] : '';
@@ -330,7 +370,10 @@ class TypstEditorController extends TextEditingController {
 
     final result = '${text.substring(0, p)}$inserted${text.substring(p)}';
     _shiftPending(from: p, delta: inserted.length);
-    return newValue.copyWith(text: result, selection: TextSelection.collapsed(offset: p + caretOffset));
+    return newValue.copyWith(
+      text: result,
+      selection: TextSelection.collapsed(offset: p + caretOffset),
+    );
   }
 
   /// The leading run of spaces/tabs starting at [lineStart] in [text].
@@ -346,14 +389,20 @@ class TypstEditorController extends TextEditingController {
   /// [_pendingAutoClose] valid across an edit that shifts text around a
   /// point without otherwise disturbing it.
   void _shiftPending({required int from, required int delta}) {
-    final shifted = <int>{for (final o in _pendingAutoClose) o >= from ? o + delta : o};
+    final shifted = <int>{
+      for (final o in _pendingAutoClose) o >= from ? o + delta : o,
+    };
     _pendingAutoClose
       ..clear()
       ..addAll(shifted);
   }
 
   @override
-  TextSpan buildTextSpan({required BuildContext context, TextStyle? style, required bool withComposing}) {
+  TextSpan buildTextSpan({
+    required BuildContext context,
+    TextStyle? style,
+    required bool withComposing,
+  }) {
     return debugBuildSpan(style: style);
   }
 
@@ -380,7 +429,10 @@ class TypstEditorController extends TextEditingController {
     if (node.children.isEmpty) {
       return _leafSpan(node.text, tagStyle, cursor);
     }
-    return TextSpan(style: tagStyle, children: [for (final child in node.children) _buildNode(child, cursor)]);
+    return TextSpan(
+      style: tagStyle,
+      children: [for (final child in node.children) _buildNode(child, cursor)],
+    );
   }
 
   /// Splits one leaf's text at diagnostic boundaries so the overlapping
@@ -393,7 +445,11 @@ class TypstEditorController extends TextEditingController {
 
     final covering = [
       for (final d in _diagnostics)
-        if (d.sourceStart != null && d.sourceEnd != null && d.sourceStart! < end && d.sourceEnd! > start) d,
+        if (d.sourceStart != null &&
+            d.sourceEnd != null &&
+            d.sourceStart! < end &&
+            d.sourceEnd! > start)
+          d,
     ];
     if (covering.isEmpty) return TextSpan(text: text, style: tagStyle);
 
@@ -412,17 +468,25 @@ class TypstEditorController extends TextEditingController {
       if (segStart == segEnd) continue;
       final segment = text.substring(segStart - start, segEnd - start);
       final severity = _worstSeverity(covering, segStart, segEnd);
-      final segStyle = severity == null ? tagStyle : _withDiagnostic(tagStyle, severity);
+      final segStyle = severity == null
+          ? tagStyle
+          : _withDiagnostic(tagStyle, severity);
       children.add(TextSpan(text: segment, style: segStyle));
     }
     return TextSpan(children: children);
   }
 
-  TypstDiagnosticSeverity? _worstSeverity(List<TypstDiagnostic> diagnostics, int segStart, int segEnd) {
+  TypstDiagnosticSeverity? _worstSeverity(
+    List<TypstDiagnostic> diagnostics,
+    int segStart,
+    int segEnd,
+  ) {
     TypstDiagnosticSeverity? worst;
     for (final d in diagnostics) {
       if (d.sourceStart! >= segEnd || d.sourceEnd! <= segStart) continue;
-      if (d.severity == TypstDiagnosticSeverity.error) return TypstDiagnosticSeverity.error;
+      if (d.severity == TypstDiagnosticSeverity.error) {
+        return TypstDiagnosticSeverity.error;
+      }
       worst = TypstDiagnosticSeverity.warning;
     }
     return worst;
@@ -432,7 +496,9 @@ class TypstEditorController extends TextEditingController {
     final decoration = TextStyle(
       decoration: TextDecoration.underline,
       decorationStyle: TextDecorationStyle.wavy,
-      decorationColor: severity == TypstDiagnosticSeverity.error ? errorColor : warningColor,
+      decorationColor: severity == TypstDiagnosticSeverity.error
+          ? errorColor
+          : warningColor,
     );
     return (base ?? const TextStyle()).merge(decoration);
   }
@@ -456,5 +522,8 @@ class _Utf16Cursor {
 bool _isWordChar(String s) {
   if (s.isEmpty) return false;
   final c = s.codeUnitAt(0);
-  return (c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x5A) || (c >= 0x61 && c <= 0x7A) || c == 0x5F;
+  return (c >= 0x30 && c <= 0x39) ||
+      (c >= 0x41 && c <= 0x5A) ||
+      (c >= 0x61 && c <= 0x7A) ||
+      c == 0x5F;
 }

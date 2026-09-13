@@ -20,7 +20,9 @@ class FakeRustSession implements rust.TypstSession {
   List<rust.TypstDiagnostic> diagnosticsToReturn = const [];
 
   @override
-  Future<List<rust.TypstFoldingRange>> foldingRanges({required String source}) async => const [];
+  Future<List<rust.TypstFoldingRange>> foldingRanges({
+    required String source,
+  }) async => const [];
 
   @override
   Future<rust.HighlightNode> highlight({required String source}) async {
@@ -29,7 +31,13 @@ class FakeRustSession implements rust.TypstSession {
     return rust.HighlightNode(
       tag: null,
       text: '',
-      children: [rust.HighlightNode(tag: rust.HighlightTag.heading, text: source, children: const [])],
+      children: [
+        rust.HighlightNode(
+          tag: rust.HighlightTag.heading,
+          text: source,
+          children: const [],
+        ),
+      ],
     );
   }
 
@@ -38,7 +46,11 @@ class FakeRustSession implements rust.TypstSession {
     required int cursorUtf16,
     required bool explicit,
   }) async {
-    return rust.CompletionResult(generation: BigInt.zero, applyFromUtf16: 0, completions: const []);
+    return rust.CompletionResult(
+      generation: BigInt.zero,
+      applyFromUtf16: 0,
+      completions: const [],
+    );
   }
 
   @override
@@ -47,7 +59,10 @@ class FakeRustSession implements rust.TypstSession {
   }
 
   @override
-  Future<rust.FunctionInfoResult> functionInfo({required int cursorUtf16, required String label}) async {
+  Future<rust.FunctionInfoResult> functionInfo({
+    required int cursorUtf16,
+    required String label,
+  }) async {
     return rust.FunctionInfoResult(generation: BigInt.zero, info: null);
   }
 
@@ -79,7 +94,10 @@ class FakeRustSession implements rust.TypstSession {
   }
 
   @override
-  Future<rust.PageTextData> pageText({required BigInt generation, required int pageIndex}) async {
+  Future<rust.PageTextData> pageText({
+    required BigInt generation,
+    required int pageIndex,
+  }) async {
     throw UnimplementedError();
   }
 
@@ -129,22 +147,25 @@ TypstSession makeSession(FakeRustSession fake) {
 }
 
 void main() {
-  test('highlight is requested for the initial text and applied when ready', () async {
-    final fake = FakeRustSession();
-    final session = makeSession(fake);
-    final controller = TypstEditorController(session: session, text: 'hello');
+  test(
+    'highlight is requested for the initial text and applied when ready',
+    () async {
+      final fake = FakeRustSession();
+      final session = makeSession(fake);
+      final controller = TypstEditorController(session: session, text: 'hello');
 
-    expect(fake.highlightedSources, ['hello']);
-    expect(controller.debugHasFreshTree, isFalse);
+      expect(fake.highlightedSources, ['hello']);
+      expect(controller.debugHasFreshTree, isFalse);
 
-    await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
 
-    expect(controller.debugHasFreshTree, isTrue);
-    expect(flatten(controller.debugBuildSpan()), [('hello', null)]);
+      expect(controller.debugHasFreshTree, isTrue);
+      expect(flatten(controller.debugBuildSpan()), [('hello', null)]);
 
-    controller.dispose();
-    await session.dispose();
-  });
+      controller.dispose();
+      await session.dispose();
+    },
+  );
 
   test('assigning text requests a fresh highlight', () async {
     final fake = FakeRustSession();
@@ -161,98 +182,116 @@ void main() {
     await session.dispose();
   });
 
-  test('rapid edits while a highlight is in flight coalesce to one more call', () async {
-    final fake = FakeRustSession();
-    final session = makeSession(fake);
-    fake.highlightGate = Completer<void>();
+  test(
+    'rapid edits while a highlight is in flight coalesce to one more call',
+    () async {
+      final fake = FakeRustSession();
+      final session = makeSession(fake);
+      fake.highlightGate = Completer<void>();
 
-    final controller = TypstEditorController(session: session, text: 'first');
-    expect(fake.highlightedSources, ['first']);
+      final controller = TypstEditorController(session: session, text: 'first');
+      expect(fake.highlightedSources, ['first']);
 
-    // Both arrive while 'first' is still gated.
-    controller.text = 'second';
-    controller.text = 'third';
-    expect(fake.highlightedSources, ['first'], reason: 'no new call starts until the in-flight one resolves');
+      // Both arrive while 'first' is still gated.
+      controller.text = 'second';
+      controller.text = 'third';
+      expect(fake.highlightedSources, [
+        'first',
+      ], reason: 'no new call starts until the in-flight one resolves');
 
-    fake.highlightGate!.complete();
-    fake.highlightGate = null;
-    await Future<void>.delayed(Duration.zero);
+      fake.highlightGate!.complete();
+      fake.highlightGate = null;
+      await Future<void>.delayed(Duration.zero);
 
-    // 'second' was superseded by 'third' before it ever started, exactly
-    // like TypstSession's own compile coalescing.
-    expect(fake.highlightedSources, ['first', 'third']);
-    expect(controller.debugHasFreshTree, isTrue);
-    expect(flatten(controller.debugBuildSpan()), [('third', null)]);
+      // 'second' was superseded by 'third' before it ever started, exactly
+      // like TypstSession's own compile coalescing.
+      expect(fake.highlightedSources, ['first', 'third']);
+      expect(controller.debugHasFreshTree, isTrue);
+      expect(flatten(controller.debugBuildSpan()), [('third', null)]);
 
-    controller.dispose();
-    await session.dispose();
-  });
+      controller.dispose();
+      await session.dispose();
+    },
+  );
 
-  test('a stale in-flight result is discarded, not applied to newer text', () async {
-    final fake = FakeRustSession();
-    final session = makeSession(fake);
-    fake.highlightGate = Completer<void>();
+  test(
+    'a stale in-flight result is discarded, not applied to newer text',
+    () async {
+      final fake = FakeRustSession();
+      final session = makeSession(fake);
+      fake.highlightGate = Completer<void>();
 
-    final controller = TypstEditorController(session: session, text: 'old');
-    controller.text = 'new';
+      final controller = TypstEditorController(session: session, text: 'old');
+      controller.text = 'new';
 
-    // Let the gated 'old' call resolve while 'new' is already current text.
-    fake.highlightGate!.complete();
-    fake.highlightGate = null;
-    await Future<void>.delayed(Duration.zero);
+      // Let the gated 'old' call resolve while 'new' is already current text.
+      fake.highlightGate!.complete();
+      fake.highlightGate = null;
+      await Future<void>.delayed(Duration.zero);
 
-    // The result for 'old' must not be shown against the now-current 'new'.
-    // Either a fresh tree for 'new' has already landed, or none has yet —
-    // never a tree whose text mismatches `text`.
-    if (controller.debugHasFreshTree) {
+      // The result for 'old' must not be shown against the now-current 'new'.
+      // Either a fresh tree for 'new' has already landed, or none has yet —
+      // never a tree whose text mismatches `text`.
+      if (controller.debugHasFreshTree) {
+        expect(flatten(controller.debugBuildSpan()), [('new', null)]);
+      } else {
+        expect(controller.debugBuildSpan().toPlainText(), 'new');
+      }
+
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.debugHasFreshTree, isTrue);
       expect(flatten(controller.debugBuildSpan()), [('new', null)]);
-    } else {
-      expect(controller.debugBuildSpan().toPlainText(), 'new');
-    }
 
-    await Future<void>.delayed(Duration.zero);
-    expect(controller.debugHasFreshTree, isTrue);
-    expect(flatten(controller.debugBuildSpan()), [('new', null)]);
+      controller.dispose();
+      await session.dispose();
+    },
+  );
 
-    controller.dispose();
-    await session.dispose();
-  });
+  test(
+    'diagnostics from session.results overlay a wavy underline on the covered range',
+    () async {
+      final fake = FakeRustSession();
+      final session = makeSession(fake);
+      final controller = TypstEditorController(
+        session: session,
+        text: 'let x = (',
+      );
+      await Future<void>.delayed(Duration.zero);
 
-  test('diagnostics from session.results overlay a wavy underline on the covered range', () async {
-    final fake = FakeRustSession();
-    final session = makeSession(fake);
-    final controller = TypstEditorController(session: session, text: 'let x = (');
-    await Future<void>.delayed(Duration.zero);
+      fake.diagnosticsToReturn = const [
+        rust.TypstDiagnostic(
+          severity: rust.DiagnosticSeverity.error,
+          message: 'unclosed delimiter',
+          hints: [],
+          utf16Start: 8,
+          utf16End: 9,
+          line: 1,
+          column: 8,
+        ),
+      ];
+      await session.compile(controller.text);
+      await Future<void>.delayed(Duration.zero);
 
-    fake.diagnosticsToReturn = const [
-      rust.TypstDiagnostic(
-        severity: rust.DiagnosticSeverity.error,
-        message: 'unclosed delimiter',
-        hints: [],
-        utf16Start: 8,
-        utf16End: 9,
-        line: 1,
-        column: 8,
-      ),
-    ];
-    await session.compile(controller.text);
-    await Future<void>.delayed(Duration.zero);
+      // 'let x = (' with the diagnostic covering index 8..9 (the '(') splits
+      // the single leaf into an unstyled prefix and a wavy-underlined '(' in
+      // the controller's default error color.
+      expect(flatten(controller.debugBuildSpan()), [
+        ('let x = ', null),
+        ('(', controller.errorColor),
+      ]);
 
-    // 'let x = (' with the diagnostic covering index 8..9 (the '(') splits
-    // the single leaf into an unstyled prefix and a wavy-underlined '(' in
-    // the controller's default error color.
-    expect(flatten(controller.debugBuildSpan()), [('let x = ', null), ('(', controller.errorColor)]);
-
-    controller.dispose();
-    await session.dispose();
-  });
+      controller.dispose();
+      await session.dispose();
+    },
+  );
 
   group('auto-closing brackets', () {
     // Every text-changing `.value =` below also dispatches a highlight
     // request (see `_requestHighlight`); `settle()` drains it so a test's
     // `dispose()` doesn't race a `FakeRustSession.highlight` future that's
     // still in flight, the same way the highlighting tests above do.
-    ({TypstEditorController controller, TypstSession session}) makeAutoCloseController({
+    ({TypstEditorController controller, TypstSession session})
+    makeAutoCloseController({
       String text = '',
       Map<String, String>? pairs,
       int? caret,
@@ -260,85 +299,170 @@ void main() {
       final session = makeSession(FakeRustSession());
       final controller = pairs == null
           ? TypstEditorController(session: session, text: text)
-          : TypstEditorController(session: session, text: text, autoClosePairs: pairs);
-      controller.selection = TextSelection.collapsed(offset: caret ?? text.length);
+          : TypstEditorController(
+              session: session,
+              text: text,
+              autoClosePairs: pairs,
+            );
+      controller.selection = TextSelection.collapsed(
+        offset: caret ?? text.length,
+      );
       return (controller: controller, session: session);
     }
 
     Future<void> settle() => Future<void>.delayed(Duration.zero);
 
-    test('typing an opener inserts its closer and places the caret between them', () async {
-      const pairs = {'(': ')', '[': ']', '{': '}', '"': '"'};
-      for (final entry in pairs.entries) {
+    test(
+      'typing an opener inserts its closer and places the caret between them',
+      () async {
+        const pairs = {'(': ')', '[': ']', '{': '}', '"': '"'};
+        for (final entry in pairs.entries) {
+          final env = makeAutoCloseController();
+          env.controller.value = TextEditingValue(
+            text: entry.key,
+            selection: const TextSelection.collapsed(offset: 1),
+          );
+          expect(
+            env.controller.text,
+            '${entry.key}${entry.value}',
+            reason: entry.key,
+          );
+          expect(
+            env.controller.selection,
+            const TextSelection.collapsed(offset: 1),
+            reason: entry.key,
+          );
+          await settle();
+          env.controller.dispose();
+          await env.session.dispose();
+        }
+      },
+    );
+
+    test(
+      'typing a closer that matches a pending auto-close types over it instead of duplicating',
+      () async {
         final env = makeAutoCloseController();
-        env.controller.value = TextEditingValue(text: entry.key, selection: const TextSelection.collapsed(offset: 1));
-        expect(env.controller.text, '${entry.key}${entry.value}', reason: entry.key);
-        expect(env.controller.selection, const TextSelection.collapsed(offset: 1), reason: entry.key);
+        env.controller.value = const TextEditingValue(
+          text: '(',
+          selection: TextSelection.collapsed(offset: 1),
+        );
+        expect(env.controller.text, '()');
+
+        // What the text input system delivers when ')' is typed at the caret,
+        // before this controller's correction: a naive insertion.
+        env.controller.value = const TextEditingValue(
+          text: '())',
+          selection: TextSelection.collapsed(offset: 2),
+        );
+        expect(
+          env.controller.text,
+          '()',
+          reason: 'no duplicate close inserted',
+        );
+        expect(
+          env.controller.selection,
+          const TextSelection.collapsed(offset: 2),
+        );
         await settle();
         env.controller.dispose();
         await env.session.dispose();
-      }
-    });
+      },
+    );
 
-    test('typing a closer that matches a pending auto-close types over it instead of duplicating', () async {
-      final env = makeAutoCloseController();
-      env.controller.value = const TextEditingValue(text: '(', selection: TextSelection.collapsed(offset: 1));
-      expect(env.controller.text, '()');
+    test(
+      'backspace right after an opener deletes its auto-inserted closer too',
+      () async {
+        final env = makeAutoCloseController();
+        env.controller.value = const TextEditingValue(
+          text: '(',
+          selection: TextSelection.collapsed(offset: 1),
+        );
+        expect(env.controller.text, '()');
 
-      // What the text input system delivers when ')' is typed at the caret,
-      // before this controller's correction: a naive insertion.
-      env.controller.value = const TextEditingValue(text: '())', selection: TextSelection.collapsed(offset: 2));
-      expect(env.controller.text, '()', reason: 'no duplicate close inserted');
-      expect(env.controller.selection, const TextSelection.collapsed(offset: 2));
-      await settle();
-      env.controller.dispose();
-      await env.session.dispose();
-    });
+        env.controller.value = const TextEditingValue(
+          text: ')',
+          selection: TextSelection.collapsed(offset: 0),
+        );
+        expect(
+          env.controller.text,
+          '',
+          reason: 'the auto-inserted ) is deleted along with (',
+        );
+        expect(
+          env.controller.selection,
+          const TextSelection.collapsed(offset: 0),
+        );
+        await settle();
+        env.controller.dispose();
+        await env.session.dispose();
+      },
+    );
 
-    test('backspace right after an opener deletes its auto-inserted closer too', () async {
-      final env = makeAutoCloseController();
-      env.controller.value = const TextEditingValue(text: '(', selection: TextSelection.collapsed(offset: 1));
-      expect(env.controller.text, '()');
+    test(
+      'backspace elsewhere does not delete a paired closer, but tracking survives it',
+      () async {
+        final env = makeAutoCloseController(text: 'a');
+        env.controller.value = const TextEditingValue(
+          text: 'a(',
+          selection: TextSelection.collapsed(offset: 2),
+        );
+        expect(env.controller.text, 'a()');
 
-      env.controller.value = const TextEditingValue(text: ')', selection: TextSelection.collapsed(offset: 0));
-      expect(env.controller.text, '', reason: 'the auto-inserted ) is deleted along with (');
-      expect(env.controller.selection, const TextSelection.collapsed(offset: 0));
-      await settle();
-      env.controller.dispose();
-      await env.session.dispose();
-    });
+        // Move the caret to just after 'a' and backspace it — unrelated to
+        // the pending pair sitting at index 2.
+        env.controller.selection = const TextSelection.collapsed(offset: 1);
+        env.controller.value = const TextEditingValue(
+          text: '()',
+          selection: TextSelection.collapsed(offset: 0),
+        );
+        expect(
+          env.controller.text,
+          '()',
+          reason: 'only the unrelated character is deleted',
+        );
 
-    test('backspace elsewhere does not delete a paired closer, but tracking survives it', () async {
-      final env = makeAutoCloseController(text: 'a');
-      env.controller.value = const TextEditingValue(text: 'a(', selection: TextSelection.collapsed(offset: 2));
-      expect(env.controller.text, 'a()');
+        // The pending closer's tracked offset shifted down by one rather than
+        // being dropped: typing ')' at the caret, now between '(' and ')',
+        // still types over rather than duplicating.
+        env.controller.selection = const TextSelection.collapsed(offset: 1);
+        env.controller.value = const TextEditingValue(
+          text: '())',
+          selection: TextSelection.collapsed(offset: 2),
+        );
+        expect(
+          env.controller.text,
+          '()',
+          reason: 'pending tracking survived the unrelated backspace',
+        );
+        await settle();
+        env.controller.dispose();
+        await env.session.dispose();
+      },
+    );
 
-      // Move the caret to just after 'a' and backspace it — unrelated to
-      // the pending pair sitting at index 2.
-      env.controller.selection = const TextSelection.collapsed(offset: 1);
-      env.controller.value = const TextEditingValue(text: '()', selection: TextSelection.collapsed(offset: 0));
-      expect(env.controller.text, '()', reason: 'only the unrelated character is deleted');
-
-      // The pending closer's tracked offset shifted down by one rather than
-      // being dropped: typing ')' at the caret, now between '(' and ')',
-      // still types over rather than duplicating.
-      env.controller.selection = const TextSelection.collapsed(offset: 1);
-      env.controller.value = const TextEditingValue(text: '())', selection: TextSelection.collapsed(offset: 2));
-      expect(env.controller.text, '()', reason: 'pending tracking survived the unrelated backspace');
-      await settle();
-      env.controller.dispose();
-      await env.session.dispose();
-    });
-
-    test('does not add a closer when the caret is right before a word character', () async {
-      final env = makeAutoCloseController(text: 'foo', caret: 0);
-      env.controller.value = const TextEditingValue(text: '(foo', selection: TextSelection.collapsed(offset: 1));
-      expect(env.controller.text, '(foo', reason: 'no closer added before a word character');
-      expect(env.controller.selection, const TextSelection.collapsed(offset: 1));
-      await settle();
-      env.controller.dispose();
-      await env.session.dispose();
-    });
+    test(
+      'does not add a closer when the caret is right before a word character',
+      () async {
+        final env = makeAutoCloseController(text: 'foo', caret: 0);
+        env.controller.value = const TextEditingValue(
+          text: '(foo',
+          selection: TextSelection.collapsed(offset: 1),
+        );
+        expect(
+          env.controller.text,
+          '(foo',
+          reason: 'no closer added before a word character',
+        );
+        expect(
+          env.controller.selection,
+          const TextSelection.collapsed(offset: 1),
+        );
+        await settle();
+        env.controller.dispose();
+        await env.session.dispose();
+      },
+    );
 
     test('does not pair while an IME composition is active', () async {
       final env = makeAutoCloseController();
@@ -347,7 +471,11 @@ void main() {
         selection: TextSelection.collapsed(offset: 1),
         composing: TextRange(start: 0, end: 1),
       );
-      expect(env.controller.text, '(', reason: 'no closer added mid-composition');
+      expect(
+        env.controller.text,
+        '(',
+        reason: 'no closer added mid-composition',
+      );
       await settle();
       env.controller.dispose();
       await env.session.dispose();
@@ -355,7 +483,10 @@ void main() {
 
     test('a bulk text assignment is never treated as typing', () async {
       final env = makeAutoCloseController();
-      env.controller.value = const TextEditingValue(text: '(', selection: TextSelection.collapsed(offset: 1));
+      env.controller.value = const TextEditingValue(
+        text: '(',
+        selection: TextSelection.collapsed(offset: 1),
+      );
       expect(env.controller.text, '()');
 
       const replacement = 'unrelated replacement';
@@ -368,7 +499,11 @@ void main() {
         text: '$replacement)',
         selection: TextSelection.collapsed(offset: end + 1),
       );
-      expect(env.controller.text, '$replacement)', reason: 'bulk assignment left no pairing artifacts behind');
+      expect(
+        env.controller.text,
+        '$replacement)',
+        reason: 'bulk assignment left no pairing artifacts behind',
+      );
       await settle();
       env.controller.dispose();
       await env.session.dispose();
@@ -376,21 +511,42 @@ void main() {
 
     test('nested pairs type over correctly in LIFO order', () async {
       final env = makeAutoCloseController();
-      env.controller.value = const TextEditingValue(text: '(', selection: TextSelection.collapsed(offset: 1));
+      env.controller.value = const TextEditingValue(
+        text: '(',
+        selection: TextSelection.collapsed(offset: 1),
+      );
       expect(env.controller.text, '()');
 
-      env.controller.value = const TextEditingValue(text: '([)', selection: TextSelection.collapsed(offset: 2));
+      env.controller.value = const TextEditingValue(
+        text: '([)',
+        selection: TextSelection.collapsed(offset: 2),
+      );
       expect(env.controller.text, '([])');
-      expect(env.controller.selection, const TextSelection.collapsed(offset: 2));
+      expect(
+        env.controller.selection,
+        const TextSelection.collapsed(offset: 2),
+      );
 
       // Type over the inner ']' first, then the outer ')'.
-      env.controller.value = const TextEditingValue(text: '([]])', selection: TextSelection.collapsed(offset: 3));
+      env.controller.value = const TextEditingValue(
+        text: '([]])',
+        selection: TextSelection.collapsed(offset: 3),
+      );
       expect(env.controller.text, '([])');
-      expect(env.controller.selection, const TextSelection.collapsed(offset: 3));
+      expect(
+        env.controller.selection,
+        const TextSelection.collapsed(offset: 3),
+      );
 
-      env.controller.value = const TextEditingValue(text: '([]))', selection: TextSelection.collapsed(offset: 4));
+      env.controller.value = const TextEditingValue(
+        text: '([]))',
+        selection: TextSelection.collapsed(offset: 4),
+      );
       expect(env.controller.text, '([])');
-      expect(env.controller.selection, const TextSelection.collapsed(offset: 4));
+      expect(
+        env.controller.selection,
+        const TextSelection.collapsed(offset: 4),
+      );
       await settle();
       env.controller.dispose();
       await env.session.dispose();
@@ -398,54 +554,100 @@ void main() {
 
     test('autoClosePairs can be customized or disabled entirely', () async {
       final disabled = makeAutoCloseController(pairs: const {});
-      disabled.controller.value = const TextEditingValue(text: '(', selection: TextSelection.collapsed(offset: 1));
-      expect(disabled.controller.text, '(', reason: 'empty map disables auto-closing');
+      disabled.controller.value = const TextEditingValue(
+        text: '(',
+        selection: TextSelection.collapsed(offset: 1),
+      );
+      expect(
+        disabled.controller.text,
+        '(',
+        reason: 'empty map disables auto-closing',
+      );
       await settle();
       disabled.controller.dispose();
       await disabled.session.dispose();
 
       final custom = makeAutoCloseController(pairs: const {'<': '>'});
-      custom.controller.value = const TextEditingValue(text: '<', selection: TextSelection.collapsed(offset: 1));
-      expect(custom.controller.text, '<>', reason: 'a pair outside the default set still auto-closes');
+      custom.controller.value = const TextEditingValue(
+        text: '<',
+        selection: TextSelection.collapsed(offset: 1),
+      );
+      expect(
+        custom.controller.text,
+        '<>',
+        reason: 'a pair outside the default set still auto-closes',
+      );
 
-      custom.controller.value = const TextEditingValue(text: '<(>', selection: TextSelection.collapsed(offset: 2));
-      expect(custom.controller.text, '<(>', reason: '( is not in this custom map, so it is left unpaired');
+      custom.controller.value = const TextEditingValue(
+        text: '<(>',
+        selection: TextSelection.collapsed(offset: 2),
+      );
+      expect(
+        custom.controller.text,
+        '<(>',
+        reason: '( is not in this custom map, so it is left unpaired',
+      );
       await settle();
       custom.controller.dispose();
       await custom.session.dispose();
     });
 
-    test('typing an opener over a selection wraps it instead of replacing it', () async {
-      final env = makeAutoCloseController(text: 'hello');
-      env.controller.selection = const TextSelection(baseOffset: 0, extentOffset: 5);
-      // What the text input system delivers when '(' is typed over the
-      // whole selection, before this controller's correction: a plain
-      // replacement, caret collapsed right after the typed character.
-      env.controller.value = const TextEditingValue(text: '(', selection: TextSelection.collapsed(offset: 1));
-      expect(env.controller.text, '(hello)');
-      expect(
-        env.controller.selection,
-        const TextSelection(baseOffset: 1, extentOffset: 6),
-        reason: 'the original text stays selected, now inside the pair',
-      );
-      await settle();
-      env.controller.dispose();
-      await env.session.dispose();
-    });
+    test(
+      'typing an opener over a selection wraps it instead of replacing it',
+      () async {
+        final env = makeAutoCloseController(text: 'hello');
+        env.controller.selection = const TextSelection(
+          baseOffset: 0,
+          extentOffset: 5,
+        );
+        // What the text input system delivers when '(' is typed over the
+        // whole selection, before this controller's correction: a plain
+        // replacement, caret collapsed right after the typed character.
+        env.controller.value = const TextEditingValue(
+          text: '(',
+          selection: TextSelection.collapsed(offset: 1),
+        );
+        expect(env.controller.text, '(hello)');
+        expect(
+          env.controller.selection,
+          const TextSelection(baseOffset: 1, extentOffset: 6),
+          reason: 'the original text stays selected, now inside the pair',
+        );
+        await settle();
+        env.controller.dispose();
+        await env.session.dispose();
+      },
+    );
 
-    test('typing a non-opener over a selection just replaces it as usual', () async {
-      final env = makeAutoCloseController(text: 'hello');
-      env.controller.selection = const TextSelection(baseOffset: 0, extentOffset: 5);
-      env.controller.value = const TextEditingValue(text: 'x', selection: TextSelection.collapsed(offset: 1));
-      expect(env.controller.text, 'x', reason: 'a non-opener never wraps, even over a selection');
-      await settle();
-      env.controller.dispose();
-      await env.session.dispose();
-    });
+    test(
+      'typing a non-opener over a selection just replaces it as usual',
+      () async {
+        final env = makeAutoCloseController(text: 'hello');
+        env.controller.selection = const TextSelection(
+          baseOffset: 0,
+          extentOffset: 5,
+        );
+        env.controller.value = const TextEditingValue(
+          text: 'x',
+          selection: TextSelection.collapsed(offset: 1),
+        );
+        expect(
+          env.controller.text,
+          'x',
+          reason: 'a non-opener never wraps, even over a selection',
+        );
+        await settle();
+        env.controller.dispose();
+        await env.session.dispose();
+      },
+    );
   });
 
   group('smart newline', () {
-    ({TypstEditorController controller, TypstSession session}) makeController(String text, int caret) {
+    ({TypstEditorController controller, TypstSession session}) makeController(
+      String text,
+      int caret,
+    ) {
       final session = makeSession(FakeRustSession());
       final controller = TypstEditorController(session: session, text: text);
       controller.selection = TextSelection.collapsed(offset: caret);
@@ -454,55 +656,85 @@ void main() {
 
     Future<void> settle() => Future<void>.delayed(Duration.zero);
 
-    test('enter between a matching, empty bracket pair opens an indented block', () async {
-      final env = makeController('#function()', 10); // caret between '(' and ')'
-      // What the text input system delivers for a plain Enter: a naive
-      // single '\n' inserted at the caret.
-      env.controller.value = const TextEditingValue(
-        text: '#function(\n)',
-        selection: TextSelection.collapsed(offset: 11),
-      );
-      expect(env.controller.text, '#function(\n  \n)');
-      expect(
-        env.controller.selection,
-        const TextSelection.collapsed(offset: 13),
-        reason: 'caret lands on the blank, one-level-deeper line',
-      );
-      await settle();
-      env.controller.dispose();
-      await env.session.dispose();
-    });
+    test(
+      'enter between a matching, empty bracket pair opens an indented block',
+      () async {
+        final env = makeController(
+          '#function()',
+          10,
+        ); // caret between '(' and ')'
+        // What the text input system delivers for a plain Enter: a naive
+        // single '\n' inserted at the caret.
+        env.controller.value = const TextEditingValue(
+          text: '#function(\n)',
+          selection: TextSelection.collapsed(offset: 11),
+        );
+        expect(env.controller.text, '#function(\n  \n)');
+        expect(
+          env.controller.selection,
+          const TextSelection.collapsed(offset: 13),
+          reason: 'caret lands on the blank, one-level-deeper line',
+        );
+        await settle();
+        env.controller.dispose();
+        await env.session.dispose();
+      },
+    );
 
-    test('enter carries the current line\'s indentation forward elsewhere', () async {
-      final env = makeController('  foo', 5);
-      env.controller.value = const TextEditingValue(text: '  foo\n', selection: TextSelection.collapsed(offset: 6));
-      expect(env.controller.text, '  foo\n  ');
-      expect(env.controller.selection, const TextSelection.collapsed(offset: 8));
-      await settle();
-      env.controller.dispose();
-      await env.session.dispose();
-    });
+    test(
+      'enter carries the current line\'s indentation forward elsewhere',
+      () async {
+        final env = makeController('  foo', 5);
+        env.controller.value = const TextEditingValue(
+          text: '  foo\n',
+          selection: TextSelection.collapsed(offset: 6),
+        );
+        expect(env.controller.text, '  foo\n  ');
+        expect(
+          env.controller.selection,
+          const TextSelection.collapsed(offset: 8),
+        );
+        await settle();
+        env.controller.dispose();
+        await env.session.dispose();
+      },
+    );
 
-    test('enter on an unindented line with no adjacent bracket pair does nothing extra', () async {
-      final env = makeController('abc', 3);
-      env.controller.value = const TextEditingValue(text: 'abc\n', selection: TextSelection.collapsed(offset: 4));
-      expect(env.controller.text, 'abc\n');
-      expect(env.controller.selection, const TextSelection.collapsed(offset: 4));
-      await settle();
-      env.controller.dispose();
-      await env.session.dispose();
-    });
+    test(
+      'enter on an unindented line with no adjacent bracket pair does nothing extra',
+      () async {
+        final env = makeController('abc', 3);
+        env.controller.value = const TextEditingValue(
+          text: 'abc\n',
+          selection: TextSelection.collapsed(offset: 4),
+        );
+        expect(env.controller.text, 'abc\n');
+        expect(
+          env.controller.selection,
+          const TextSelection.collapsed(offset: 4),
+        );
+        await settle();
+        env.controller.dispose();
+        await env.session.dispose();
+      },
+    );
 
-    test('enter between brackets that are not empty (something already between them) is a plain newline', () async {
-      // '(' and ')' aren't *immediately* adjacent here — 'x' sits between
-      // them — so this isn't the "opens a block" case, just carrying
-      // whatever indentation (none) the current line has.
-      final env = makeController('#f(x)', 3); // caret right after '('
-      env.controller.value = const TextEditingValue(text: '#f(\nx)', selection: TextSelection.collapsed(offset: 4));
-      expect(env.controller.text, '#f(\nx)');
-      await settle();
-      env.controller.dispose();
-      await env.session.dispose();
-    });
+    test(
+      'enter between brackets that are not empty (something already between them) is a plain newline',
+      () async {
+        // '(' and ')' aren't *immediately* adjacent here — 'x' sits between
+        // them — so this isn't the "opens a block" case, just carrying
+        // whatever indentation (none) the current line has.
+        final env = makeController('#f(x)', 3); // caret right after '('
+        env.controller.value = const TextEditingValue(
+          text: '#f(\nx)',
+          selection: TextSelection.collapsed(offset: 4),
+        );
+        expect(env.controller.text, '#f(\nx)');
+        await settle();
+        env.controller.dispose();
+        await env.session.dispose();
+      },
+    );
   });
 }

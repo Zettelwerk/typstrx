@@ -37,13 +37,13 @@ class TypstPageText {
       final dx = x < rect.left
           ? rect.left - x
           : x > rect.right
-              ? x - rect.right
-              : 0.0;
+          ? x - rect.right
+          : 0.0;
       final dy = y < rect.top
           ? rect.top - y
           : y > rect.bottom
-              ? y - rect.bottom
-              : 0.0;
+          ? y - rect.bottom
+          : 0.0;
       final distance = dx * dx + dy * dy;
       if (distance < bestDistance) {
         bestDistance = distance;

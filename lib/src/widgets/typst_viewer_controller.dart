@@ -12,8 +12,7 @@ class TypstViewerController extends ChangeNotifier
 
   /// The current view matrix (document points -> view coordinates).
   @override
-  Matrix4 get value =>
-      _state?._txController.value ?? Matrix4.identity();
+  Matrix4 get value => _state?._txController.value ?? Matrix4.identity();
 
   /// The current zoom (1.0 = one point per logical pixel).
   double get currentZoom => _state?._currentZoom ?? 1.0;
@@ -59,8 +58,8 @@ class TypstViewerController extends ChangeNotifier
     final state = _state;
     final layout = state?._layout;
     if (state == null || layout == null) return;
-    final rect = layout.pageRects[
-        (pageNumber - 1).clamp(0, layout.pageRects.length - 1)];
+    final rect = layout
+        .pageRects[(pageNumber - 1).clamp(0, layout.pageRects.length - 1)];
     state._goTo(Offset(state._visibleRect.left, rect.top - 8));
   }
 
