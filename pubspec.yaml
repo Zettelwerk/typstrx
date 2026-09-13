@@ -4,8 +4,7 @@ description: >-
   Rust compiler, renders pages with viewport-based high-resolution tiles,
   and provides viewer widgets with text selection and link support.
 version: 0.1.0
-# TODO(publish): set the real repository URL before publishing to pub.dev
-# repository: https://github.com/<owner>/typstrx
+repository: https://github.com/Zettelwerk/typstrx
 
 environment:
   sdk: ^3.12.2
