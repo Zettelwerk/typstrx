@@ -33,13 +33,17 @@ from the compiled document.
 |---|---|
 | Linux | Supported |
 | Android | Supported |
-| iOS / macOS / Windows | Scaffolded, untested |
+| iOS / macOS | Scaffolded, untested |
+| Windows | Supported |
 | Web | Not supported yet |
 
 ## Requirements
 
-The Rust crate embedded in this package is compiled when the consuming app is
-built (via [cargokit](https://github.com/irondash/cargokit)). You need:
+The Rust crate embedded in this package is built via
+[cargokit](https://github.com/irondash/cargokit). On supported platforms,
+Cargokit automatically downloads and verifies a signed precompiled binary
+when Rust is unavailable. You need a Rust toolchain to build it locally or as
+a fallback when a matching precompiled binary is unavailable:
 
 - A [Rust toolchain](https://rustup.rs) (`rustup`)
 - For Android: NDK r26 or newer, plus the Rust targets for your ABIs, e.g.
@@ -131,7 +135,6 @@ final text = controller.selection?.text;
 - Text search widget (the text model already supports `allMatches`-style search)
 - Scroll thumbs, facing-page layouts, selection magnifier
 - `SelectionArea` integration
-- Precompiled Rust binaries (no consumer Rust toolchain needed)
 - True sub-region rendering backend (typst-svg + resvg) for very high zoom
 - Web support
 

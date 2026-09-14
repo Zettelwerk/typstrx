@@ -17,7 +17,7 @@ jobs:
     name: Precompile (Linux + Android)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-java@v4
         with:
@@ -66,4 +66,38 @@ jobs:
             --android-sdk-location "$ANDROID_HOME" \
             --android-ndk-version 27.0.12077973 \
             --android-min-sdk-version 21 \
+            --verbose
+
+  precompile-windows:
+    name: Precompile (Windows)
+    needs: precompile
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install cargokit build_tool dependencies
+        working-directory: cargokit/build_tool
+        run: dart pub get
+
+      - name: Precompile and publish Windows binaries
+        working-directory: cargokit/build_tool
+        env:
+          PRIVATE_KEY: ${{ secrets.CARGOKIT_PRIVATE_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          dart run bin/build_tool.dart precompile-binaries `
+            --repository Zettelwerk/typstrx `
+            --manifest-dir ../../rust `
+            --target x86_64-pc-windows-msvc `
             --verbose
