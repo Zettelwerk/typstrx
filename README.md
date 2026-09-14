@@ -33,8 +33,8 @@ from the compiled document.
 |---|---|
 | Linux | Supported |
 | Android | Supported |
-| iOS / macOS | Scaffolded, untested |
 | Windows | Supported |
+| iOS / macOS | Scaffolded, untested |
 | Web | Not supported yet |
 
 ## Requirements

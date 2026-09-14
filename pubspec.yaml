@@ -5,6 +5,15 @@ description: >-
   link navigation.
 version: 0.1.0
 repository: https://github.com/Zettelwerk/typstrx
+issue_tracker: https://github.com/Zettelwerk/typstrx/issues
+
+topics:
+  - typst
+  - pdf
+  - ffi
+  - typesetting
+  - code
+
 
 environment:
   sdk: ^3.12.2
