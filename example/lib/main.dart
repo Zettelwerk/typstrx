@@ -88,25 +88,53 @@ Future<void> main() async {
   runApp(ExampleApp(session: session));
 }
 
-class ExampleApp extends StatelessWidget {
+class ExampleApp extends StatefulWidget {
   const ExampleApp({super.key, required this.session});
 
   final TypstSession session;
 
   @override
+  State<ExampleApp> createState() => _ExampleAppState();
+}
+
+class _ExampleAppState extends State<ExampleApp> {
+  ThemeMode _themeMode = ThemeMode.system;
+
+  void _setThemeMode(ThemeMode mode) => setState(() => _themeMode = mode);
+
+  @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'typstrx example',
-      theme: ThemeData(colorSchemeSeed: Colors.indigo),
-      home: EditorPage(session: session),
+      theme: ThemeData(
+        colorSchemeSeed: Colors.indigo,
+        brightness: Brightness.light,
+      ),
+      darkTheme: ThemeData(
+        colorSchemeSeed: Colors.indigo,
+        brightness: Brightness.dark,
+      ),
+      themeMode: _themeMode,
+      home: EditorPage(
+        session: widget.session,
+        themeMode: _themeMode,
+        onThemeModeChanged: _setThemeMode,
+      ),
     );
   }
 }
 
 class EditorPage extends StatefulWidget {
-  const EditorPage({super.key, required this.session});
+  const EditorPage({
+    super.key,
+    required this.session,
+    required this.themeMode,
+    required this.onThemeModeChanged,
+  });
 
   final TypstSession session;
+  final ThemeMode themeMode;
+  final ValueChanged<ThemeMode> onThemeModeChanged;
 
   @override
   State<EditorPage> createState() => _EditorPageState();
@@ -148,6 +176,18 @@ class _EditorPageState extends State<EditorPage> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Keeps syntax colors in sync with the app's brightness (light/dark
+    // system setting, or the toggle in the app bar) — the controller's
+    // `theme` setter repaints immediately, no recompile/rehighlight needed.
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    _controller.theme = isDark
+        ? TypstSyntaxTheme.darkTheme
+        : TypstSyntaxTheme.defaultTheme;
+  }
+
+  @override
   void dispose() {
     _controller.dispose();
     _viewerController.removeListener(_onViewerChanged);
@@ -175,6 +215,24 @@ class _EditorPageState extends State<EditorPage> {
     widget.session.updateSource(_stressTestSource);
   }
 
+  static IconData _themeModeIcon(ThemeMode mode) => switch (mode) {
+    ThemeMode.system => Icons.brightness_auto,
+    ThemeMode.light => Icons.light_mode,
+    ThemeMode.dark => Icons.dark_mode,
+  };
+
+  // Cycles system -> light -> dark -> system, so the button also lets you
+  // get back to following the OS setting rather than being stuck on
+  // whichever of light/dark you last picked.
+  void _cycleThemeMode() {
+    const next = {
+      ThemeMode.system: ThemeMode.light,
+      ThemeMode.light: ThemeMode.dark,
+      ThemeMode.dark: ThemeMode.system,
+    };
+    widget.onThemeModeChanged(next[widget.themeMode]!);
+  }
+
   @override
   Widget build(BuildContext context) {
     final result = _lastResult;
@@ -183,6 +241,11 @@ class _EditorPageState extends State<EditorPage> {
       appBar: AppBar(
         title: const Text('typstrx example'),
         actions: [
+          IconButton(
+            icon: Icon(_themeModeIcon(widget.themeMode)),
+            tooltip: 'Toggle dark mode',
+            onPressed: _cycleThemeMode,
+          ),
           IconButton(
             icon: const Icon(Icons.auto_awesome_mosaic),
             tooltip: 'Load stress test document (~40 pages)',
@@ -222,6 +285,15 @@ class _EditorPageState extends State<EditorPage> {
                         controller: _controller,
                         onChanged: widget.session.updateSource,
                         detailsBuilder: defaultTypstDetailsBuilder,
+                        // TypstCodeEditor's own default (unhighlighted text)
+                        // color is black — invisible against a dark
+                        // background, since it doesn't know about the app's
+                        // theme. colorScheme.onSurface tracks light/dark.
+                        style: TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 13,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
                       ),
                     ),
                   ),
@@ -265,14 +337,14 @@ class _EditorPageState extends State<EditorPage> {
                 if (diagnostics.isNotEmpty)
                   Container(
                     width: double.infinity,
-                    color: Colors.red.shade50,
+                    color: Theme.of(context).colorScheme.errorContainer,
                     padding: const EdgeInsets.all(8),
                     constraints: const BoxConstraints(maxHeight: 120),
                     child: SingleChildScrollView(
                       child: Text(
                         diagnostics.map((e) => e.toString()).join('\n'),
                         style: TextStyle(
-                          color: Colors.red.shade900,
+                          color: Theme.of(context).colorScheme.onErrorContainer,
                           fontFamily: 'monospace',
                           fontSize: 12,
                         ),
@@ -331,7 +403,10 @@ class _RasterizationPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final labelStyle = Theme.of(context).textTheme.bodySmall;
     return Container(
-      color: Colors.indigo.shade50,
+      // Was a hardcoded light indigo — text here is the ambient (theme-
+      // adaptive) bodySmall color, so in dark mode that became light text on
+      // a light background. surfaceContainerHighest tracks brightness.
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: Column(
         mainAxisSize: MainAxisSize.min,

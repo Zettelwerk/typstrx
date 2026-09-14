@@ -33,7 +33,7 @@ class TypstEditorController extends TextEditingController {
     this.indentUnit = '  ',
     String text = '',
   }) : _session = session,
-       theme = theme ?? TypstSyntaxTheme.defaultTheme,
+       _theme = theme ?? TypstSyntaxTheme.defaultTheme,
        super(text: text) {
     _resultsSubscription = session.results.listen((result) {
       _diagnostics = result.diagnostics;
@@ -52,7 +52,14 @@ class TypstEditorController extends TextEditingController {
 
   /// The tag → style mapping used to color source. Assigning a new value
   /// repaints without recomputing the highlight tree.
-  TypstSyntaxTheme theme;
+  TypstSyntaxTheme get theme => _theme;
+  set theme(TypstSyntaxTheme value) {
+    if (identical(_theme, value)) return;
+    _theme = value;
+    notifyListeners();
+  }
+
+  TypstSyntaxTheme _theme;
 
   /// Wavy-underline color for error diagnostics.
   Color errorColor;

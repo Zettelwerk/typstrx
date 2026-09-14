@@ -26,12 +26,16 @@ typedef TypstDetailsBuilder =
 /// monospace heading (colored per token — see [TypstSignatureTokenKind] —
 /// the same way [typstCompletionKindColor] colors the completion list), the
 /// description underneath, and (when present) the example in a syntax-
-/// colored code block, using [TypstSyntaxTheme.defaultTheme].
+/// colored code block, using [TypstSyntaxTheme.defaultTheme] or
+/// [TypstSyntaxTheme.darkTheme] to match [context]'s brightness.
 Widget defaultTypstDetailsBuilder(
   BuildContext context,
   TypstFunctionInfo info,
 ) {
   final colorScheme = Theme.of(context).colorScheme;
+  final exampleTheme = Theme.of(context).brightness == Brightness.dark
+      ? TypstSyntaxTheme.darkTheme
+      : TypstSyntaxTheme.defaultTheme;
   const signatureStyle = TextStyle(
     fontFamily: 'monospace',
     fontWeight: FontWeight.bold,
@@ -76,7 +80,7 @@ Widget defaultTypstDetailsBuilder(
                   info.exampleHighlight != null
                       ? typstHighlightedSpan(
                           info.exampleHighlight!,
-                          TypstSyntaxTheme.defaultTheme,
+                          exampleTheme,
                           style: exampleStyle,
                         )
                       : TextSpan(text: example, style: exampleStyle),

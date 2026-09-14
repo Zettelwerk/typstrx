@@ -60,6 +60,46 @@ class TypstSyntaxTheme {
     TypstHighlightTag.function: const TextStyle(color: Color(0xFF6F42C1)),
     TypstHighlightTag.interpolated: const TextStyle(color: Color(0xFFE36209)),
   });
+
+  /// A legible palette for a dark background — the same category mapping as
+  /// [defaultTheme], with every color lifted to stay readable against a dark
+  /// (not merely non-white) surface rather than reused as-is: [defaultTheme]'s
+  /// colors are tuned for a light background, and several (e.g. the navy
+  /// used for [TypstHighlightTag.link]/[TypstHighlightTag.string]) are close
+  /// enough to black to disappear on one.
+  static final TypstSyntaxTheme darkTheme = TypstSyntaxTheme({
+    TypstHighlightTag.comment: const TextStyle(
+      color: Color(0xFF8B949E),
+      fontStyle: FontStyle.italic,
+    ),
+    TypstHighlightTag.escape: const TextStyle(color: Color(0xFF7EE787)),
+    TypstHighlightTag.strong: const TextStyle(fontWeight: FontWeight.bold),
+    TypstHighlightTag.emph: const TextStyle(fontStyle: FontStyle.italic),
+    TypstHighlightTag.link: const TextStyle(
+      color: Color(0xFF79C0FF),
+      decoration: TextDecoration.underline,
+    ),
+    TypstHighlightTag.raw: const TextStyle(color: Color(0xFF79C0FF)),
+    TypstHighlightTag.label: const TextStyle(color: Color(0xFFD2A8FF)),
+    TypstHighlightTag.ref: const TextStyle(color: Color(0xFFD2A8FF)),
+    TypstHighlightTag.heading: const TextStyle(
+      color: Color(0xFF79C0FF),
+      fontWeight: FontWeight.bold,
+    ),
+    TypstHighlightTag.listMarker: const TextStyle(color: Color(0xFFFF7B72)),
+    TypstHighlightTag.listTerm: const TextStyle(fontWeight: FontWeight.bold),
+    TypstHighlightTag.mathDelimiter: const TextStyle(color: Color(0xFFFF7B72)),
+    TypstHighlightTag.mathOperator: const TextStyle(color: Color(0xFFFF7B72)),
+    TypstHighlightTag.keyword: const TextStyle(
+      color: Color(0xFFFF7B72),
+      fontWeight: FontWeight.w600,
+    ),
+    TypstHighlightTag.operator_: const TextStyle(color: Color(0xFFFF7B72)),
+    TypstHighlightTag.number: const TextStyle(color: Color(0xFF79C0FF)),
+    TypstHighlightTag.string: const TextStyle(color: Color(0xFFA5D6FF)),
+    TypstHighlightTag.function: const TextStyle(color: Color(0xFFD2A8FF)),
+    TypstHighlightTag.interpolated: const TextStyle(color: Color(0xFFFFA657)),
+  });
 }
 
 /// Builds a [TextSpan] for [node] purely from [theme] — no controller, no
