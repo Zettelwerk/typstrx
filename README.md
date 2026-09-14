@@ -12,6 +12,8 @@ from the compiled document.
 
 > **Status: work in progress.** APIs may change before 1.0.
 
+![Showcase](typstrx-showcase.png "Showcase of demo application")
+
 ## Features
 
 - Compile Typst source strings to paged documents, with diagnostics
