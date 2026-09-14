@@ -100,6 +100,11 @@ class TypstSyntaxTheme {
     TypstHighlightTag.function: const TextStyle(color: Color(0xFFD2A8FF)),
     TypstHighlightTag.interpolated: const TextStyle(color: Color(0xFFFFA657)),
   });
+
+  /// [darkTheme] for [Brightness.dark], [defaultTheme] otherwise.
+  static TypstSyntaxTheme forBrightness(Brightness brightness) {
+    return brightness == Brightness.dark ? darkTheme : defaultTheme;
+  }
 }
 
 /// Builds a [TextSpan] for [node] purely from [theme] — no controller, no

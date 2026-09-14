@@ -46,10 +46,22 @@ IconData typstCompletionKindIcon(TypstCompletionKindTag tag) {
 
 /// An accent color for [tag], paired with [typstCompletionKindIcon].
 ///
-/// Fixed rather than [Theme]-derived — like most editors' kind colors, this
-/// is a small identifying palette chosen to read clearly on both light and
-/// dark container backgrounds, not one meant to shift with the app's theme.
-Color typstCompletionKindColor(TypstCompletionKindTag tag) {
+/// Small enough (icon-sized, against this popup's own theme-derived
+/// container background) that the [Brightness.light] palette reads clearly
+/// on both light and dark backgrounds as-is. Text-sized uses (e.g.
+/// [defaultTypstDetailsBuilder]'s signature heading) need more contrast
+/// against a dark surface, so pass [brightness] to get the lifted
+/// [Brightness.dark] variant there.
+Color typstCompletionKindColor(
+  TypstCompletionKindTag tag, {
+  Brightness brightness = Brightness.light,
+}) {
+  return brightness == Brightness.dark
+      ? _darkCompletionKindColor(tag)
+      : _lightCompletionKindColor(tag);
+}
+
+Color _lightCompletionKindColor(TypstCompletionKindTag tag) {
   return switch (tag) {
     TypstCompletionKindTag.syntax => const Color(0xFF78909C),
     TypstCompletionKindTag.func => const Color(0xFF9C27B0),
@@ -61,6 +73,24 @@ Color typstCompletionKindColor(TypstCompletionKindTag tag) {
     TypstCompletionKindTag.label => const Color(0xFF3F51B5),
     TypstCompletionKindTag.font => const Color(0xFFD81B60),
     TypstCompletionKindTag.symbol => const Color(0xFF673AB7),
+  };
+}
+
+// The same identifying hues as [_lightCompletionKindColor], lifted to stay
+// readable as text color against a dark surface — mirrors how
+// [TypstSyntaxTheme.darkTheme] lifts [TypstSyntaxTheme.defaultTheme]'s colors.
+Color _darkCompletionKindColor(TypstCompletionKindTag tag) {
+  return switch (tag) {
+    TypstCompletionKindTag.syntax => const Color(0xFFB0BEC5),
+    TypstCompletionKindTag.func => const Color(0xFFD2A8FF),
+    TypstCompletionKindTag.type => const Color(0xFF4DB6AC),
+    TypstCompletionKindTag.param => const Color(0xFF79C0FF),
+    TypstCompletionKindTag.constant => const Color(0xFFFFA657),
+    TypstCompletionKindTag.path => const Color(0xFFBCAAA4),
+    TypstCompletionKindTag.package => const Color(0xFF7EE787),
+    TypstCompletionKindTag.label => const Color(0xFF9FA8DA),
+    TypstCompletionKindTag.font => const Color(0xFFFF8FAB),
+    TypstCompletionKindTag.symbol => const Color(0xFFB39DDB),
   };
 }
 

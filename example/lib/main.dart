@@ -181,10 +181,15 @@ class _EditorPageState extends State<EditorPage> {
     // Keeps syntax colors in sync with the app's brightness (light/dark
     // system setting, or the toggle in the app bar) — the controller's
     // `theme` setter repaints immediately, no recompile/rehighlight needed.
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    _controller.theme = isDark
-        ? TypstSyntaxTheme.darkTheme
-        : TypstSyntaxTheme.defaultTheme;
+    final brightness = Theme.of(context).brightness;
+    final isDark = brightness == Brightness.dark;
+    _controller.theme = TypstSyntaxTheme.forBrightness(brightness);
+    _controller.errorColor = isDark
+        ? TypstEditorController.darkErrorColor
+        : TypstEditorController.defaultErrorColor;
+    _controller.warningColor = isDark
+        ? TypstEditorController.darkWarningColor
+        : TypstEditorController.defaultWarningColor;
   }
 
   @override
@@ -285,14 +290,9 @@ class _EditorPageState extends State<EditorPage> {
                         controller: _controller,
                         onChanged: widget.session.updateSource,
                         detailsBuilder: defaultTypstDetailsBuilder,
-                        // TypstCodeEditor's own default (unhighlighted text)
-                        // color is black — invisible against a dark
-                        // background, since it doesn't know about the app's
-                        // theme. colorScheme.onSurface tracks light/dark.
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontFamily: 'monospace',
                           fontSize: 13,
-                          color: Theme.of(context).colorScheme.onSurface,
                         ),
                       ),
                     ),

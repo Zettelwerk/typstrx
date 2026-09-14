@@ -33,9 +33,8 @@ Widget defaultTypstDetailsBuilder(
   TypstFunctionInfo info,
 ) {
   final colorScheme = Theme.of(context).colorScheme;
-  final exampleTheme = Theme.of(context).brightness == Brightness.dark
-      ? TypstSyntaxTheme.darkTheme
-      : TypstSyntaxTheme.defaultTheme;
+  final brightness = Theme.of(context).brightness;
+  final exampleTheme = TypstSyntaxTheme.forBrightness(brightness);
   const signatureStyle = TextStyle(
     fontFamily: 'monospace',
     fontWeight: FontWeight.bold,
@@ -56,7 +55,9 @@ Widget defaultTypstDetailsBuilder(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text.rich(_signatureSpan(info.signature, signatureStyle)),
+            Text.rich(
+              _signatureSpan(info.signature, signatureStyle, brightness),
+            ),
             if (info.description case final description?) ...[
               const SizedBox(height: 8),
               Text(
@@ -94,29 +95,41 @@ Widget defaultTypstDetailsBuilder(
   );
 }
 
-TextSpan _signatureSpan(List<TypstSignatureToken> tokens, TextStyle base) {
+TextSpan _signatureSpan(
+  List<TypstSignatureToken> tokens,
+  TextStyle base,
+  Brightness brightness,
+) {
   return TextSpan(
     style: base,
     children: [
       for (final token in tokens)
         TextSpan(
           text: token.text,
-          style: TextStyle(color: _signatureTokenColor(token.kind)),
+          style: TextStyle(
+            color: _signatureTokenColor(token.kind, brightness),
+          ),
         ),
     ],
   );
 }
 
-Color _signatureTokenColor(TypstSignatureTokenKind kind) {
+Color _signatureTokenColor(
+  TypstSignatureTokenKind kind,
+  Brightness brightness,
+) {
   return switch (kind) {
     TypstSignatureTokenKind.name => typstCompletionKindColor(
       TypstCompletionKindTag.func,
+      brightness: brightness,
     ),
     TypstSignatureTokenKind.param => typstCompletionKindColor(
       TypstCompletionKindTag.param,
+      brightness: brightness,
     ),
     TypstSignatureTokenKind.punctuation => typstCompletionKindColor(
       TypstCompletionKindTag.syntax,
+      brightness: brightness,
     ),
   };
 }

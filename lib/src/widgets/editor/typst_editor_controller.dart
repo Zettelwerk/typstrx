@@ -27,8 +27,8 @@ class TypstEditorController extends TextEditingController {
   TypstEditorController({
     required TypstSession session,
     TypstSyntaxTheme? theme,
-    this.errorColor = const Color(0xFFD73A49),
-    this.warningColor = const Color(0xFFE36209),
+    this.errorColor = defaultErrorColor,
+    this.warningColor = defaultWarningColor,
     this.autoClosePairs = const {'(': ')', '[': ']', '{': '}', '"': '"'},
     this.indentUnit = '  ',
     String text = '',
@@ -62,10 +62,36 @@ class TypstEditorController extends TextEditingController {
   TypstSyntaxTheme _theme;
 
   /// Wavy-underline color for error diagnostics.
+  ///
+  /// Defaults to a light-background-tuned red (see [defaultErrorColor]).
+  /// Reassign — e.g. to [darkErrorColor] — to keep it legible against a dark
+  /// surface; unlike [theme], this isn't derived from [Brightness]
+  /// automatically, since the controller has no [BuildContext] of its own.
   Color errorColor;
 
   /// Wavy-underline color for warning diagnostics.
+  ///
+  /// Defaults to a light-background-tuned orange (see [defaultWarningColor]).
+  /// Reassign — e.g. to [darkWarningColor] — to keep it legible against a
+  /// dark surface; unlike [theme], this isn't derived from [Brightness]
+  /// automatically, since the controller has no [BuildContext] of its own.
   Color warningColor;
+
+  /// [errorColor]'s default — tuned for a light background, matching
+  /// [TypstSyntaxTheme.defaultTheme]'s palette.
+  static const defaultErrorColor = Color(0xFFD73A49);
+
+  /// [warningColor]'s default — tuned for a light background, matching
+  /// [TypstSyntaxTheme.defaultTheme]'s palette.
+  static const defaultWarningColor = Color(0xFFE36209);
+
+  /// A lifted [errorColor] that stays legible against a dark background,
+  /// matching [TypstSyntaxTheme.darkTheme]'s palette.
+  static const darkErrorColor = Color(0xFFFF7B72);
+
+  /// A lifted [warningColor] that stays legible against a dark background,
+  /// matching [TypstSyntaxTheme.darkTheme]'s palette.
+  static const darkWarningColor = Color(0xFFFFA657);
 
   /// Typed-opener → auto-inserted-closer pairs applied as the user types
   /// (see [_applyAutoClose]) — also what a newline between a pair (see

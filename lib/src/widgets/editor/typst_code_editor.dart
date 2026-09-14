@@ -1424,16 +1424,17 @@ class _TypstCodeEditorState extends State<TypstCodeEditor>
     // node the syntax theme doesn't color (plain prose, or a tag the theme
     // has no entry for) inherits it verbatim. Left null, that resolved to
     // near-white text on a light background — invisible, not merely
-    // untinted. Backfilled here rather than only in the widget's own
-    // default so a caller-supplied style that also omits a color doesn't
-    // hit the same bug.
+    // untinted. Backfilled here (from the ambient theme, so it tracks
+    // light/dark rather than defaulting to a fixed black that disappears on
+    // a dark background) rather than only in the widget's own default so a
+    // caller-supplied style that also omits a color doesn't hit the same bug.
     final rawStyle =
         widget.style ?? const TextStyle(fontFamily: 'monospace', fontSize: 13);
+    final defaultTextColor = Theme.of(context).colorScheme.onSurface;
     final style = rawStyle.color == null
-        ? rawStyle.copyWith(color: const Color(0xFF000000))
+        ? rawStyle.copyWith(color: defaultTextColor)
         : rawStyle;
-    final cursorColor =
-        widget.cursorColor ?? style.color ?? const Color(0xFF000000);
+    final cursorColor = widget.cursorColor ?? style.color ?? defaultTextColor;
     final selectionColor = widget.selectionColor ?? const Color(0x664A90D9);
 
     // AnimatedBuilder rebuilds this whole subtree — including a fresh call
