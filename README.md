@@ -12,7 +12,7 @@ from the compiled document.
 
 > **Status: work in progress.** APIs may change before 1.0.
 
-![Showcase](typstrx-showcase.png "Showcase of demo application")
+![Showcase](https://raw.githubusercontent.com/Zettelwerk/typstrx/refs/heads/main/typstrx-showcase.png "Showcase of demo application")
 
 ## Features
 
