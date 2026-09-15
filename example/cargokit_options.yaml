@@ -1,0 +1,4 @@
+# Cargokit user options apply to the Flutter app, not to rust/cargokit.yaml.
+# Prefer a verified release artifact when one matches this crate; cargokit
+# automatically falls back to a local Cargo build otherwise.
+use_precompiled_binaries: true

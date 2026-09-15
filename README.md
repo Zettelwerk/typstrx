@@ -17,39 +17,60 @@ from the compiled document.
 ## Features
 
 - Compile Typst source strings to paged documents, with diagnostics
-  (errors/warnings with source locations)
+(errors/warnings with source locations)
 - High-resolution, viewport-based partial page rendering (only the visible
-  window of each page is rasterized at high zoom)
+window of each page is rasterized at high zoom)
 - `TypstViewer` widget with pan/zoom, text selection, and link navigation
 - `TypstPageView`, a host-controlled embeddable surface for canvases and
-  notebooks that need Typst content inline rather than a paginated document
+notebooks that need Typst content inline rather than a paginated document
 - Vector PDF export from any successful compilation snapshot
 - Live recompilation while the source changes (debounced, flicker-free)
 - Embedded default fonts (Libertinus, New Computer Modern Math, DejaVu Sans
-  Mono) plus an API to register custom font bytes
+Mono) plus an API to register custom font bytes
 - `@preview` Typst package support with on-demand downloads and local caching
 
 ## Platforms
 
-| Platform | Status |
-|---|---|
-| Linux | Supported |
-| Android | Supported |
-| Windows | Supported |
+
+| Platform    | Status               |
+| ----------- | -------------------- |
+| Linux       | Supported            |
+| Android     | Supported            |
+| Windows     | Supported            |
 | iOS / macOS | Scaffolded, untested |
-| Web | Not supported yet |
+| Web         | Not supported yet    |
+
 
 ## Requirements
 
 The Rust crate embedded in this package is built via
-[cargokit](https://github.com/irondash/cargokit). On supported platforms,
-Cargokit automatically downloads and verifies a signed precompiled binary
-when Rust is unavailable. You need a Rust toolchain to build it locally or as
+[cargokit](https://github.com/irondash/cargokit). On supported platforms,  
+Cargokit automatically downloads and verifies a signed precompiled binary  
+when Rust is **unavailable**. You need a Rust toolchain to build it locally or as  
 a fallback when a matching precompiled binary is unavailable:
 
 - A [Rust toolchain](https://rustup.rs) (`rustup`)
 - For Android: NDK r26 or newer, plus the Rust targets for your ABIs, e.g.
-  `rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android`
+`rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android`
+
+### Using precompiled binaries when you have Rust installed
+
+Cargokit only reaches for the signed precompiled binaries automatically when
+it can't find a Rust toolchain on your machine (i.e. no `rustup` on `PATH`).  
+If you have Rust installed, Cargokit  
+defaults to compiling this crate from source instead, even though a matching  
+precompiled binary is published for your platform. That's a much slower build  
+(the crate pulls in the Typst compiler and its dependencies).
+
+To opt into using the precompiled binaries anyway, add a
+`cargokit_options.yaml` file next to
+your `pubspec.yaml`
+
+```yaml
+use_precompiled_binaries: true
+```
+
+
 
 ## Quick start
 
