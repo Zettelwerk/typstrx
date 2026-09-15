@@ -745,6 +745,38 @@ void main() {
     },
   );
 
+  testWidgets('updates line numbers on the first frame after a newline edit', (
+    tester,
+  ) async {
+    final fake = FakeRustSession();
+    final session = TypstSession.forTesting(fake, const TypstSessionOptions());
+    final controller = TypstEditorController(session: session, text: 'one');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 300,
+            child: TypstCodeEditor(controller: controller),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('2'), findsNothing);
+
+    controller.value = const TextEditingValue(
+      text: 'one\n',
+      selection: TextSelection.collapsed(offset: 4),
+    );
+    await tester.pump();
+
+    expect(find.text('2'), findsOneWidget);
+
+    controller.dispose();
+    await session.dispose();
+  });
+
   testWidgets('tapping the editor requests focus (gesture wiring is live)', (
     tester,
   ) async {

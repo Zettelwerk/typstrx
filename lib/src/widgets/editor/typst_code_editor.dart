@@ -860,6 +860,12 @@ class _TypstCodeEditorState extends State<TypstCodeEditor>
     }
     _lastControllerText = text;
     _lastControllerSelection = selection;
+    // EditableText listens to its controller directly, but the line-number
+    // gutter is a sibling built from the controller's current plain text.
+    // Rebuild this widget in the same frame as a text edit so the gutter does
+    // not wait for an unrelated later rebuild (for example, completion or
+    // host preview state) before showing a newly inserted line.
+    if (textChanged && widget.showLineNumbers) setState(() {});
     // Any real text or caret change means whatever was under the mouse
     // when the tooltip was requested is no longer what the tooltip
     // describes — independent of the completion-popup logic below.
