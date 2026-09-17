@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -46,12 +47,36 @@ class TypstViewer extends StatefulWidget {
   const TypstViewer({
     super.key,
     required this.session,
+    this.document,
+    this.initialPreviewImage,
+    this.initialPreviewScale,
+    this.initialPreviewRenderTime = Duration.zero,
     this.controller,
     this.params = const TypstViewerParams(),
   });
 
   /// The session whose latest document is displayed.
   final TypstSession session;
+
+  /// An optional document snapshot to display instead of following
+  /// [session.documents]. This lets a host stage a newly compiled document
+  /// (for example, until an embedded surface has prepared its first raster)
+  /// before exposing it to Flutter's layout.
+  final TypstDocument? document;
+
+  /// A decoded first-page preview that is ready to paint for [document].
+  ///
+  /// The viewer takes ownership of this image. This is intended for a host
+  /// that stages a document before making it visible; ordinary viewers should
+  /// leave it null and rasterization remains fully automatic.
+  final ui.Image? initialPreviewImage;
+
+  /// Pixels per Typst point in [initialPreviewImage]. Required when providing
+  /// an initial preview image.
+  final double? initialPreviewScale;
+
+  /// End-to-end time that produced [initialPreviewImage], for diagnostics.
+  final Duration initialPreviewRenderTime;
 
   /// Optional controller for programmatic scrolling/zooming.
   final TypstViewerController? controller;
@@ -125,11 +150,32 @@ class _TypstViewerState extends State<TypstViewer>
       maxBytes: widget.params.maxImageCacheBytes,
       backgroundColor: widget.params.rasterBackgroundColor,
     );
+    // A host-controlled surface such as TypstPageView pins min/max to the
+    // same scale. Start there before the first paint; waiting for
+    // LayoutBuilder's post-frame fit would briefly paint a newly staged
+    // raster at identity scale whenever that fixed scale is not 1.0.
+    if (widget.params.minScale == widget.params.maxScale) {
+      final scale = widget.params.minScale;
+      _txController.value = Matrix4.identity()
+        ..scaleByDouble(scale, scale, scale, 1);
+    }
     widget.controller?._attach(this);
     _txController.addListener(_onMatrixChanged);
-    _subscription = widget.session.documents.listen(_onDocument);
-    final initial = widget.session.document;
+    if (widget.document == null) {
+      _subscription = widget.session.documents.listen(_onDocument);
+    }
+    final initial = widget.document ?? widget.session.document;
     if (initial != null) _onDocument(initial);
+    final preview = widget.initialPreviewImage;
+    if (preview != null && widget.document != null && initial != null) {
+      _cache.seedPreview(
+        pageNumber: 1,
+        generation: initial.generation,
+        image: preview,
+        scale: widget.initialPreviewScale ?? _previewScale,
+        renderTime: widget.initialPreviewRenderTime,
+      );
+    }
   }
 
   @override
@@ -139,13 +185,17 @@ class _TypstViewerState extends State<TypstViewer>
       oldWidget.controller?._detach();
       widget.controller?._attach(this);
     }
-    if (oldWidget.session != widget.session) {
+    if (oldWidget.session != widget.session ||
+        oldWidget.document != widget.document) {
       _subscription?.cancel();
-      _subscription = widget.session.documents.listen(_onDocument);
+      _subscription = null;
       _document = null;
       _layout = null;
       _fitDone = false;
-      final initial = widget.session.document;
+      if (widget.document == null) {
+        _subscription = widget.session.documents.listen(_onDocument);
+      }
+      final initial = widget.document ?? widget.session.document;
       if (initial != null) _onDocument(initial);
     }
     if (oldWidget.params.margin != widget.params.margin) {

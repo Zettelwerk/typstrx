@@ -188,6 +188,34 @@ class TypstPageImageCache extends ChangeNotifier {
     }
   }
 
+  /// Takes ownership of an already decoded whole-page preview.
+  ///
+  /// Used by embedded hosts that render a new document before committing its
+  /// dimensions to Flutter's layout. The next viewer can therefore paint the
+  /// staged preview immediately instead of rasterizing the same page again.
+  void seedPreview({
+    required int pageNumber,
+    required int generation,
+    required ui.Image image,
+    required double scale,
+    required Duration renderTime,
+  }) {
+    _previews[pageNumber]?.dispose();
+    _previews[pageNumber] = CachedPageImage(
+      image: image,
+      scale: scale,
+      generation: generation,
+      renderTime: renderTime,
+    );
+    _lastRender = RasterizationMetrics(
+      isTile: false,
+      width: image.width,
+      height: image.height,
+      scale: scale,
+      renderTime: renderTime,
+    );
+  }
+
   /// The cached high-resolution tile of the page, if its generation matches.
   CachedPageTile? tileOf(int pageNumber, int generation) {
     final tile = _tiles[pageNumber];

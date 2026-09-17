@@ -19,6 +19,8 @@ import 'package:typstrx/src/widgets/editor/typst_line_number_gutter.dart';
 /// typst_editor_controller_test.dart, needed here too since these tests
 /// exercise a real, mounted [TypstEditorController].
 class FakeRustSession implements rust.TypstSession {
+  final compiledSources = <String>[];
+
   /// What the next `completions()` call returns.
   List<rust.TypstCompletion> completionsToReturn = const [];
   int applyFromUtf16ToReturn = 0;
@@ -96,6 +98,7 @@ class FakeRustSession implements rust.TypstSession {
 
   @override
   Future<rust.CompileResult> compile({required String source}) async {
+    compiledSources.add(source);
     return rust.CompileResult(
       generation: BigInt.zero,
       success: true,
@@ -947,6 +950,48 @@ void main() {
 
         expect(find.text('lorem'), findsOneWidget);
         expect(session.lastCompiledSource, '#lo');
+
+        controller.dispose();
+        await session.dispose();
+      },
+    );
+
+    testWidgets(
+      'an implicit trigger preserves the configured fragment compile mode',
+      (tester) async {
+        final fake = FakeRustSession()
+          ..completionsToReturn = const [lorem]
+          ..applyFromUtf16ToReturn = 1;
+        final session = TypstSession.forTesting(
+          fake,
+          const TypstSessionOptions(),
+        );
+        final controller = TypstEditorController(
+          session: session,
+          text: '',
+          analysisFragmentOptions: () =>
+              const TypstFragmentOptions(width: 321, margin: 7),
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(body: TypstCodeEditor(controller: controller)),
+          ),
+        );
+        await tester.pump();
+        controller.value = const TextEditingValue(
+          text: '#lo',
+          selection: TextSelection.collapsed(offset: 3),
+        );
+        await tester.pump(const Duration(milliseconds: 160));
+
+        expect(fake.compiledSources, hasLength(1));
+        expect(
+          fake.compiledSources.single,
+          startsWith(
+            '#set page(width: 321pt, height: auto, margin: 7pt, fill: none)\n',
+          ),
+        );
 
         controller.dispose();
         await session.dispose();

@@ -31,6 +31,7 @@ class TypstEditorController extends TextEditingController {
     this.warningColor = defaultWarningColor,
     this.autoClosePairs = const {'(': ')', '[': ']', '{': '}', '"': '"'},
     this.indentUnit = '  ',
+    this.analysisFragmentOptions,
     String text = '',
   }) : _session = session,
        _theme = theme ?? TypstSyntaxTheme.defaultTheme,
@@ -49,6 +50,16 @@ class TypstEditorController extends TextEditingController {
   /// (e.g. a completion popup) that needs [TypstSession.completions]/
   /// [TypstSession.hover]/[TypstSession.lastCompiledSource] directly.
   TypstSession get session => _session;
+
+  /// Supplies the embedded-fragment options used when the editor needs to
+  /// compile the current buffer before requesting completions.
+  ///
+  /// Leave this null for ordinary documents. Hosts that render the same
+  /// session through `TypstPageView` should return the options used by their
+  /// fragment compiler; otherwise an implicit completion can briefly publish
+  /// a normal Typst page (with its default fill and margins) between fragment
+  /// compilations.
+  final TypstFragmentOptions Function()? analysisFragmentOptions;
 
   /// The tag → style mapping used to color source. Assigning a new value
   /// repaints without recomputing the highlight tree.

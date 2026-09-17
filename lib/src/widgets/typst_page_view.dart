@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 import 'package:flutter/widgets.dart';
 
 import '../document/typst_document.dart';
@@ -53,8 +54,15 @@ class TypstPageView extends StatefulWidget {
 
 class _TypstPageViewState extends State<TypstPageView> {
   StreamSubscription<TypstDocument>? _subscription;
+  // Only this staged document is allowed to affect the widget's SizedBox.
+  // The session may already hold a newer document while its first preview is
+  // being generated, but that must not resize an old raster underneath us.
   TypstDocument? _document;
   Size? _lastReportedSize;
+  int _stageRequest = 0;
+  ui.Image? _stagedPreview;
+  double? _stagedPreviewScale;
+  Duration _stagedPreviewRenderTime = Duration.zero;
 
   @override
   void initState() {
@@ -70,14 +78,49 @@ class _TypstPageViewState extends State<TypstPageView> {
 
   void _attach() {
     _subscription?.cancel();
-    _document = widget.session.document;
-    _subscription = widget.session.documents.listen((document) {
-      if (!mounted) return;
-      setState(() => _document = document);
-      _reportSize(document);
+    _document = null;
+    _subscription = widget.session.documents.listen(_stageDocument);
+    final document = widget.session.document;
+    if (document != null) _stageDocument(document);
+  }
+
+  /// Pre-renders the next page before allowing it to change this widget's
+  /// size. This avoids one frame where a prior-generation image is stretched
+  /// to the freshly compiled fragment's new height.
+  Future<void> _stageDocument(TypstDocument document) async {
+    if (document.pages.isEmpty) return;
+    final request = ++_stageRequest;
+    final page = document.pages.first;
+    final scale = widget.previewDpi / 72.0;
+    final stopwatch = Stopwatch()..start();
+    final raster = await page.render(
+      fullWidth: page.width * scale,
+      fullHeight: page.height * scale,
+      backgroundColor: const Color(0x00000000),
+    );
+    if (!mounted || request != _stageRequest || raster == null) return;
+
+    // Decode too: this makes the hand-off wait for the complete Dart-side
+    // raster pipeline, not merely for Rust to return raw pixels.
+    final image = await raster.createImage();
+    stopwatch.stop();
+    if (!mounted || request != _stageRequest) {
+      image.dispose();
+      return;
+    }
+    setState(() {
+      _document = document;
+      _stagedPreview = image;
+      _stagedPreviewScale = scale;
+      _stagedPreviewRenderTime = stopwatch.elapsed;
     });
-    final document = _document;
-    if (document != null) _reportSize(document);
+    _reportSize(document);
+    // The newly keyed viewer consumes the image during this frame. Clear our
+    // reference afterwards; its image cache owns disposal from that point.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _document != document) return;
+      setState(() => _stagedPreview = null);
+    });
   }
 
   void _reportSize(TypstDocument document) {
@@ -94,6 +137,9 @@ class _TypstPageViewState extends State<TypstPageView> {
   @override
   void dispose() {
     _subscription?.cancel();
+    _stageRequest++;
+    // A preview that has not yet been handed to a viewer is ours to dispose.
+    _stagedPreview?.dispose();
     super.dispose();
   }
 
@@ -108,7 +154,16 @@ class _TypstPageViewState extends State<TypstPageView> {
       width: page.width * widget.scale,
       height: page.height * widget.scale,
       child: TypstViewer(
+        // A new document may have different dimensions. Reusing the viewer
+        // would let its previous-generation raster be laid out at those new
+        // dimensions for one frame, visibly stretching it until the new
+        // preview arrives. A generation key drops that stale raster instead.
+        key: ValueKey(document.generation),
         session: widget.session,
+        document: document,
+        initialPreviewImage: _stagedPreview,
+        initialPreviewScale: _stagedPreviewScale,
+        initialPreviewRenderTime: _stagedPreviewRenderTime,
         controller: widget.controller,
         params: TypstViewerParams(
           margin: 0,

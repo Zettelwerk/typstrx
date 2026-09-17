@@ -937,6 +937,8 @@ class _TypstCodeEditorState extends State<TypstCodeEditor>
   // it never once passed. Compiling directly here, only when the World
   // doesn't already match, decouples completions from that cycle (and from
   // whether a host wires up page rendering via updateSource at all).
+  // Embedded editors preserve their compile mode through
+  // TypstEditorController.analysisFragmentOptions.
   Future<void> _runCompletionsRequest({
     required int requestId,
     required String text,
@@ -945,7 +947,12 @@ class _TypstCodeEditorState extends State<TypstCodeEditor>
   }) async {
     final controller = widget.controller;
     if (controller.session.lastCompiledSource != text) {
-      await controller.session.compile(text);
+      final fragmentOptions = controller.analysisFragmentOptions?.call();
+      if (fragmentOptions == null) {
+        await controller.session.compile(text);
+      } else {
+        await controller.session.compileFragment(text, fragmentOptions);
+      }
       if (!mounted || requestId != _completionRequestId) return;
     }
     final result = await controller.session.completions(

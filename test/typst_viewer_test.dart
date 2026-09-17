@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,6 +12,7 @@ import 'package:typstrx/typstrx.dart' hide TypstSession;
 /// Fake bridge that "compiles" to 10 A4 pages and renders solid red pixels.
 class FakeRustSession implements rust.TypstSession {
   var generation = 0;
+  Completer<void>? renderGate;
   final renderedPages = <int>[];
   final renderedRegions =
       <({int page, int x, int y, int w, int h, int fullW, int fullH})>[];
@@ -17,10 +20,11 @@ class FakeRustSession implements rust.TypstSession {
   @override
   Future<rust.CompileResult> compile({required String source}) async {
     generation++;
+    final pageHeight = source.contains('tall') ? 1684.0 : 842.0;
     return rust.CompileResult(
       generation: BigInt.from(generation),
       success: true,
-      pages: List.filled(10, const rust.PageInfo(widthPt: 595, heightPt: 842)),
+      pages: List.filled(10, rust.PageInfo(widthPt: 595, heightPt: pageHeight)),
       diagnostics: [],
       elapsedMs: BigInt.zero,
     );
@@ -73,6 +77,11 @@ class FakeRustSession implements rust.TypstSession {
     required int fullHeight,
     required int backgroundArgb,
   }) async {
+    final gate = renderGate;
+    if (gate != null) {
+      await gate.future;
+      if (identical(renderGate, gate)) renderGate = null;
+    }
     if (generation.toInt() != this.generation) {
       throw const rust.TypstrxError.stale();
     }
@@ -195,6 +204,82 @@ void main() {
       );
     }
   }
+
+  testWidgets('fixed-scale viewer uses its scale on the first painted frame', (
+    tester,
+  ) async {
+    final (session, _) = await makeSession();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: 595 * 0.5,
+            height: 842 * 0.5,
+            child: TypstViewer(
+              session: session,
+              params: const TypstViewerParams(
+                margin: 0,
+                minScale: 0.5,
+                maxScale: 0.5,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final transform = tester.widget<Transform>(
+      find.descendant(
+        of: find.byType(TypstViewer),
+        matching: find.byType(Transform),
+      ),
+    );
+    expect(transform.transform.getMaxScaleOnAxis(), closeTo(0.5, 0.0001));
+  });
+
+  testWidgets(
+    'page view keeps old bounds until a resized document raster is ready',
+    (tester) async {
+      final (session, fake) = await makeSession();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SingleChildScrollView(
+            child: Center(child: TypstPageView(session: session, scale: 0.5)),
+          ),
+        ),
+      );
+      await settle(tester);
+      expect(
+        tester.getSize(find.byType(TypstPageView)),
+        const Size(595 * 0.5, 842 * 0.5),
+      );
+
+      final gate = Completer<void>();
+      fake.renderGate = gate;
+      await session.compile('tall');
+      await tester.pump();
+
+      // Compilation has supplied the new 1684pt height, but it must remain
+      // outside the Flutter tree until its preview raster has completed.
+      expect(
+        tester.getSize(find.byType(TypstPageView)),
+        const Size(595 * 0.5, 842 * 0.5),
+      );
+
+      await tester.runAsync(() async {
+        gate.complete();
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      });
+      await settle(tester);
+      expect(
+        tester.getSize(find.byType(TypstPageView)),
+        const Size(595 * 0.5, 1684 * 0.5),
+      );
+    },
+  );
 
   testWidgets('renders visible pages lazily, not the whole document', (
     tester,
