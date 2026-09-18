@@ -20,6 +20,7 @@ class TypstPageView extends StatefulWidget {
     super.key,
     required this.session,
     this.scale = 1,
+    this.pageMargin = 0,
     this.controller,
     this.enableTextSelection = true,
     this.selectionColor = const Color(0x553b82f6),
@@ -30,10 +31,18 @@ class TypstPageView extends StatefulWidget {
     this.previewDpi = 144,
     this.maxRenderDpi = 576,
     this.maxImageCacheBytes = 32 * 1024 * 1024,
-  }) : assert(scale > 0);
+  }) : assert(scale > 0),
+       assert(pageMargin >= 0);
 
   /// Logical pixels per Typst point.
   final double scale;
+
+  /// Transparent space around the embedded page, in Typst points.
+  ///
+  /// This controls viewer layout only. Use [TypstFragmentOptions.margin] to
+  /// add margin inside the compiled Typst page itself.
+  final double pageMargin;
+
   final TypstSession session;
   final TypstViewerController? controller;
   final bool enableTextSelection;
@@ -150,9 +159,11 @@ class _TypstPageViewState extends State<TypstPageView> {
       return const SizedBox.shrink();
     }
     final page = document.pages.first;
+    final canvasWidth = page.width + widget.pageMargin * 2;
+    final canvasHeight = page.height + widget.pageMargin * 2;
     return SizedBox(
-      width: page.width * widget.scale,
-      height: page.height * widget.scale,
+      width: canvasWidth * widget.scale,
+      height: canvasHeight * widget.scale,
       child: TypstViewer(
         // A new document may have different dimensions. Reusing the viewer
         // would let its previous-generation raster be laid out at those new
@@ -165,8 +176,8 @@ class _TypstPageViewState extends State<TypstPageView> {
         initialPreviewScale: _stagedPreviewScale,
         initialPreviewRenderTime: _stagedPreviewRenderTime,
         controller: widget.controller,
+        pageMargin: widget.pageMargin,
         params: TypstViewerParams(
-          margin: 0,
           minScale: widget.scale,
           maxScale: widget.scale,
           previewDpi: widget.previewDpi,

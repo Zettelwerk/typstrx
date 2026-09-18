@@ -107,6 +107,7 @@ class _ViewerExamplePageState extends State<ViewerExamplePage> {
   // tradeoff.
   double _maxRenderDpi = const TypstViewerParams().maxRenderDpi;
   double _previewDpi = const TypstViewerParams().previewDpi;
+  double _pageMargin = const TypstViewerParams().margin;
   bool _useFixedDpi = false;
   double _fixedDpi = const TypstViewerParams().previewDpi;
   double _tileScaleFactor = const TypstViewerParams().tileScaleFactor;
@@ -266,6 +267,7 @@ class _ViewerExamplePageState extends State<ViewerExamplePage> {
                   child: TypstViewer(
                     session: widget.session,
                     controller: _viewerController,
+                    pageMargin: _pageMargin,
                     params: TypstViewerParams(
                       maxRenderDpi: _maxRenderDpi,
                       previewDpi: _previewDpi,
@@ -277,6 +279,7 @@ class _ViewerExamplePageState extends State<ViewerExamplePage> {
                 _RasterizationPanel(
                   maxRenderDpi: _maxRenderDpi,
                   previewDpi: _previewDpi,
+                  pageMargin: _pageMargin,
                   useFixedDpi: _useFixedDpi,
                   fixedDpi: _fixedDpi,
                   tileScaleFactor: _tileScaleFactor,
@@ -284,6 +287,8 @@ class _ViewerExamplePageState extends State<ViewerExamplePage> {
                       setState(() => _maxRenderDpi = value),
                   onPreviewDpiChanged: (value) =>
                       setState(() => _previewDpi = value),
+                  onPageMarginChanged: (value) =>
+                      setState(() => _pageMargin = value),
                   onUseFixedDpiChanged: (value) =>
                       setState(() => _useFixedDpi = value),
                   onFixedDpiChanged: (value) =>
@@ -334,11 +339,13 @@ class _RasterizationPanel extends StatelessWidget {
   const _RasterizationPanel({
     required this.maxRenderDpi,
     required this.previewDpi,
+    required this.pageMargin,
     required this.useFixedDpi,
     required this.fixedDpi,
     required this.tileScaleFactor,
     required this.onMaxRenderDpiChanged,
     required this.onPreviewDpiChanged,
+    required this.onPageMarginChanged,
     required this.onUseFixedDpiChanged,
     required this.onFixedDpiChanged,
     required this.onTileScaleFactorChanged,
@@ -347,11 +354,13 @@ class _RasterizationPanel extends StatelessWidget {
 
   final double maxRenderDpi;
   final double previewDpi;
+  final double pageMargin;
   final bool useFixedDpi;
   final double fixedDpi;
   final double tileScaleFactor;
   final ValueChanged<double> onMaxRenderDpiChanged;
   final ValueChanged<double> onPreviewDpiChanged;
+  final ValueChanged<double> onPageMarginChanged;
   final ValueChanged<bool> onUseFixedDpiChanged;
   final ValueChanged<double> onFixedDpiChanged;
   final ValueChanged<double> onTileScaleFactorChanged;
@@ -406,6 +415,27 @@ class _RasterizationPanel extends StatelessWidget {
                 ),
               ],
             ),
+          Row(
+            children: [
+              SizedBox(
+                width: 190,
+                child: Text(
+                  'Page margin: ${pageMargin.round()} pt',
+                  style: labelStyle,
+                ),
+              ),
+              Expanded(
+                child: Slider(
+                  value: pageMargin,
+                  min: 0,
+                  max: 96,
+                  divisions: 32,
+                  label: '${pageMargin.round()} pt',
+                  onChanged: onPageMarginChanged,
+                ),
+              ),
+            ],
+          ),
           if (!useFixedDpi)
             Row(
               children: [

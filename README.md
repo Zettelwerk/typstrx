@@ -40,6 +40,8 @@ Mono) plus an API to register custom font bytes
 | iOS / macOS | Scaffolded, untested |
 | Web         | Not supported yet    |
 
+If you think this is relevant for you, create a git issue.
+
 
 ## Requirements
 
@@ -85,7 +87,35 @@ Future<void> main() async {
 }
 ```
 
-See `example/` for a full split-view editor + viewer demo.
+See `example/` for a full split-view editor + embedded viewer demo.
+
+## Render full documents with `TypstViewer`
+
+`TypstViewer` follows the latest successful compilation in its session. It
+provides pan/zoom, lazy page rasterization, text selection, and link handling:
+
+```dart
+final controller = TypstViewerController();
+
+TypstViewer(
+  session: session,
+  controller: controller,
+  pageMargin: 12, // Typst points around and between pages
+  params: TypstViewerParams(
+    previewDpi: 144,
+    maxRenderDpi: 576,
+    enableTextSelection: true,
+    onLinkTap: (link) => print(link.url ?? link.dest),
+  ),
+)
+
+// Compile immediately, or use updateSource for a debounced live preview.
+session.updateSource('= Hello, *world*!');
+```
+
+Use `TypstViewerParams.margin` instead of `pageMargin` when you keep all
+viewer configuration in the params object. The top-level `pageMargin`
+property takes precedence when both are supplied.
 
 ## Custom fonts and project files
 
@@ -131,6 +161,7 @@ await session.compileFragment(
 TypstPageView(
   session: session,
   scale: 1.0, // logical pixels per Typst point; keep in sync with `width`
+  pageMargin: 8.0, // optional transparent viewer margin around the page
   onSizeChanged: (size) => print('content is now $size'),
 )
 ```
@@ -141,6 +172,11 @@ diagnostics, completions, and hover all report positions in *your* source,
 not the wrapped one. `TypstPageView` only ever shows `pages.first`, so it
 expects a session compiled with `compileFragment`/`updateFragmentSource`
 rather than a multi-page `compile()`/`updateSource()` document.
+`TypstPageView.pageMargin` controls transparent space outside the rendered
+page. Use `TypstFragmentOptions.margin` when the margin should be compiled
+inside the Typst page. A full `TypstViewer` accepts the same top-level
+`pageMargin` override, or it can be configured through
+`TypstViewerParams.margin`.
 
 Reading the current text selection (from either widget) works the same
 way regardless of embedding:

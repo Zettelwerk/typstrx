@@ -54,6 +54,7 @@ class _PageViewExamplePageState extends State<PageViewExamplePage> {
   Size? _pageSize;
   double _fragmentWidth = 360,
       _scale = .8,
+      _pageMargin = 0,
       _previewDpi = 144,
       _maxRenderDpi = 576,
       _cacheMegabytes = 32;
@@ -134,6 +135,7 @@ class _PageViewExamplePageState extends State<PageViewExamplePage> {
     final controls = _DebugPanel(
       fragmentWidth: _fragmentWidth,
       scale: _scale,
+      pageMargin: _pageMargin,
       previewDpi: _previewDpi,
       maxRenderDpi: _maxRenderDpi,
       cacheMegabytes: _cacheMegabytes,
@@ -146,6 +148,7 @@ class _PageViewExamplePageState extends State<PageViewExamplePage> {
       controller: _pageView,
       onFragmentWidthChanged: (v) => _setAndCompile(() => _fragmentWidth = v),
       onScaleChanged: (v) => setState(() => _scale = v),
+      onPageMarginChanged: (v) => setState(() => _pageMargin = v),
       onPreviewDpiChanged: (v) => setState(() => _previewDpi = v),
       onMaxRenderDpiChanged: (v) => setState(() => _maxRenderDpi = v),
       onCacheMegabytesChanged: (v) => setState(() => _cacheMegabytes = v),
@@ -161,6 +164,7 @@ class _PageViewExamplePageState extends State<PageViewExamplePage> {
         session: widget.session,
         controller: _pageView,
         scale: _scale,
+        pageMargin: _pageMargin,
         previewDpi: _previewDpi,
         maxRenderDpi: _maxRenderDpi,
         maxImageCacheBytes: (_cacheMegabytes * 1024 * 1024).round(),
@@ -322,6 +326,7 @@ class _DebugPanel extends StatelessWidget {
   const _DebugPanel({
     required this.fragmentWidth,
     required this.scale,
+    required this.pageMargin,
     required this.previewDpi,
     required this.maxRenderDpi,
     required this.cacheMegabytes,
@@ -334,6 +339,7 @@ class _DebugPanel extends StatelessWidget {
     required this.controller,
     required this.onFragmentWidthChanged,
     required this.onScaleChanged,
+    required this.onPageMarginChanged,
     required this.onPreviewDpiChanged,
     required this.onMaxRenderDpiChanged,
     required this.onCacheMegabytesChanged,
@@ -342,7 +348,12 @@ class _DebugPanel extends StatelessWidget {
     required this.onShowSelectionToolbarChanged,
     required this.onRecompile,
   });
-  final double fragmentWidth, scale, previewDpi, maxRenderDpi, cacheMegabytes;
+  final double fragmentWidth,
+      scale,
+      pageMargin,
+      previewDpi,
+      maxRenderDpi,
+      cacheMegabytes;
   final bool transparent, enableTextSelection, showSelectionToolbar;
   final Size? pageSize;
   final TypstCompileResult? result;
@@ -350,6 +361,7 @@ class _DebugPanel extends StatelessWidget {
   final TypstViewerController controller;
   final ValueChanged<double> onFragmentWidthChanged,
       onScaleChanged,
+      onPageMarginChanged,
       onPreviewDpiChanged,
       onMaxRenderDpiChanged,
       onCacheMegabytesChanged;
@@ -405,6 +417,15 @@ class _DebugPanel extends StatelessWidget {
             divisions: 25,
             suffix: '×',
             onChanged: onScaleChanged,
+          ),
+          _DebugSlider(
+            label: 'Page margin',
+            value: pageMargin,
+            min: 0,
+            max: 96,
+            divisions: 32,
+            suffix: 'pt',
+            onChanged: onPageMarginChanged,
           ),
           _DebugSlider(
             label: 'Preview DPI',

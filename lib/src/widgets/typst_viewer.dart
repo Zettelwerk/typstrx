@@ -52,8 +52,9 @@ class TypstViewer extends StatefulWidget {
     this.initialPreviewScale,
     this.initialPreviewRenderTime = Duration.zero,
     this.controller,
+    this.pageMargin,
     this.params = const TypstViewerParams(),
-  });
+  }) : assert(pageMargin == null || pageMargin >= 0);
 
   /// The session whose latest document is displayed.
   final TypstSession session;
@@ -80,6 +81,12 @@ class TypstViewer extends StatefulWidget {
 
   /// Optional controller for programmatic scrolling/zooming.
   final TypstViewerController? controller;
+
+  /// Space around the document canvas in Typst points.
+  ///
+  /// When set, this overrides [TypstViewerParams.margin]. Keeping it null
+  /// preserves the value in [params].
+  final double? pageMargin;
 
   /// Visual and behavioral configuration.
   final TypstViewerParams params;
@@ -198,7 +205,7 @@ class _TypstViewerState extends State<TypstViewer>
       final initial = widget.document ?? widget.session.document;
       if (initial != null) _onDocument(initial);
     }
-    if (oldWidget.params.margin != widget.params.margin) {
+    if (_effectivePageMargin(oldWidget) != _effectivePageMargin(widget)) {
       final document = _document;
       if (document != null) _layout = _layoutPages(document);
       _fitDone = false;
@@ -258,7 +265,7 @@ class _TypstViewerState extends State<TypstViewer>
   }
 
   TypstPageLayout _layoutPages(TypstDocument document) {
-    final margin = widget.params.margin;
+    final margin = _effectivePageMargin(widget);
     var maxWidth = 0.0;
     for (final page in document.pages) {
       maxWidth = math.max(maxWidth, page.width);
@@ -279,6 +286,9 @@ class _TypstViewerState extends State<TypstViewer>
     }
     return TypstPageLayout(pageRects: rects, documentSize: Size(docWidth, top));
   }
+
+  static double _effectivePageMargin(TypstViewer viewer) =>
+      viewer.pageMargin ?? viewer.params.margin;
 
   // ---- view transform ----
 

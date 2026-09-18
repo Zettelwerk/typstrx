@@ -281,6 +281,26 @@ void main() {
     },
   );
 
+  testWidgets('page view includes its page margin in its widget bounds', (
+    tester,
+  ) async {
+    final (session, _) = await makeSession();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: TypstPageView(session: session, scale: 0.5, pageMargin: 12),
+        ),
+      ),
+    );
+    await settle(tester);
+
+    expect(
+      tester.getSize(find.byType(TypstPageView)),
+      const Size((595 + 24) * 0.5, (842 + 24) * 0.5),
+    );
+  });
+
   testWidgets('renders visible pages lazily, not the whole document', (
     tester,
   ) async {
@@ -598,7 +618,7 @@ void main() {
         home: TypstViewer(
           session: session,
           controller: controller,
-          params: TypstViewerParams(margin: margin),
+          pageMargin: margin,
         ),
       );
 
