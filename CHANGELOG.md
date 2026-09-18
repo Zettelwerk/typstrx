@@ -1,3 +1,23 @@
+## 0.1.1
+
+- `TypstViewer.pageMargin` and `TypstPageView.pageMargin` provide a direct
+  way to configure transparent space around the page canvas. The viewer-level
+  value overrides `TypstViewerParams.margin`; embedded views include the
+  margin in their Flutter size so it is not clipped. Use
+  `TypstFragmentOptions.margin` for margin *inside* compiled Typst content.
+- `TypstPageView` now stages, rasterizes, and decodes a replacement page
+  before committing its new dimensions to Flutter. Its prepared preview is
+  reused by the internal viewer, preventing stale-raster stretching and blank
+  frames while an embedded fragment changes height.
+- Completion-triggered editor compilation can preserve embedded fragment
+  settings through `TypstEditorController.analysisFragmentOptions`, avoiding
+  a transient default Typst page with its own fill and margins between
+  fragment updates.
+- The example app now has switchable full-document viewer and embedded
+  `TypstPageView` test screens. Both expose page-margin controls; the embedded
+  screen also exposes fragment, selection, cache, DPI, compile, and raster
+  diagnostics controls.
+
 ## 0.1.0
 
 Initial release.
