@@ -106,9 +106,7 @@ TextSpan _signatureSpan(
       for (final token in tokens)
         TextSpan(
           text: token.text,
-          style: TextStyle(
-            color: _signatureTokenColor(token.kind, brightness),
-          ),
+          style: TextStyle(color: _signatureTokenColor(token.kind, brightness)),
         ),
     ],
   );
